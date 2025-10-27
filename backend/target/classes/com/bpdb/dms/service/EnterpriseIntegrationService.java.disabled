@@ -1,0 +1,413 @@
+package com.bpdb.dms.service;
+
+import com.bpdb.dms.entity.*;
+import com.bpdb.dms.repository.IntegrationConfigRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * Service for managing enterprise system integrations
+ */
+@Service
+@Transactional
+public class EnterpriseIntegrationService {
+    
+    private static final Logger logger = LoggerFactory.getLogger(EnterpriseIntegrationService.class);
+    
+    @Autowired
+    private IntegrationConfigRepository integrationConfigRepository;
+    
+    @Autowired
+    private AuditService auditService;
+    
+    @Autowired
+    private NotificationService notificationService;
+    
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final RestTemplate restTemplate = new RestTemplate();
+    
+    /**
+     * Create a new integration configuration
+     */
+    public IntegrationConfig createIntegrationConfig(String name, String description, 
+                                                   IntegrationType integrationType, 
+                                                   String endpointUrl, String authType,
+                                                   User createdBy) {
+        try {
+            IntegrationConfig config = new IntegrationConfig(name, description, integrationType, createdBy);
+            config.setEndpointUrl(endpointUrl);
+            config.setAuthType(authType);
+            config.setStatus(IntegrationStatus.CONFIGURING);
+            
+            IntegrationConfig savedConfig = integrationConfigRepository.save(config);
+            
+            auditService.logActivity(createdBy.getUsername(), "INTEGRATION_CONFIG_CREATED", 
+                "Integration configuration created: " + name, null);
+            
+            logger.info("Integration configuration created: {} by user: {}", name, createdBy.getUsername());
+            
+            return savedConfig;
+            
+        } catch (Exception e) {
+            logger.error("Failed to create integration configuration: {}", e.getMessage());
+            throw new RuntimeException("Failed to create integration configuration", e);
+        }
+    }
+    
+    /**
+     * Update integration configuration
+     */
+    public IntegrationConfig updateIntegrationConfig(Long configId, String name, String description,
+                                                    String endpointUrl, String apiKey, String apiSecret,
+                                                    String configData, String mappingRules,
+                                                    Integer syncFrequencyMinutes, User updatedBy) {
+        try {
+            IntegrationConfig config = integrationConfigRepository.findById(configId)
+                .orElseThrow(() -> new RuntimeException("Integration configuration not found"));
+            
+            config.setName(name);
+            config.setDescription(description);
+            config.setEndpointUrl(endpointUrl);
+            config.setApiKey(apiKey);
+            config.setApiSecret(apiSecret);
+            config.setConfigData(configData);
+            config.setMappingRules(mappingRules);
+            config.setSyncFrequencyMinutes(syncFrequencyMinutes);
+            config.setLastModifiedBy(updatedBy);
+            
+            IntegrationConfig savedConfig = integrationConfigRepository.save(config);
+            
+            auditService.logActivity(updatedBy.getUsername(), "INTEGRATION_CONFIG_UPDATED", 
+                "Integration configuration updated: " + name, null);
+            
+            logger.info("Integration configuration updated: {}", name);
+            
+            return savedConfig;
+            
+        } catch (Exception e) {
+            logger.error("Failed to update integration configuration: {}", e.getMessage());
+            throw new RuntimeException("Failed to update integration configuration", e);
+        }
+    }
+    
+    /**
+     * Test integration configuration
+     */
+    public boolean testIntegrationConfig(Long configId) {
+        try {
+            IntegrationConfig config = integrationConfigRepository.findById(configId)
+                .orElseThrow(() -> new RuntimeException("Integration configuration not found"));
+            
+            return testIntegrationConnection(config);
+            
+        } catch (Exception e) {
+            logger.error("Integration test failed: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Enable integration configuration
+     */
+    public IntegrationConfig enableIntegrationConfig(Long configId, User enabledBy) {
+        try {
+            IntegrationConfig config = integrationConfigRepository.findById(configId)
+                .orElseThrow(() -> new RuntimeException("Integration configuration not found"));
+            
+            // Test connection before enabling
+            if (!testIntegrationConnection(config)) {
+                throw new RuntimeException("Integration test failed");
+            }
+            
+            config.setIsEnabled(true);
+            config.setStatus(IntegrationStatus.ACTIVE);
+            config.setNextSyncAt(LocalDateTime.now().plusMinutes(config.getSyncFrequencyMinutes()));
+            
+            IntegrationConfig savedConfig = integrationConfigRepository.save(config);
+            
+            auditService.logActivity(enabledBy.getUsername(), "INTEGRATION_CONFIG_ENABLED", 
+                "Integration configuration enabled: " + config.getName(), null);
+            
+            logger.info("Integration configuration enabled: {}", config.getName());
+            
+            return savedConfig;
+            
+        } catch (Exception e) {
+            logger.error("Failed to enable integration configuration: {}", e.getMessage());
+            throw new RuntimeException("Failed to enable integration configuration", e);
+        }
+    }
+    
+    /**
+     * Disable integration configuration
+     */
+    public IntegrationConfig disableIntegrationConfig(Long configId, User disabledBy) {
+        try {
+            IntegrationConfig config = integrationConfigRepository.findById(configId)
+                .orElseThrow(() -> new RuntimeException("Integration configuration not found"));
+            
+            config.setIsEnabled(false);
+            config.setStatus(IntegrationStatus.INACTIVE);
+            
+            IntegrationConfig savedConfig = integrationConfigRepository.save(config);
+            
+            auditService.logActivity(disabledBy.getUsername(), "INTEGRATION_CONFIG_DISABLED", 
+                "Integration configuration disabled: " + config.getName(), null);
+            
+            logger.info("Integration configuration disabled: {}", config.getName());
+            
+            return savedConfig;
+            
+        } catch (Exception e) {
+            logger.error("Failed to disable integration configuration: {}", e.getMessage());
+            throw new RuntimeException("Failed to disable integration configuration", e);
+        }
+    }
+    
+    /**
+     * Sync integration data
+     */
+    @Async
+    public CompletableFuture<Void> syncIntegrationData(Long configId) {
+        try {
+            IntegrationConfig config = integrationConfigRepository.findById(configId)
+                .orElseThrow(() -> new RuntimeException("Integration configuration not found"));
+            
+            if (!config.getIsEnabled()) {
+                return CompletableFuture.completedFuture(null);
+            }
+            
+            logger.info("Starting sync for integration: {}", config.getName());
+            
+            // Perform data synchronization based on integration type
+            boolean success = performDataSync(config);
+            
+            // Update sync statistics
+            config.setLastSyncAt(LocalDateTime.now());
+            config.setNextSyncAt(LocalDateTime.now().plusMinutes(config.getSyncFrequencyMinutes()));
+            
+            if (success) {
+                config.setSuccessCount(config.getSuccessCount() + 1);
+                config.setLastError(null);
+            } else {
+                config.setFailureCount(config.getFailureCount() + 1);
+                config.setLastError("Sync operation failed");
+            }
+            
+            integrationConfigRepository.save(config);
+            
+            // Send notification if sync failed
+            if (!success) {
+                notificationService.createNotification(
+                    config.getCreatedBy(),
+                    "Integration Sync Failed",
+                    "Sync failed for integration: " + config.getName(),
+                    NotificationType.SYSTEM_ALERT,
+                    NotificationPriority.HIGH
+                );
+            }
+            
+            logger.info("Sync completed for integration: {} - Success: {}", config.getName(), success);
+            
+            return CompletableFuture.completedFuture(null);
+            
+        } catch (Exception e) {
+            logger.error("Failed to sync integration data: {}", e.getMessage());
+            return CompletableFuture.failedFuture(e);
+        }
+    }
+    
+    /**
+     * Process automatic integrations
+     */
+    @Async
+    public void processAutomaticIntegrations() {
+        try {
+            List<IntegrationConfig> integrations = integrationConfigRepository.findIntegrationConfigsDueForSync(LocalDateTime.now());
+            
+            for (IntegrationConfig config : integrations) {
+                syncIntegrationData(config.getId());
+            }
+            
+        } catch (Exception e) {
+            logger.error("Failed to process automatic integrations: {}", e.getMessage());
+        }
+    }
+    
+    /**
+     * Get integration statistics
+     */
+    public Map<String, Object> getIntegrationStatistics() {
+        try {
+            return Map.of(
+                "totalIntegrations", integrationConfigRepository.count(),
+                "activeIntegrations", integrationConfigRepository.countByStatus(IntegrationStatus.ACTIVE),
+                "enabledIntegrations", integrationConfigRepository.countByIsEnabledTrue(),
+                "inactiveIntegrations", integrationConfigRepository.countByStatus(IntegrationStatus.INACTIVE)
+            );
+            
+        } catch (Exception e) {
+            logger.error("Failed to get integration statistics: {}", e.getMessage());
+            throw new RuntimeException("Failed to get integration statistics", e);
+        }
+    }
+    
+    /**
+     * Get integrations by type
+     */
+    public Page<IntegrationConfig> getIntegrationsByType(IntegrationType integrationType, Pageable pageable) {
+        return integrationConfigRepository.findByIntegrationType(integrationType, pageable);
+    }
+    
+    /**
+     * Get integrations for user
+     */
+    public Page<IntegrationConfig> getIntegrationsForUser(User user, Pageable pageable) {
+        return integrationConfigRepository.findByCreatedBy(user, pageable);
+    }
+    
+    /**
+     * Test integration connection
+     */
+    private boolean testIntegrationConnection(IntegrationConfig config) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Content-Type", "application/json");
+            
+            // Add authentication headers based on auth type
+            if ("API_KEY".equals(config.getAuthType())) {
+                headers.set("X-API-Key", config.getApiKey());
+            } else if ("BEARER_TOKEN".equals(config.getAuthType())) {
+                headers.set("Authorization", "Bearer " + config.getApiKey());
+            }
+            
+            HttpEntity<String> request = new HttpEntity<>(headers);
+            
+            ResponseEntity<String> response = restTemplate.exchange(
+                config.getEndpointUrl() + "/health",
+                HttpMethod.GET,
+                request,
+                String.class
+            );
+            
+            return response.getStatusCode().is2xxSuccessful();
+            
+        } catch (Exception e) {
+            logger.error("Integration connection test failed: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Perform data synchronization
+     */
+    private boolean performDataSync(IntegrationConfig config) {
+        try {
+            // Implementation depends on integration type
+            switch (config.getIntegrationType()) {
+                case ERP_SYSTEM:
+                    return syncERPData(config);
+                case CRM_SYSTEM:
+                    return syncCRMData(config);
+                case HR_SYSTEM:
+                    return syncHRData(config);
+                case EMAIL_SYSTEM:
+                    return syncEmailData(config);
+                default:
+                    return syncGenericData(config);
+            }
+            
+        } catch (Exception e) {
+            logger.error("Data sync failed for integration: {}", config.getName());
+            return false;
+        }
+    }
+    
+    /**
+     * Sync ERP data
+     */
+    private boolean syncERPData(IntegrationConfig config) {
+        try {
+            logger.info("Syncing ERP data for integration: {}", config.getName());
+            // Implement ERP-specific sync logic
+            return true;
+        } catch (Exception e) {
+            logger.error("ERP sync failed: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Sync CRM data
+     */
+    private boolean syncCRMData(IntegrationConfig config) {
+        try {
+            logger.info("Syncing CRM data for integration: {}", config.getName());
+            // Implement CRM-specific sync logic
+            return true;
+        } catch (Exception e) {
+            logger.error("CRM sync failed: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Sync HR data
+     */
+    private boolean syncHRData(IntegrationConfig config) {
+        try {
+            logger.info("Syncing HR data for integration: {}", config.getName());
+            // Implement HR-specific sync logic
+            return true;
+        } catch (Exception e) {
+            logger.error("HR sync failed: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Sync Email data
+     */
+    private boolean syncEmailData(IntegrationConfig config) {
+        try {
+            logger.info("Syncing Email data for integration: {}", config.getName());
+            // Implement Email-specific sync logic
+            return true;
+        } catch (Exception e) {
+            logger.error("Email sync failed: {}", e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Sync generic data
+     */
+    private boolean syncGenericData(IntegrationConfig config) {
+        try {
+            logger.info("Syncing generic data for integration: {}", config.getName());
+            // Implement generic sync logic
+            return true;
+        } catch (Exception e) {
+            logger.error("Generic sync failed: {}", e.getMessage());
+            return false;
+        }
+    }
+}

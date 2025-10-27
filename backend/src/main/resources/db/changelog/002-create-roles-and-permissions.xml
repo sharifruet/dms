@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="002-001" author="dms">
+        <comment>Create roles table</comment>
+        <createTable tableName="roles">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="display_name" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="TEXT"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="002-002" author="dms">
+        <comment>Create permissions table</comment>
+        <createTable tableName="permissions">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(100)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="display_name" type="VARCHAR(200)"/>
+            <column name="description" type="TEXT"/>
+            <column name="resource" type="VARCHAR(50)"/>
+            <column name="action" type="VARCHAR(50)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="002-003" author="dms">
+        <comment>Create role_permissions table</comment>
+        <createTable tableName="role_permissions">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="role_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="permission_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="002-004" author="dms">
+        <comment>Add foreign key constraints for role_permissions</comment>
+        <addForeignKeyConstraint
+                baseTableName="role_permissions"
+                baseColumnNames="role_id"
+                constraintName="fk_role_permissions_role"
+                referencedTableName="roles"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+        <addForeignKeyConstraint
+                baseTableName="role_permissions"
+                baseColumnNames="permission_id"
+                constraintName="fk_role_permissions_permission"
+                referencedTableName="permissions"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+    </changeSet>
+
+    <changeSet id="002-005" author="dms">
+        <comment>Add role_id column to users table</comment>
+        <addColumn tableName="users">
+            <column name="role_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="002-006" author="dms">
+        <comment>Add foreign key constraint for users.role_id</comment>
+        <addForeignKeyConstraint
+                baseTableName="users"
+                baseColumnNames="role_id"
+                constraintName="fk_users_role"
+                referencedTableName="roles"
+                referencedColumnNames="id"
+                onDelete="SET NULL"/>
+    </changeSet>
+
+    <changeSet id="002-007" author="dms">
+        <comment>Insert default roles</comment>
+        <insert tableName="roles">
+            <column name="name" value="ADMIN"/>
+            <column name="display_name" value="Administrator"/>
+            <column name="description" value="Full system access"/>
+        </insert>
+        <insert tableName="roles">
+            <column name="name" value="OFFICER"/>
+            <column name="display_name" value="Officer"/>
+            <column name="description" value="Document management access"/>
+        </insert>
+        <insert tableName="roles">
+            <column name="name" value="VIEWER"/>
+            <column name="display_name" value="Viewer"/>
+            <column name="description" value="Read-only access"/>
+        </insert>
+        <insert tableName="roles">
+            <column name="name" value="AUDITOR"/>
+            <column name="display_name" value="Auditor"/>
+            <column name="description" value="Audit and compliance access"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="002-008" author="dms">
+        <comment>Insert default permissions</comment>
+        <insert tableName="permissions">
+            <column name="name" value="USER_MANAGEMENT"/>
+            <column name="display_name" value="User Management"/>
+            <column name="description" value="Manage users and roles"/>
+            <column name="resource" value="USER"/>
+            <column name="action" value="MANAGE"/>
+        </insert>
+        <insert tableName="permissions">
+            <column name="name" value="DOCUMENT_UPLOAD"/>
+            <column name="display_name" value="Document Upload"/>
+            <column name="description" value="Upload documents"/>
+            <column name="resource" value="DOCUMENT"/>
+            <column name="action" value="CREATE"/>
+        </insert>
+        <insert tableName="permissions">
+            <column name="name" value="DOCUMENT_VIEW"/>
+            <column name="display_name" value="Document View"/>
+            <column name="description" value="View documents"/>
+            <column name="resource" value="DOCUMENT"/>
+            <column name="action" value="READ"/>
+        </insert>
+        <insert tableName="permissions">
+            <column name="name" value="DOCUMENT_DELETE"/>
+            <column name="display_name" value="Document Delete"/>
+            <column name="description" value="Delete documents"/>
+            <column name="resource" value="DOCUMENT"/>
+            <column name="action" value="DELETE"/>
+        </insert>
+        <insert tableName="permissions">
+            <column name="name" value="AUDIT_VIEW"/>
+            <column name="display_name" value="Audit View"/>
+            <column name="description" value="View audit logs"/>
+            <column name="resource" value="AUDIT"/>
+            <column name="action" value="READ"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="002-009" author="dms">
+        <comment>Assign permissions to roles</comment>
+        <sql>
+            -- Admin gets all permissions
+            INSERT INTO role_permissions (role_id, permission_id)
+            SELECT r.id, p.id
+            FROM roles r, permissions p
+            WHERE r.name = 'ADMIN';
+
+            -- Officer gets document permissions
+            INSERT INTO role_permissions (role_id, permission_id)
+            SELECT r.id, p.id
+            FROM roles r, permissions p
+            WHERE r.name = 'OFFICER' AND p.name IN ('DOCUMENT_UPLOAD', 'DOCUMENT_VIEW', 'DOCUMENT_DELETE');
+
+            -- Viewer gets read-only permissions
+            INSERT INTO role_permissions (role_id, permission_id)
+            SELECT r.id, p.id
+            FROM roles r, permissions p
+            WHERE r.name = 'VIEWER' AND p.name = 'DOCUMENT_VIEW';
+
+            -- Auditor gets audit permissions
+            INSERT INTO role_permissions (role_id, permission_id)
+            SELECT r.id, p.id
+            FROM roles r, permissions p
+            WHERE r.name = 'AUDITOR' AND p.name IN ('DOCUMENT_VIEW', 'AUDIT_VIEW');
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

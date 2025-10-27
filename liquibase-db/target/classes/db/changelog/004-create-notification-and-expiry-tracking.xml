@@ -1,0 +1,183 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="004-001" author="dms">
+        <comment>Create notifications table</comment>
+        <createTable tableName="notifications">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="title" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="message" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="priority" type="VARCHAR(20)" defaultValue="MEDIUM">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(20)" defaultValue="UNREAD">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_read" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="read_at" type="TIMESTAMP"/>
+            <column name="expires_at" type="TIMESTAMP"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="004-002" author="dms">
+        <comment>Create expiry_tracking table</comment>
+        <createTable tableName="expiry_tracking">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="document_id" type="BIGINT"/>
+            <column name="title" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="TEXT"/>
+            <column name="expiry_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expiry_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reminder_days" type="INTEGER" defaultValue="30">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(20)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="004-003" author="dms">
+        <comment>Create notification_preferences table</comment>
+        <createTable tableName="notification_preferences">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="notification_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="email_enabled" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sms_enabled" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="in_app_enabled" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="004-004" author="dms">
+        <comment>Add foreign key constraints</comment>
+        <addForeignKeyConstraint
+                baseTableName="notifications"
+                baseColumnNames="user_id"
+                constraintName="fk_notifications_user"
+                referencedTableName="users"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+        <addForeignKeyConstraint
+                baseTableName="expiry_tracking"
+                baseColumnNames="document_id"
+                constraintName="fk_expiry_tracking_document"
+                referencedTableName="documents"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+        <addForeignKeyConstraint
+                baseTableName="expiry_tracking"
+                baseColumnNames="created_by"
+                constraintName="fk_expiry_tracking_created_by"
+                referencedTableName="users"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+        <addForeignKeyConstraint
+                baseTableName="notification_preferences"
+                baseColumnNames="user_id"
+                constraintName="fk_notification_preferences_user"
+                referencedTableName="users"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+    </changeSet>
+
+    <changeSet id="004-005" author="dms">
+        <comment>Create indexes for performance</comment>
+        <createIndex tableName="notifications" indexName="idx_notifications_user_id">
+            <column name="user_id"/>
+        </createIndex>
+        <createIndex tableName="notifications" indexName="idx_notifications_status">
+            <column name="status"/>
+        </createIndex>
+        <createIndex tableName="notifications" indexName="idx_notifications_type">
+            <column name="type"/>
+        </createIndex>
+        <createIndex tableName="notifications" indexName="idx_notifications_is_read">
+            <column name="is_read"/>
+        </createIndex>
+        <createIndex tableName="expiry_tracking" indexName="idx_expiry_tracking_document_id">
+            <column name="document_id"/>
+        </createIndex>
+        <createIndex tableName="expiry_tracking" indexName="idx_expiry_tracking_expiry_date">
+            <column name="expiry_date"/>
+        </createIndex>
+        <createIndex tableName="expiry_tracking" indexName="idx_expiry_tracking_status">
+            <column name="status"/>
+        </createIndex>
+        <createIndex tableName="notification_preferences" indexName="idx_notification_preferences_user_id">
+            <column name="user_id"/>
+        </createIndex>
+        <createIndex tableName="notification_preferences" indexName="idx_notification_preferences_type">
+            <column name="notification_type"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="004-006" author="dms">
+        <comment>Insert sample notification preferences</comment>
+        <sql>
+            INSERT INTO notification_preferences (user_id, notification_type, email_enabled, sms_enabled, in_app_enabled)
+            SELECT id, 'DOCUMENT_EXPIRY', true, false, true FROM users WHERE username = 'admin';
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
+

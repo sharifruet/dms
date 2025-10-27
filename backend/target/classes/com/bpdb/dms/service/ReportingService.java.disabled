@@ -1,0 +1,468 @@
+package com.bpdb.dms.service;
+
+import com.bpdb.dms.entity.*;
+import com.bpdb.dms.repository.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
+
+/**
+ * Service for managing reports and analytics
+ */
+@Service
+@Transactional
+public class ReportingService {
+    
+    private static final Logger logger = LoggerFactory.getLogger(ReportingService.class);
+    
+    @Autowired
+    private ReportRepository reportRepository;
+    
+    @Autowired
+    private AnalyticsRepository analyticsRepository;
+    
+    @Autowired
+    private DashboardRepository dashboardRepository;
+    
+    @Autowired
+    private DocumentRepository documentRepository;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Autowired
+    private ExpiryTrackingRepository expiryTrackingRepository;
+    
+    @Autowired
+    private AuditLogRepository auditLogRepository;
+    
+    @Autowired
+    private AuditService auditService;
+    
+    @Autowired
+    private PdfReportService pdfReportService;
+    
+    @Autowired
+    private ExcelReportService excelReportService;
+    
+    @Autowired
+    private WordReportService wordReportService;
+    
+    /**
+     * Create a new report
+     */
+    public Report createReport(String name, String description, ReportType type, 
+                              ReportFormat format, User createdBy, Map<String, Object> parameters) {
+        try {
+            Report report = new Report(name, description, type, format, createdBy);
+            
+            if (parameters != null) {
+                report.setParameters(convertParametersToString(parameters));
+            }
+            
+            // Set expiry date (default 30 days)
+            report.setExpiresAt(LocalDateTime.now().plusDays(30));
+            
+            Report savedReport = reportRepository.save(report);
+            
+            // Generate report asynchronously
+            generateReportAsync(savedReport);
+            
+            // Log activity
+            auditService.logActivity(createdBy.getUsername(), "REPORT_CREATED", 
+                "Report created: " + name, parameters);
+            
+            logger.info("Report created: {} by user {}", name, createdBy.getUsername());
+            
+            return savedReport;
+            
+        } catch (Exception e) {
+            logger.error("Failed to create report {}: {}", name, e.getMessage());
+            throw new RuntimeException("Failed to create report", e);
+        }
+    }
+    
+    /**
+     * Generate report asynchronously
+     */
+    @Async
+    public CompletableFuture<Void> generateReportAsync(Report report) {
+        try {
+            report.setStatus(ReportStatus.GENERATING);
+            reportRepository.save(report);
+            
+            // Generate report based on type and format
+            String filePath = generateReportFile(report);
+            
+            if (filePath != null) {
+                report.setFilePath(filePath);
+                report.setGeneratedAt(LocalDateTime.now());
+                report.setStatus(ReportStatus.COMPLETED);
+                
+                // Calculate file size (simplified)
+                report.setFileSize(1024L); // Placeholder
+                
+                reportRepository.save(report);
+                
+                logger.info("Report generated successfully: {}", report.getName());
+            } else {
+                report.setStatus(ReportStatus.FAILED);
+                reportRepository.save(report);
+                
+                logger.error("Failed to generate report: {}", report.getName());
+            }
+            
+        } catch (Exception e) {
+            logger.error("Failed to generate report {}: {}", report.getName(), e.getMessage());
+            report.setStatus(ReportStatus.FAILED);
+            reportRepository.save(report);
+        }
+        
+        return CompletableFuture.completedFuture(null);
+    }
+    
+    /**
+     * Generate report file based on type and format
+     */
+    private String generateReportFile(Report report) {
+        try {
+            Map<String, Object> parameters = convertStringToParameters(report.getParameters());
+            
+            switch (report.getFormat()) {
+                case PDF:
+                    return pdfReportService.generateReport(report.getType(), parameters);
+                case EXCEL:
+                    return excelReportService.generateReport(report.getType(), parameters);
+                case WORD:
+                    return wordReportService.generateReport(report.getType(), parameters);
+                case CSV:
+                    return generateCsvReport(report.getType(), parameters);
+                case JSON:
+                    return generateJsonReport(report.getType(), parameters);
+                case HTML:
+                    return generateHtmlReport(report.getType(), parameters);
+                default:
+                    return null;
+            }
+        } catch (Exception e) {
+            logger.error("Failed to generate report file: {}", e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * Get document summary report data
+     */
+    public Map<String, Object> getDocumentSummaryData(Map<String, Object> parameters) {
+        Map<String, Object> data = new HashMap<>();
+        
+        try {
+            // Total documents
+            long totalDocuments = documentRepository.count();
+            data.put("totalDocuments", totalDocuments);
+            
+            // Documents by type
+            Map<String, Long> documentsByType = new HashMap<>();
+            for (DocumentType type : DocumentType.values()) {
+                long count = documentRepository.countByDocumentType(type);
+                documentsByType.put(type.name(), count);
+            }
+            data.put("documentsByType", documentsByType);
+            
+            // Documents by department
+            List<Object[]> departmentStats = documentRepository.getDocumentCountByDepartment();
+            Map<String, Long> documentsByDepartment = new HashMap<>();
+            for (Object[] stat : departmentStats) {
+                documentsByDepartment.put((String) stat[0], (Long) stat[1]);
+            }
+            data.put("documentsByDepartment", documentsByDepartment);
+            
+            // Recent uploads (last 30 days)
+            LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
+            long recentUploads = documentRepository.countByCreatedAtAfter(thirtyDaysAgo);
+            data.put("recentUploads", recentUploads);
+            
+            // Active documents
+            long activeDocuments = documentRepository.countByIsActiveTrue();
+            data.put("activeDocuments", activeDocuments);
+            
+        } catch (Exception e) {
+            logger.error("Failed to get document summary data: {}", e.getMessage());
+        }
+        
+        return data;
+    }
+    
+    /**
+     * Get user activity report data
+     */
+    public Map<String, Object> getUserActivityData(Map<String, Object> parameters) {
+        Map<String, Object> data = new HashMap<>();
+        
+        try {
+            // Total users
+            long totalUsers = userRepository.count();
+            data.put("totalUsers", totalUsers);
+            
+            // Active users
+            long activeUsers = userRepository.countByIsActiveTrue();
+            data.put("activeUsers", activeUsers);
+            
+            // Users by role
+            Map<String, Long> usersByRole = new HashMap<>();
+            for (Role role : Role.values()) {
+                long count = userRepository.countByRole(role);
+                usersByRole.put(role.name(), count);
+            }
+            data.put("usersByRole", usersByRole);
+            
+            // Users by department
+            List<Object[]> departmentStats = userRepository.getUserCountByDepartment();
+            Map<String, Long> usersByDepartment = new HashMap<>();
+            for (Object[] stat : departmentStats) {
+                usersByDepartment.put((String) stat[0], (Long) stat[1]);
+            }
+            data.put("usersByDepartment", usersByDepartment);
+            
+            // Recent logins (last 30 days)
+            LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
+            long recentLogins = auditLogRepository.countByCreatedAtAfterAndAction(thirtyDaysAgo, "LOGIN");
+            data.put("recentLogins", recentLogins);
+            
+        } catch (Exception e) {
+            logger.error("Failed to get user activity data: {}", e.getMessage());
+        }
+        
+        return data;
+    }
+    
+    /**
+     * Get expiry report data
+     */
+    public Map<String, Object> getExpiryReportData(Map<String, Object> parameters) {
+        Map<String, Object> data = new HashMap<>();
+        
+        try {
+            // Active expiry tracking
+            long activeTracking = expiryTrackingRepository.countByStatus(ExpiryStatus.ACTIVE);
+            data.put("activeTracking", activeTracking);
+            
+            // Expired documents
+            long expiredDocuments = expiryTrackingRepository.countByStatus(ExpiryStatus.EXPIRED);
+            data.put("expiredDocuments", expiredDocuments);
+            
+            // Documents expiring in next 30 days
+            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime thirtyDaysFromNow = now.plusDays(30);
+            List<ExpiryTracking> expiringIn30Days = expiryTrackingRepository.findExpiringBetween(now, thirtyDaysFromNow);
+            data.put("expiringIn30Days", expiringIn30Days.size());
+            
+            // Documents expiring in next 7 days
+            LocalDateTime sevenDaysFromNow = now.plusDays(7);
+            List<ExpiryTracking> expiringIn7Days = expiryTrackingRepository.findExpiringBetween(now, sevenDaysFromNow);
+            data.put("expiringIn7Days", expiringIn7Days.size());
+            
+            // Expiry tracking by type
+            Map<String, Long> trackingByType = new HashMap<>();
+            for (ExpiryType type : ExpiryType.values()) {
+                long count = expiryTrackingRepository.countByExpiryTypeAndStatus(type, ExpiryStatus.ACTIVE);
+                trackingByType.put(type.name(), count);
+            }
+            data.put("trackingByType", trackingByType);
+            
+        } catch (Exception e) {
+            logger.error("Failed to get expiry report data: {}", e.getMessage());
+        }
+        
+        return data;
+    }
+    
+    /**
+     * Get system performance data
+     */
+    public Map<String, Object> getSystemPerformanceData(Map<String, Object> parameters) {
+        Map<String, Object> data = new HashMap<>();
+        
+        try {
+            // Storage usage (simplified)
+            long totalDocuments = documentRepository.count();
+            double estimatedStorage = totalDocuments * 0.5; // 0.5 MB per document average
+            data.put("estimatedStorageMB", estimatedStorage);
+            
+            // System uptime (placeholder)
+            data.put("uptimeHours", 24 * 30); // 30 days
+            
+            // Average response time (placeholder)
+            data.put("averageResponseTimeMs", 150);
+            
+            // Error rate (placeholder)
+            data.put("errorRate", 0.01); // 1%
+            
+        } catch (Exception e) {
+            logger.error("Failed to get system performance data: {}", e.getMessage());
+        }
+        
+        return data;
+    }
+    
+    /**
+     * Record analytics data
+     */
+    public void recordAnalytics(MetricType metricType, String metricName, Double metricValue, 
+                               String dimensionKey, String dimensionValue) {
+        try {
+            Analytics analytics = new Analytics(metricType, metricName, metricValue, dimensionKey, dimensionValue);
+            analyticsRepository.save(analytics);
+            
+            logger.debug("Analytics recorded: {} = {} for {} = {}", metricName, metricValue, dimensionKey, dimensionValue);
+            
+        } catch (Exception e) {
+            logger.error("Failed to record analytics: {}", e.getMessage());
+        }
+    }
+    
+    /**
+     * Get analytics data for dashboard
+     */
+    public Map<String, Object> getAnalyticsData(MetricType metricType, String dimensionKey) {
+        Map<String, Object> data = new HashMap<>();
+        
+        try {
+            List<Object[]> aggregatedData = analyticsRepository.getAggregatedMetricsByDimension(metricType, dimensionKey);
+            
+            Map<String, Double> metrics = new HashMap<>();
+            for (Object[] row : aggregatedData) {
+                metrics.put((String) row[0], (Double) row[1]);
+            }
+            
+            data.put("metrics", metrics);
+            data.put("total", metrics.values().stream().mapToDouble(Double::doubleValue).sum());
+            
+        } catch (Exception e) {
+            logger.error("Failed to get analytics data: {}", e.getMessage());
+        }
+        
+        return data;
+    }
+    
+    /**
+     * Process scheduled reports
+     */
+    @Scheduled(fixedRate = 300000) // Run every 5 minutes
+    public void processScheduledReports() {
+        try {
+            List<Report> scheduledReports = reportRepository.findScheduledForGeneration(LocalDateTime.now());
+            
+            for (Report report : scheduledReports) {
+                generateReportAsync(report);
+                
+                // Update next generation time
+                report.setLastGeneratedAt(LocalDateTime.now());
+                // TODO: Calculate next generation time based on cron expression
+                report.setNextGenerationAt(LocalDateTime.now().plusHours(24));
+                reportRepository.save(report);
+            }
+            
+            if (!scheduledReports.isEmpty()) {
+                logger.info("Processed {} scheduled reports", scheduledReports.size());
+            }
+            
+        } catch (Exception e) {
+            logger.error("Failed to process scheduled reports: {}", e.getMessage());
+        }
+    }
+    
+    /**
+     * Clean up old reports and analytics
+     */
+    @Scheduled(cron = "0 0 3 * * ?") // Run daily at 3 AM
+    public void cleanupOldData() {
+        try {
+            LocalDateTime cutoffDate = LocalDateTime.now().minusDays(90);
+            
+            // Clean up old reports
+            reportRepository.deleteOldReports(cutoffDate);
+            
+            // Clean up old analytics
+            analyticsRepository.deleteOldAnalytics(cutoffDate);
+            
+            logger.info("Cleaned up old reports and analytics data");
+            
+        } catch (Exception e) {
+            logger.error("Failed to cleanup old data: {}", e.getMessage());
+        }
+    }
+    
+    /**
+     * Generate CSV report
+     */
+    private String generateCsvReport(ReportType type, Map<String, Object> parameters) {
+        // TODO: Implement CSV report generation
+        return "/reports/temp_" + System.currentTimeMillis() + ".csv";
+    }
+    
+    /**
+     * Generate JSON report
+     */
+    private String generateJsonReport(ReportType type, Map<String, Object> parameters) {
+        // TODO: Implement JSON report generation
+        return "/reports/temp_" + System.currentTimeMillis() + ".json";
+    }
+    
+    /**
+     * Generate HTML report
+     */
+    private String generateHtmlReport(ReportType type, Map<String, Object> parameters) {
+        // TODO: Implement HTML report generation
+        return "/reports/temp_" + System.currentTimeMillis() + ".html";
+    }
+    
+    /**
+     * Convert parameters map to JSON string
+     */
+    private String convertParametersToString(Map<String, Object> parameters) {
+        try {
+            // Simple JSON conversion - in production, use a proper JSON library
+            StringBuilder json = new StringBuilder("{");
+            boolean first = true;
+            for (Map.Entry<String, Object> entry : parameters.entrySet()) {
+                if (!first) json.append(",");
+                json.append("\"").append(entry.getKey()).append("\":\"").append(entry.getValue()).append("\"");
+                first = false;
+            }
+            json.append("}");
+            return json.toString();
+        } catch (Exception e) {
+            logger.error("Failed to convert parameters to string: {}", e.getMessage());
+            return "{}";
+        }
+    }
+    
+    /**
+     * Convert JSON string to parameters map
+     */
+    private Map<String, Object> convertStringToParameters(String parametersJson) {
+        try {
+            // Simple JSON parsing - in production, use a proper JSON library
+            Map<String, Object> parameters = new HashMap<>();
+            if (parametersJson != null && !parametersJson.trim().isEmpty()) {
+                // TODO: Implement proper JSON parsing
+                parameters.put("default", "value");
+            }
+            return parameters;
+        } catch (Exception e) {
+            logger.error("Failed to convert string to parameters: {}", e.getMessage());
+            return new HashMap<>();
+        }
+    }
+}

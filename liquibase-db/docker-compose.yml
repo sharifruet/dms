@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  liquibase:
+    image: liquibase/liquibase:4.24.0
+    container_name: dms-liquibase
+    environment:
+      - LIQUIBASE_CHANGELOGFILE=src/main/resources/db/changelog/db.changelog-master.xml
+      - LIQUIBASE_URL=jdbc:postgresql://postgres:5432/dms_db
+      - LIQUIBASE_USERNAME=dms_user
+      - LIQUIBASE_PASSWORD=dms_password
+      - LIQUIBASE_DRIVER=org.postgresql.Driver
+    volumes:
+      - ./liquibase-db:/liquibase
+    working_dir: /liquibase
+    command: update
+    depends_on:
+      - postgres
+    networks:
+      - dms-network
+
+  postgres:
+    image: postgres:15
+    container_name: dms-postgres
+    environment:
+      POSTGRES_DB: dms_db
+      POSTGRES_USER: dms_user
+      POSTGRES_PASSWORD: dms_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dms-network
+
+volumes:
+  postgres_data:
+
+networks:
+  dms-network:
+    driver: bridge
+

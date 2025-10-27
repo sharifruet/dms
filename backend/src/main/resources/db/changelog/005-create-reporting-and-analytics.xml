@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="005-001" author="dms">
+        <comment>Create reports table</comment>
+        <createTable tableName="reports">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="TEXT"/>
+            <column name="type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="format" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(20)" defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="file_path" type="VARCHAR(500)"/>
+            <column name="created_by" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="005-002" author="dms">
+        <comment>Create analytics table</comment>
+        <createTable tableName="analytics">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="metric_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="metric_name" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="metric_value" type="DECIMAL(15,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="metric_unit" type="VARCHAR(50)"/>
+            <column name="dimension_key" type="VARCHAR(100)"/>
+            <column name="dimension_value" type="VARCHAR(255)"/>
+            <column name="period_start" type="TIMESTAMP"/>
+            <column name="period_end" type="TIMESTAMP"/>
+            <column name="metadata" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="005-003" author="dms">
+        <comment>Create dashboards table</comment>
+        <createTable tableName="dashboards">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="TEXT"/>
+            <column name="type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="config" type="JSONB"/>
+            <column name="is_public" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="005-004" author="dms">
+        <comment>Add foreign key constraints</comment>
+        <addForeignKeyConstraint
+                baseTableName="reports"
+                baseColumnNames="created_by"
+                constraintName="fk_reports_created_by"
+                referencedTableName="users"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+        <addForeignKeyConstraint
+                baseTableName="dashboards"
+                baseColumnNames="created_by"
+                constraintName="fk_dashboards_created_by"
+                referencedTableName="users"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+    </changeSet>
+
+    <changeSet id="005-005" author="dms">
+        <comment>Create indexes</comment>
+        <createIndex tableName="reports" indexName="idx_reports_created_by">
+            <column name="created_by"/>
+        </createIndex>
+        <createIndex tableName="reports" indexName="idx_reports_type">
+            <column name="type"/>
+        </createIndex>
+        <createIndex tableName="reports" indexName="idx_reports_status">
+            <column name="status"/>
+        </createIndex>
+        <createIndex tableName="analytics" indexName="idx_analytics_metric_name">
+            <column name="metric_name"/>
+        </createIndex>
+        <createIndex tableName="analytics" indexName="idx_analytics_metric_type">
+            <column name="metric_type"/>
+        </createIndex>
+        <createIndex tableName="analytics" indexName="idx_analytics_created_at">
+            <column name="created_at"/>
+        </createIndex>
+        <createIndex tableName="dashboards" indexName="idx_dashboards_created_by">
+            <column name="created_by"/>
+        </createIndex>
+        <createIndex tableName="dashboards" indexName="idx_dashboards_type">
+            <column name="type"/>
+        </createIndex>
+        <createIndex tableName="dashboards" indexName="idx_dashboards_is_public">
+            <column name="is_public"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="005-006" author="dms">
+        <comment>Create index for analytics table</comment>
+        <createIndex tableName="analytics" indexName="idx_analytics_created_at">
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

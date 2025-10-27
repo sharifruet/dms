@@ -1,0 +1,99 @@
+OCR-Integrated Document Management System (DMS)
+Modules & Features 
+1. Document Upload & Classification 
+Upload documents: PDF, Word, Excel, Image (Scanned Copy)
+Role-based upload (DD1, DD2, DD3, DD4)
+Auto document type detection (Tender, PO, LC, BG, 
+Correspondence, Contract, Stationery Record, etc.)
+OCR-based metadata extraction
+Manual verification and correction
+Auto indexing and naming convention
+Duplicate detection and attachment linking
+Stationery & asset record tracking per employee
+Tender item tracking via OCR or manual entry
+Universal search across all files
+Edit and re-upload Word/Excel documents with version tracking
+2. OCR Extraction & Metadata Management
+Integrated OCR engine for all uploaded documents
+Auto-populate metadata fields (Tender No, Vendor, Date, Amount, 
+etc.)
+Accuracy validation interface
+Detect missing or inconsistent data
+Pre-defined templates per document type
+3. Document Repository & Storage 
+Centralized and secure storage
+Folder-wise and department-wise categorization
+Version control
+Linked document view (Contract ↔ LC ↔ BG ↔ PO ↔
+Correspondence)
+Archive and restore functionality
+Folder summary view (total files, uploaded files, remaining 
+uploads)
+Explorer-style folder interface for easy navigation
+4. Search, Filter & Retrieval 
+Full-text OCR-based search
+Advanced metadata search (Tender No, PO No, Vendor, Date, 
+Document Type)
+Filters and sorting options
+Document preview and secure download
+Export search results (PDF/Excel)
+5. Access Control & Role Management 
+Role-based access (Admin, Officer, Viewer, Auditor)
+Permission matrix (upload/view/edit/delete)
+Department-level access restriction
+Two-Factor Authentication (optional)
+User authorization and access log
+Secure file sharing among users
+6. Notification & Alert 
+Configurable alert intervals (30/15/7 days).
+Alerts for contract, BG (Bank Guarantee), and LC expiry.
+BG/PG Expiry Alert: System auto-checks expiry dates; sends 
+notification (Email/SMS/In-App) before and after expiry until renewed.
+Performance Security (PS) Tracking:
+➢ Tracks the warranty/coverage period of each PS.
+➢ Auto alert if the warranty period is about to expire or not covered.
+➢ Renewal alert generated if PS renewal not recorded within grace period.
+➢ Renewal update form allows authorized users to extend PS coverage and 
+upload 
+➢ new documents.
+ Alerts for missing mandatory documents or delayed uploads.
+Reminder dashboard summarizing pending renewals, upcoming 
+expiries, and compliance status.
+Notification channels: Email, SMS, In-App.
+7. Dashboard & Reporting 
+Real-time dashboard (document count, status, expiry alerts)
+Vendor-wise and department-wise summaries
+Graphical charts for management overview
+Exportable reports (PDF, Excel, Word)
+Monthly/Quarterly summaries
+8. Audit Trail & Compliance 
+Log all activities (upload/view/modify/delete)
+User-wise activity reports
+Version history tracking
+Deleted/replaced document recovery
+Audit report generation (PDF/Excel)
+ 9. Document Linkage & Lifecycle Management 
+Internal linkage between related documents (Contract ↔ LC ↔ BG 
+↔ PO ↔ Correspondence).
+Dual Start Logic (Sign Date / LC Opening Date) for contract 
+timeline activation.
+System auto-tracks the validity of BG, PG & Warranty period.
+Auto notification on expiry of BG/PG/Warranty period with renewal 
+option.
+Unified alert dashboard showing linked documents and status 
+flags (e.g., Active, Expired, Renewed).
+Future-ready API structure for integration with BPDB ERP or Audit 
+systems.
+ 10. Security & Backup 
+AES-256 data encryption
+SSL-secured communication
+Role-based access control
+Scheduled backups (daily/weekly) to on-premise/cloud
+Disaster recovery and restore plan
+Compliance with BPDB IT & e-Governance Security Policy
+ 11. System Administration
+User and role management
+Department and folder configuration
+System log monitoring
+Data retention policy configuration
+Backup and restore the control panel

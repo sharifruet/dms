@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <include file="db/changelog/001-create-initial-tables.xml"/>
+    <include file="db/changelog/002-create-roles-and-permissions.xml"/>
+    <include file="db/changelog/003-create-user-management-and-audit.xml"/>
+    <include file="db/changelog/004-create-notification-and-expiry-tracking.xml"/>
+    <include file="db/changelog/005-create-reporting-and-analytics.xml"/>
+    <include file="db/changelog/006-create-advanced-features.xml"/>
+    <include file="db/changelog/007-create-enterprise-features.xml"/>
+    <include file="db/changelog/008-create-testing-and-optimization.xml"/>
+
+</databaseChangeLog>
