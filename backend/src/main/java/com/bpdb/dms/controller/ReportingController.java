@@ -1,6 +1,7 @@
 package com.bpdb.dms.controller;
 
 import com.bpdb.dms.entity.*;
+import com.bpdb.dms.repository.UserRepository;
 import com.bpdb.dms.service.ReportingService;
 import com.bpdb.dms.service.DashboardService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -9,6 +10,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -29,6 +31,18 @@ public class ReportingController {
     @Autowired
     private DashboardService dashboardService;
     
+    @Autowired
+    private UserRepository userRepository;
+    
+    /**
+     * Helper method to get User from Authentication
+     */
+    private User getUserFromAuthentication(Authentication authentication) {
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        return userRepository.findByUsername(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+    
     /**
      * Create a new report
      */
@@ -38,7 +52,7 @@ public class ReportingController {
             Authentication authentication) {
         
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = getUserFromAuthentication(authentication);
             
             Report report = reportingService.createReport(
                 request.getName(),
@@ -66,7 +80,7 @@ public class ReportingController {
             Authentication authentication) {
         
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = getUserFromAuthentication(authentication);
             Pageable pageable = PageRequest.of(page, size);
             Page<Report> reports = reportingService.reportRepository.findByCreatedBy(user, pageable);
             

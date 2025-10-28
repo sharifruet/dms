@@ -49,4 +49,46 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
      */
     @Query("SELECT d FROM Document d WHERE d.tags LIKE %:tag%")
     List<Document> findByTagsContaining(@Param("tag") String tag);
+    
+    /**
+     * Count documents by type
+     */
+    long countByDocumentType(DocumentType documentType);
+    
+    /**
+     * Count documents by department
+     */
+    long countByDepartment(String department);
+    
+    /**
+     * Count documents by uploaded user
+     */
+    long countByUploadedBy(User user);
+    
+    /**
+     * Count active documents
+     */
+    long countByIsActiveTrue();
+    
+    /**
+     * Count documents uploaded by user and active
+     */
+    long countByUploadedByAndIsActiveTrue(User user);
+    
+    /**
+     * Count documents by department and active
+     */
+    long countByDepartmentAndIsActiveTrue(String department);
+    
+    /**
+     * Count documents created after date
+     */
+    @Query("SELECT COUNT(d) FROM Document d WHERE d.createdAt > :date")
+    long countByCreatedAtAfter(@Param("date") java.time.LocalDateTime date);
+    
+    /**
+     * Get document count by department
+     */
+    @Query("SELECT d.department, COUNT(d) FROM Document d GROUP BY d.department")
+    java.util.List<Object[]> getDocumentCountByDepartment();
 }

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Box } from '@mui/material';
-import Navbar from './components/Navbar';
+import Sidebar from './components/Sidebar';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Documents from './pages/Documents';
@@ -11,6 +11,7 @@ import Notifications from './pages/Notifications';
 import ExpiryTracking from './pages/ExpiryTracking';
 import Reports from './pages/Reports';
 import DashboardPage from './pages/DashboardPage';
+import DashboardManagement from './pages/DashboardManagement';
 import Workflows from './pages/Workflows';
 import DocumentVersioning from './pages/DocumentVersioning';
 import Integrations from './pages/Integrations';
@@ -23,9 +24,17 @@ function App() {
   const { isAuthenticated } = useAppSelector((state) => state.auth);
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      {isAuthenticated && <Navbar />}
-      <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#ffffff' }}>
+      {isAuthenticated && <Sidebar />}
+      <Box 
+        component="main" 
+        sx={{ 
+          flexGrow: 1, 
+          ml: isAuthenticated ? '260px' : 0,
+          minHeight: '100vh',
+          backgroundColor: '#ffffff',
+        }}
+      >
         <Routes>
           <Route 
             path="/login" 
@@ -58,6 +67,10 @@ function App() {
           <Route 
             path="/reports" 
             element={isAuthenticated ? <Reports /> : <Navigate to="/login" />} 
+          />
+          <Route 
+            path="/dashboard-management" 
+            element={isAuthenticated ? <DashboardManagement /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/workflows" 

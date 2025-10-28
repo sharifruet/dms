@@ -51,6 +51,11 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
     List<Notification> findByStatus(NotificationStatus status);
     
     /**
+     * Count notifications by status
+     */
+    long countByStatus(NotificationStatus status);
+    
+    /**
      * Find notifications scheduled for sending
      */
     @Query("SELECT n FROM Notification n WHERE n.status = 'PENDING' AND n.scheduledAt <= :now")

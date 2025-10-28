@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import {
-  Container,
-  Paper,
+  Box,
+  Card,
+  CardContent,
   TextField,
   Button,
   Typography,
-  Box,
   Alert,
   CircularProgress,
 } from '@mui/material';
@@ -59,73 +59,195 @@ const Login: React.FC = () => {
   };
 
   return (
-    <Container component="main" maxWidth="sm">
-      <Box
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f8fafc',
+        px: 2,
+      }}
+    >
+      <Card
         sx={{
-          marginTop: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
+          width: '100%',
+          maxWidth: 400,
+          borderRadius: 3,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.06)',
+          border: '1px solid #e5e7eb',
         }}
       >
-        <Paper elevation={3} sx={{ padding: 4, width: '100%' }}>
-          <Typography component="h1" variant="h4" align="center" gutterBottom>
-            DMS Login
-          </Typography>
-          <Typography variant="body2" align="center" color="text.secondary" gutterBottom>
-            Document Management System
-          </Typography>
+        <CardContent sx={{ p: 4 }}>
+          {/* Header */}
+          <Box sx={{ textAlign: 'center', mb: 4 }}>
+            <Typography
+              variant="h4"
+              sx={{
+                fontWeight: 700,
+                fontSize: '1.875rem',
+                color: '#111827',
+                mb: 1,
+                letterSpacing: '-0.02em',
+              }}
+            >
+              Welcome back
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                color: '#6b7280',
+                fontSize: '0.9375rem',
+              }}
+            >
+              Sign in to your account to continue
+            </Typography>
+          </Box>
 
+          {/* Error Alert */}
           {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
+            <Alert
+              severity="error"
+              sx={{
+                mb: 3,
+                borderRadius: 2,
+                fontSize: '0.875rem',
+              }}
+            >
               {error}
             </Alert>
           )}
 
-          <Box component="form" onSubmit={handleSubmit(onSubmit)} sx={{ mt: 1 }}>
+          {/* Login Form */}
+          <Box component="form" onSubmit={handleSubmit(onSubmit)}>
             <TextField
-              margin="normal"
-              required
               fullWidth
-              id="username"
               label="Username"
               autoComplete="username"
               autoFocus
               {...register('username')}
               error={!!errors.username}
               helperText={errors.username?.message}
+              sx={{
+                mb: 3,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                  '& fieldset': {
+                    borderColor: '#d1d5db',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: '#9ca3af',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#3b82f6',
+                  },
+                },
+                '& .MuiInputLabel-root': {
+                  color: '#6b7280',
+                  '&.Mui-focused': {
+                    color: '#3b82f6',
+                  },
+                },
+              }}
             />
+
             <TextField
-              margin="normal"
-              required
               fullWidth
               label="Password"
               type="password"
-              id="password"
               autoComplete="current-password"
               {...register('password')}
               error={!!errors.password}
               helperText={errors.password?.message}
+              sx={{
+                mb: 4,
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 2,
+                  '& fieldset': {
+                    borderColor: '#d1d5db',
+                  },
+                  '&:hover fieldset': {
+                    borderColor: '#9ca3af',
+                  },
+                  '&.Mui-focused fieldset': {
+                    borderColor: '#3b82f6',
+                  },
+                },
+                '& .MuiInputLabel-root': {
+                  color: '#6b7280',
+                  '&.Mui-focused': {
+                    color: '#3b82f6',
+                  },
+                },
+              }}
             />
+
             <Button
               type="submit"
               fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2 }}
               disabled={loading}
+              sx={{
+                py: 1.5,
+                borderRadius: 2,
+                backgroundColor: '#3b82f6',
+                fontSize: '0.9375rem',
+                fontWeight: 600,
+                textTransform: 'none',
+                boxShadow: 'none',
+                '&:hover': {
+                  backgroundColor: '#2563eb',
+                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+                },
+                '&:active': {
+                  backgroundColor: '#1d4ed8',
+                },
+                '&:disabled': {
+                  backgroundColor: '#9ca3af',
+                },
+              }}
             >
-              {loading ? <CircularProgress size={24} /> : 'Sign In'}
+              {loading ? <CircularProgress size={24} color="inherit" /> : 'Sign in'}
             </Button>
           </Box>
 
-          <Box sx={{ mt: 2, textAlign: 'center' }}>
-            <Typography variant="body2" color="text.secondary">
-              Default credentials: admin / password
+          {/* Demo Credentials */}
+          <Box
+            sx={{
+              mt: 4,
+              p: 2,
+              backgroundColor: '#f9fafb',
+              borderRadius: 2,
+              border: '1px solid #e5e7eb',
+            }}
+          >
+            <Typography
+              variant="caption"
+              sx={{
+                color: '#6b7280',
+                fontSize: '0.75rem',
+                fontWeight: 500,
+                display: 'block',
+                mb: 1,
+              }}
+            >
+              Demo Credentials:
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{
+                color: '#374151',
+                fontSize: '0.75rem',
+                fontFamily: 'monospace',
+              }}
+            >
+              Username: admin<br />
+              Password: password
             </Typography>
           </Box>
-        </Paper>
-      </Box>
-    </Container>
+        </CardContent>
+      </Card>
+    </Box>
   );
 };
 

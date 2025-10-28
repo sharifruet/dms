@@ -1,6 +1,7 @@
 package com.bpdb.dms.controller;
 
 import com.bpdb.dms.entity.*;
+import com.bpdb.dms.repository.UserRepository;
 import com.bpdb.dms.service.WorkflowService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -8,6 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,6 +26,18 @@ public class WorkflowController {
     @Autowired
     private WorkflowService workflowService;
     
+    @Autowired
+    private UserRepository userRepository;
+    
+    /**
+     * Helper method to get User from Authentication
+     */
+    private User getUserFromAuthentication(Authentication authentication) {
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        return userRepository.findByUsername(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+    
     /**
      * Create a new workflow
      */
@@ -31,7 +45,7 @@ public class WorkflowController {
     public ResponseEntity<Workflow> createWorkflow(@RequestBody CreateWorkflowRequest request,
                                                   Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = getUserFromAuthentication(authentication);
             
             Workflow workflow = workflowService.createWorkflow(
                 request.getName(),
@@ -56,7 +70,7 @@ public class WorkflowController {
                                                         @RequestBody StartWorkflowRequest request,
                                                         Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = getUserFromAuthentication(authentication);
             
             WorkflowInstance instance = workflowService.startWorkflow(
                 workflowId,
@@ -79,7 +93,7 @@ public class WorkflowController {
                                                     @RequestBody CompleteStepRequest request,
                                                     Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = getUserFromAuthentication(authentication);
             
             workflowService.completeWorkflowStep(
                 stepId,
@@ -103,7 +117,7 @@ public class WorkflowController {
                                                  @RequestBody RejectStepRequest request,
                                                  Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = getUserFromAuthentication(authentication);
             
             workflowService.rejectWorkflowStep(
                 stepId,
@@ -127,7 +141,7 @@ public class WorkflowController {
             @RequestParam(defaultValue = "10") int size,
             Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = getUserFromAuthentication(authentication);
             Pageable pageable = PageRequest.of(page, size);
             
             Page<WorkflowInstance> instances = workflowService.getWorkflowInstancesForUser(user, pageable);
@@ -148,7 +162,7 @@ public class WorkflowController {
             @RequestParam(defaultValue = "10") int size,
             Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = getUserFromAuthentication(authentication);
             Pageable pageable = PageRequest.of(page, size);
             
             Page<WorkflowStep> steps = workflowService.getWorkflowStepsForUser(user, pageable);

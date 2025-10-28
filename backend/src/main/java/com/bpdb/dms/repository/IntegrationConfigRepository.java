@@ -31,6 +31,11 @@ public interface IntegrationConfigRepository extends JpaRepository<IntegrationCo
     Page<IntegrationConfig> findByStatus(IntegrationStatus status, Pageable pageable);
     
     /**
+     * Find integration configs by type and status
+     */
+    Page<IntegrationConfig> findByIntegrationTypeAndStatus(IntegrationType integrationType, IntegrationStatus status, Pageable pageable);
+    
+    /**
      * Find enabled integration configs
      */
     List<IntegrationConfig> findByIsEnabledTrue();

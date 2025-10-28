@@ -3,10 +3,14 @@ package com.bpdb.dms.repository;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.bpdb.dms.entity.Analytics;
 import com.bpdb.dms.entity.MetricType;
@@ -14,7 +18,7 @@ import com.bpdb.dms.entity.MetricType;
 /**
  * Repository interface for Analytics entity
  */
-// @Repository
+@Repository
 public interface AnalyticsRepository extends JpaRepository<Analytics, Long> {
     
     /**
@@ -23,9 +27,39 @@ public interface AnalyticsRepository extends JpaRepository<Analytics, Long> {
     List<Analytics> findByMetricType(MetricType metricType);
     
     /**
+     * Find analytics by metric type (pageable)
+     */
+    Page<Analytics> findByMetricType(MetricType metricType, Pageable pageable);
+    
+    /**
      * Find analytics by metric name
      */
     List<Analytics> findByMetricName(String metricName);
+    
+    /**
+     * Find analytics by metric name and created at between
+     */
+    List<Analytics> findByMetricNameAndCreatedAtBetween(String metricName, LocalDateTime startDate, LocalDateTime endDate);
+    
+    /**
+     * Find analytics by metric name and created at between (pageable)
+     */
+    Page<Analytics> findByMetricNameAndCreatedAtBetween(String metricName, LocalDateTime startDate, LocalDateTime endDate, Pageable pageable);
+    
+    /**
+     * Find analytics by metric type and created at between
+     */
+    List<Analytics> findByMetricTypeAndCreatedAtBetween(MetricType metricType, LocalDateTime startDate, LocalDateTime endDate);
+    
+    /**
+     * Find analytics by metric type and created at between (pageable)
+     */
+    Page<Analytics> findByMetricTypeAndCreatedAtBetween(MetricType metricType, LocalDateTime startDate, LocalDateTime endDate, Pageable pageable);
+    
+    /**
+     * Find analytics by metric type and metric name and created at between
+     */
+    Page<Analytics> findByMetricTypeAndMetricNameAndCreatedAtBetween(MetricType metricType, String metricName, LocalDateTime startDate, LocalDateTime endDate, Pageable pageable);
     
     /**
      * Find analytics by dimension
@@ -88,6 +122,8 @@ public interface AnalyticsRepository extends JpaRepository<Analytics, Long> {
     /**
      * Delete old analytics data
      */
+    @Modifying
+    @Transactional
     @Query("DELETE FROM Analytics a WHERE a.createdAt < :cutoffDate")
     void deleteOldAnalytics(@Param("cutoffDate") LocalDateTime cutoffDate);
 }

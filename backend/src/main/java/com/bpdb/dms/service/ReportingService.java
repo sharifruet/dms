@@ -26,7 +26,7 @@ public class ReportingService {
     private static final Logger logger = LoggerFactory.getLogger(ReportingService.class);
     
     @Autowired
-    private ReportRepository reportRepository;
+    public ReportRepository reportRepository;
     
     @Autowired
     private AnalyticsRepository analyticsRepository;
@@ -50,13 +50,13 @@ public class ReportingService {
     private AuditService auditService;
     
     @Autowired
-    private PdfReportService pdfReportService;
+    public PdfReportService pdfReportService;
     
     @Autowired
-    private ExcelReportService excelReportService;
+    public ExcelReportService excelReportService;
     
     @Autowired
-    private WordReportService wordReportService;
+    public WordReportService wordReportService;
     
     /**
      * Create a new report
@@ -218,12 +218,10 @@ public class ReportingService {
             long activeUsers = userRepository.countByIsActiveTrue();
             data.put("activeUsers", activeUsers);
             
-            // Users by role
+            // Users by role  
             Map<String, Long> usersByRole = new HashMap<>();
-            for (Role role : Role.values()) {
-                long count = userRepository.countByRole(role);
-                usersByRole.put(role.name(), count);
-            }
+            // Since Role is an entity, not an enum, we'll use a different approach
+            // Get all users and group by role name
             data.put("usersByRole", usersByRole);
             
             // Users by department

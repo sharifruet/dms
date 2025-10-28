@@ -23,7 +23,7 @@ public class DashboardService {
     private static final Logger logger = LoggerFactory.getLogger(DashboardService.class);
     
     @Autowired
-    private DashboardRepository dashboardRepository;
+    public DashboardRepository dashboardRepository;
     
     @Autowired
     private AnalyticsRepository analyticsRepository;

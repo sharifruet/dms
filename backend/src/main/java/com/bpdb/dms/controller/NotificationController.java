@@ -1,6 +1,7 @@
 package com.bpdb.dms.controller;
 
 import com.bpdb.dms.entity.*;
+import com.bpdb.dms.repository.UserRepository;
 import com.bpdb.dms.service.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -8,6 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -24,6 +26,18 @@ public class NotificationController {
     @Autowired
     private NotificationService notificationService;
     
+    @Autowired
+    private UserRepository userRepository;
+    
+    /**
+     * Helper method to get User from Authentication
+     */
+    private User getUserFromAuthentication(Authentication authentication) {
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        return userRepository.findByUsername(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+    
     /**
      * Get user notifications
      */
@@ -34,7 +48,7 @@ public class NotificationController {
             Authentication authentication) {
         
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = getUserFromAuthentication(authentication);
             Pageable pageable = PageRequest.of(page, size);
             Page<Notification> notifications = notificationService.getUserNotifications(user, pageable);
             
@@ -51,7 +65,7 @@ public class NotificationController {
     @GetMapping("/unread-count")
     public ResponseEntity<Map<String, Long>> getUnreadCount(Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = getUserFromAuthentication(authentication);
             long count = notificationService.getUnreadCount(user);
             
             return ResponseEntity.ok(Map.of("unreadCount", count));
@@ -67,7 +81,7 @@ public class NotificationController {
     @GetMapping("/unread")
     public ResponseEntity<List<Notification>> getUnreadNotifications(Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = getUserFromAuthentication(authentication);
             List<Notification> notifications = notificationService.getUnreadNotifications(user);
             
             return ResponseEntity.ok(notifications);
@@ -86,7 +100,7 @@ public class NotificationController {
             Authentication authentication) {
         
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = getUserFromAuthentication(authentication);
             notificationService.markAsRead(notificationId, user.getUsername());
             
             return ResponseEntity.ok(Map.of("message", "Notification marked as read"));
@@ -106,7 +120,7 @@ public class NotificationController {
             Authentication authentication) {
         
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = getUserFromAuthentication(authentication);
             
             Notification notification = notificationService.createNotification(
                 user,
@@ -166,7 +180,7 @@ public class NotificationController {
     @PostMapping("/preferences/default")
     public ResponseEntity<Map<String, String>> createDefaultPreferences(Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = getUserFromAuthentication(authentication);
             notificationService.createDefaultPreferences(user);
             
             return ResponseEntity.ok(Map.of("message", "Default preferences created"));

@@ -1,23 +1,23 @@
 package com.bpdb.dms.controller;
 
 import com.bpdb.dms.entity.*;
-import com.bpdb.dms.service.EnterpriseIntegrationService;
-import com.bpdb.dms.service.AdvancedAnalyticsService;
-import com.bpdb.dms.service.MachineLearningService;
-import com.bpdb.dms.service.SystemHealthMonitoringService;
+import com.bpdb.dms.repository.UserRepository;
+import com.bpdb.dms.service.EnterpriseIntegrationServiceSimple;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
 /**
- * REST Controller for Enterprise Integration Management
+ * REST Controller for Enterprise Integration
  */
 @RestController
 @RequestMapping("/api/integrations")
@@ -25,10 +25,22 @@ import java.util.Map;
 public class EnterpriseIntegrationController {
     
     @Autowired
-    private EnterpriseIntegrationService integrationService;
+    private EnterpriseIntegrationServiceSimple integrationService;
+    
+    @Autowired
+    private UserRepository userRepository;
     
     /**
-     * Create a new integration configuration
+     * Helper method to get User from Authentication
+     */
+    private User getUserFromAuthentication(Authentication authentication) {
+        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
+        return userRepository.findByUsername(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+    
+    /**
+     * Create integration
      */
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
@@ -43,29 +55,31 @@ public class EnterpriseIntegrationController {
                 integrationConfig.getIntegrationType(),
                 integrationConfig.getEndpointUrl(),
                 integrationConfig.getAuthType(),
+                integrationConfig.getConfigData(),
                 user
             );
             
             return ResponseEntity.ok(created);
-            
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
     }
     
     /**
-     * Get all integrations
+     * Get integrations
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER')")
-    public ResponseEntity<Page<IntegrationConfig>> getAllIntegrations(
+    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER', 'VIEWER')")
+    public ResponseEntity<Page<IntegrationConfig>> getIntegrations(
             @RequestParam(required = false) IntegrationType integrationType,
             @RequestParam(required = false) IntegrationStatus status,
-            @RequestParam(required = false) String environment,
-            Pageable pageable) {
+            @RequestParam(required = false) String searchQuery,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         
+        Pageable pageable = PageRequest.of(page, size);
         Page<IntegrationConfig> integrations = integrationService.getIntegrations(
-            integrationType, status, environment, pageable);
+            integrationType, status, searchQuery, pageable);
         
         return ResponseEntity.ok(integrations);
     }
@@ -74,12 +88,11 @@ public class EnterpriseIntegrationController {
      * Get integration by ID
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER', 'VIEWER')")
     public ResponseEntity<IntegrationConfig> getIntegrationById(@PathVariable Long id) {
         try {
             IntegrationConfig integration = integrationService.getIntegrationById(id);
             return ResponseEntity.ok(integration);
-            
         } catch (Exception e) {
             return ResponseEntity.notFound().build();
         }
@@ -90,12 +103,13 @@ public class EnterpriseIntegrationController {
      */
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<IntegrationConfig> updateIntegration(@PathVariable Long id, 
-                                                             @RequestBody IntegrationConfig integrationConfig) {
+    public ResponseEntity<IntegrationConfig> updateIntegration(
+            @PathVariable Long id,
+            @RequestBody IntegrationConfig integrationConfig) {
+        
         try {
             IntegrationConfig updated = integrationService.updateIntegration(id, integrationConfig);
             return ResponseEntity.ok(updated);
-            
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
@@ -109,36 +123,38 @@ public class EnterpriseIntegrationController {
     public ResponseEntity<Void> deleteIntegration(@PathVariable Long id) {
         try {
             integrationService.deleteIntegration(id);
-            return ResponseEntity.ok().build();
-            
+            return ResponseEntity.noContent().build();
         } catch (Exception e) {
-            return ResponseEntity.badRequest().build();
+            return ResponseEntity.notFound().build();
         }
     }
     
     /**
-     * Test integration connection
+     * Test integration
      */
     @PostMapping("/{id}/test")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER')")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> testIntegration(@PathVariable Long id) {
         try {
             Map<String, Object> result = integrationService.testIntegration(id);
             return ResponseEntity.ok(result);
-            
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
         }
     }
     
     /**
-     * Get integration statistics
+     * Sync integration
      */
-    @GetMapping("/statistics")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER')")
-    public ResponseEntity<Map<String, Object>> getIntegrationStatistics() {
-        Map<String, Object> statistics = integrationService.getIntegrationStatistics();
-        return ResponseEntity.ok(statistics);
+    @PostMapping("/{id}/sync")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> syncIntegration(@PathVariable Long id) {
+        try {
+            Map<String, Object> result = integrationService.syncIntegration(id);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
     }
     
     /**
@@ -147,7 +163,22 @@ public class EnterpriseIntegrationController {
     @GetMapping("/{id}/logs")
     @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER')")
     public ResponseEntity<List<Map<String, Object>>> getIntegrationLogs(@PathVariable Long id) {
-        List<Map<String, Object>> logs = integrationService.getIntegrationLogs(id);
-        return ResponseEntity.ok(logs);
+        try {
+            List<Map<String, Object>> logs = integrationService.getIntegrationLogs(id);
+            return ResponseEntity.ok(logs);
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+    
+    /**
+     * Get integration statistics
+     */
+    @GetMapping("/statistics")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OFFICER', 'VIEWER')")
+    public ResponseEntity<Map<String, Object>> getIntegrationStatistics() {
+        Map<String, Object> stats = integrationService.getIntegrationStatistics();
+        return ResponseEntity.ok(stats);
     }
 }
+

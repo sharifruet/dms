@@ -71,4 +71,28 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
      * Count audit logs by status
      */
     long countByStatus(AuditStatus status);
+    
+    /**
+     * Count audit logs created after date and by action
+     */
+    @Query("SELECT COUNT(a) FROM AuditLog a WHERE a.createdAt > :date AND a.action = :action")
+    long countByCreatedAtAfterAndAction(@Param("date") LocalDateTime date, @Param("action") String action);
+    
+    /**
+     * Count audit logs created after date
+     */
+    @Query("SELECT COUNT(a) FROM AuditLog a WHERE a.createdAt > :date")
+    long countByCreatedAtAfter(@Param("date") LocalDateTime date);
+    
+    /**
+     * Count audit logs by username and date range
+     */
+    @Query("SELECT COUNT(a) FROM AuditLog a WHERE a.createdAt > :date AND a.user.username = :username")
+    long countByCreatedAtAfterAndUsername(@Param("date") LocalDateTime date, @Param("username") String username);
+    
+    /**
+     * Count audit logs by description containing and date range
+     */
+    @Query("SELECT COUNT(a) FROM AuditLog a WHERE a.createdAt > :date AND a.description LIKE %:description%")
+    long countByCreatedAtAfterAndDescriptionContaining(@Param("date") LocalDateTime date, @Param("description") String description);
 }

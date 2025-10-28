@@ -55,12 +55,13 @@ public class AuthController {
             UserDetails userDetails = (UserDetails) authentication.getPrincipal();
             String token = jwtUtil.generateToken(userDetails);
             
-            User user = userRepository.findByUsername(loginRequest.getUsername()).orElse(null);
+            User user = userRepository.findByUsernameWithRole(loginRequest.getUsername())
+                    .orElseThrow(() -> new RuntimeException("User not found"));
             
             LoginResponse response = new LoginResponse();
             response.setToken(token);
             response.setUsername(userDetails.getUsername());
-            response.setRole(user.getRole().getName().name());
+            response.setRole(user.getRole() != null ? user.getRole().getName().name() : "USER");
             response.setDepartment(user.getDepartment());
             
             return ResponseEntity.ok(response);

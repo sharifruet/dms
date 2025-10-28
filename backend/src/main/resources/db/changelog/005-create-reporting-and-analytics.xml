@@ -142,11 +142,4 @@
         </createIndex>
     </changeSet>
 
-    <changeSet id="005-006" author="dms">
-        <comment>Create index for analytics table</comment>
-        <createIndex tableName="analytics" indexName="idx_analytics_created_at">
-            <column name="created_at"/>
-        </createIndex>
-    </changeSet>
-
 </databaseChangeLog>

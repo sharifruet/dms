@@ -31,6 +31,11 @@ public interface MLModelRepository extends JpaRepository<MLModel, Long> {
     Page<MLModel> findByStatus(ModelStatus status, Pageable pageable);
     
     /**
+     * Find ML models by type and status
+     */
+    Page<MLModel> findByModelTypeAndStatus(ModelType modelType, ModelStatus status, Pageable pageable);
+    
+    /**
      * Find active ML models
      */
     List<MLModel> findByIsActiveTrue();

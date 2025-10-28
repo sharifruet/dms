@@ -31,6 +31,11 @@ public interface ExpiryTrackingRepository extends JpaRepository<ExpiryTracking, 
     Page<ExpiryTracking> findByStatus(ExpiryStatus status, Pageable pageable);
     
     /**
+     * Count expiry tracking by status
+     */
+    long countByStatus(ExpiryStatus status);
+    
+    /**
      * Find expiry tracking by type
      */
     Page<ExpiryTracking> findByExpiryType(ExpiryType expiryType, Pageable pageable);
@@ -90,6 +95,11 @@ public interface ExpiryTrackingRepository extends JpaRepository<ExpiryTracking, 
      * Count active expiry tracking by department
      */
     long countByDepartmentAndStatus(String department, ExpiryStatus status);
+    
+    /**
+     * Count active expiry tracking by assigned user
+     */
+    long countByAssignedToAndStatus(User user, ExpiryStatus status);
     
     /**
      * Find expiry tracking by vendor

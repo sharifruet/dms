@@ -77,6 +77,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/ml/**").hasAnyRole("ADMIN", "OFFICER")
                 // System health monitoring endpoints
                 .requestMatchers("/api/health/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
+                // Reporting endpoints
+                .requestMatchers("/api/reports/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
