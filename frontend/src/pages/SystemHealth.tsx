@@ -454,17 +454,19 @@ const SystemHealth: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           <Tooltip title="Execute Check">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleExecuteCheck(check.id!)}
-                              disabled={executingChecks.has(check.id!)}
-                            >
-                              {executingChecks.has(check.id!) ? (
-                                <CircularProgress size={16} />
-                              ) : (
-                                <PlayIcon />
-                              )}
-                            </IconButton>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleExecuteCheck(check.id!)}
+                                disabled={executingChecks.has(check.id!)}
+                              >
+                                {executingChecks.has(check.id!) ? (
+                                  <CircularProgress size={16} />
+                                ) : (
+                                  <PlayIcon />
+                                )}
+                              </IconButton>
+                            </span>
                           </Tooltip>
                           {user?.role === 'ADMIN' && (
                             <>

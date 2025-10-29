@@ -1,10 +1,12 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { Box } from '@mui/material';
+import { Box, useMediaQuery, useTheme } from '@mui/material';
 import Sidebar from './components/Sidebar';
+import MobileSidebar from './components/MobileSidebar';
+import NotificationPermissionPrompt from './components/NotificationPermissionPrompt';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import Documents from './pages/Documents';
+import DocumentsEnhanced from './pages/DocumentsEnhanced';
 import Users from './pages/Users';
 import Search from './pages/Search';
 import Notifications from './pages/Notifications';
@@ -22,15 +24,19 @@ import { useAppSelector } from './hooks/redux';
 
 function App() {
   const { isAuthenticated } = useAppSelector((state) => state.auth);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#ffffff' }}>
-      {isAuthenticated && <Sidebar />}
+      {isAuthenticated && !isMobile && <Sidebar />}
+      {isAuthenticated && isMobile && <MobileSidebar />}
+      {isAuthenticated && <NotificationPermissionPrompt />}
       <Box 
         component="main" 
         sx={{ 
           flexGrow: 1, 
-          ml: isAuthenticated ? '260px' : 0,
+          ml: isAuthenticated && !isMobile ? '260px' : 0,
           minHeight: '100vh',
           backgroundColor: '#ffffff',
         }}
@@ -46,7 +52,7 @@ function App() {
           />
           <Route 
             path="/documents" 
-            element={isAuthenticated ? <Documents /> : <Navigate to="/login" />} 
+            element={isAuthenticated ? <DocumentsEnhanced /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/users" 

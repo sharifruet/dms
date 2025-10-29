@@ -13,12 +13,20 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
+    console.log('[DocumentService] Request interceptor:', {
+      url: config.url,
+      hasToken: !!token,
+      tokenPreview: token ? token.substring(0, 20) + '...' : 'none'
+    });
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    } else {
+      console.warn('[DocumentService] No token found in localStorage!');
     }
     return config;
   },
   (error) => {
+    console.error('[DocumentService] Request interceptor error:', error);
     return Promise.reject(error);
   }
 );

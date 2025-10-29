@@ -50,6 +50,8 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/api/users/register").permitAll()
+                // WebSocket endpoints
+                .requestMatchers("/ws/**").permitAll()
                 // User management endpoints
                 .requestMatchers("/api/users/**").hasAnyRole("ADMIN", "OFFICER")
                 .requestMatchers("/api/users").hasRole("ADMIN")
@@ -58,9 +60,8 @@ public class SecurityConfig {
                 .requestMatchers("/api/users/statistics").hasRole("ADMIN")
                 // Audit log endpoints
                 .requestMatchers("/api/audit/**").hasAnyRole("ADMIN", "AUDITOR")
-                // Document endpoints
+                // Document endpoints - more specific patterns first
                 .requestMatchers("/api/documents/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
-                .requestMatchers("/api/documents").hasAnyRole("ADMIN", "OFFICER")
                 // Workflow endpoints
                 .requestMatchers("/api/workflows/**").hasAnyRole("ADMIN", "OFFICER")
                 // Document versioning endpoints
