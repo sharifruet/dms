@@ -21,11 +21,11 @@ interface DocumentCardProps {
     id: number;
     fileName: string;
     documentType: string;
-    uploadedBy: string;
-    uploadedAt: string;
+    uploadedBy: { username: string } | string;
+    createdAt?: string;
     department: string;
-    size: string;
-    status: string;
+    size?: string;
+    status?: string;
   };
   onView?: (document: any) => void;
   onDownload?: (document: any) => void;
@@ -59,6 +59,8 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
     }
   };
 
+  const uploadedByName = typeof document.uploadedBy === 'string' ? document.uploadedBy : document.uploadedBy?.username;
+
   return (
     <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <CardContent sx={{ flexGrow: 1 }}>
@@ -78,15 +80,15 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
         </Typography>
         
         <Typography variant="body2" color="text.secondary" gutterBottom>
-          Uploaded by: {document.uploadedBy}
+          Uploaded by: {uploadedByName || 'Unknown'}
         </Typography>
         
         <Typography variant="body2" color="text.secondary" gutterBottom>
-          Size: {document.size}
+          Size: {document.size || '-'}
         </Typography>
         
         <Typography variant="body2" color="text.secondary">
-          {new Date(document.uploadedAt).toLocaleDateString()}
+          {document.createdAt ? new Date(document.createdAt).toLocaleDateString() : ''}
         </Typography>
       </CardContent>
       

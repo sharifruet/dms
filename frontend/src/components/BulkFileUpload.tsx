@@ -22,7 +22,7 @@ import {
   CheckCircle as SuccessIcon,
   Error as ErrorIcon,
 } from '@mui/icons-material';
-import axios from 'axios';
+import api from '../services/api';
 
 interface FileWithProgress {
   file: File;
@@ -95,10 +95,10 @@ const BulkFileUpload: React.FC<BulkFileUploadProps> = ({
 
         const formData = new FormData();
         formData.append('file', fileItem.file);
-        formData.append('documentType', 'CONTRACT'); // Default type
-        formData.append('department', 'General');
+        formData.append('documentType', 'OTHER');
+        formData.append('description', '');
 
-        await axios.post('/api/documents/upload', formData, {
+        await api.post('/documents/upload', formData, {
           headers: { 'Content-Type': 'multipart/form-data' },
           onUploadProgress: (progressEvent) => {
             const progress = progressEvent.total

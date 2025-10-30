@@ -3,12 +3,14 @@ package com.bpdb.dms.entity;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.List;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
  * Role entity for the DMS system
  */
 @Entity
 @Table(name = "roles")
+@JsonIgnoreProperties({"users", "rolePermissions", "hibernateLazyInitializer", "handler"})
 public class Role {
     
     @Id

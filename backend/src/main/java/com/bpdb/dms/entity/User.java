@@ -16,6 +16,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
  * User entity representing system users
@@ -23,6 +25,7 @@ import jakarta.persistence.Table;
 @Entity
 @Table(name = "users")
 @EntityListeners(AuditingEntityListener.class)
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class User {
     
     @Id
@@ -36,6 +39,7 @@ public class User {
     private String email;
     
     @Column(nullable = false)
+    @JsonIgnore
     private String password;
     
     @Column(name = "first_name")
@@ -49,6 +53,7 @@ public class User {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "role_id", nullable = false)
+    @JsonIgnoreProperties({"users", "rolePermissions", "hibernateLazyInitializer", "handler"})
     private Role role;
     
     @Column(name = "department")

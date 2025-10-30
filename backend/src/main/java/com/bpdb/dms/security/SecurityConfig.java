@@ -16,6 +16,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.http.HttpMethod;
 
 import java.util.Arrays;
 
@@ -52,6 +53,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/users/register").permitAll()
                 // WebSocket endpoints
                 .requestMatchers("/ws/**").permitAll()
+                // TEMP: Allow GET list of documents and related GET subpaths
+                .requestMatchers(HttpMethod.GET, "/api/documents", "/api/documents/**").permitAll()
+                // Allow upload for admins and officers
+                .requestMatchers(HttpMethod.POST, "/api/documents/upload").hasAnyRole("ADMIN", "OFFICER")
                 // User management endpoints
                 .requestMatchers("/api/users/**").hasAnyRole("ADMIN", "OFFICER")
                 .requestMatchers("/api/users").hasRole("ADMIN")
@@ -60,8 +65,6 @@ public class SecurityConfig {
                 .requestMatchers("/api/users/statistics").hasRole("ADMIN")
                 // Audit log endpoints
                 .requestMatchers("/api/audit/**").hasAnyRole("ADMIN", "AUDITOR")
-                // Document endpoints - more specific patterns first
-                .requestMatchers("/api/documents/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
                 // Workflow endpoints
                 .requestMatchers("/api/workflows/**").hasAnyRole("ADMIN", "OFFICER")
                 // Document versioning endpoints

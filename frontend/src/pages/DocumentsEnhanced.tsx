@@ -491,9 +491,9 @@ const DocumentsEnhanced: React.FC = () => {
                   <TableCell>{doc.department || 'N/A'}</TableCell>
                   <TableCell>{formatFileSize(doc.size)}</TableCell>
                   <TableCell>
-                    <Typography variant="body2">{formatDate(doc.uploadedAt)}</Typography>
+                    <Typography variant="body2">{formatDate((doc as any).createdAt)}</Typography>
                     <Typography variant="caption" sx={{ color: '#6b7280' }}>
-                      by {doc.uploadedBy || 'Unknown'}
+                      by {(doc as any)?.uploadedBy?.username || (doc as any)?.uploadedBy || 'Unknown'}
                     </Typography>
                   </TableCell>
                   <TableCell>

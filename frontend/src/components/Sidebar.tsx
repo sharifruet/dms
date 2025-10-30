@@ -26,6 +26,8 @@ import {
   HealthAndSafety as HealthIcon,
   People as UsersIcon,
   Logout as LogoutIcon,
+  Inventory2 as AssetsIcon,
+  Assignment as AssignmentsIcon,
 } from '@mui/icons-material';
 import { useAppSelector, useAppDispatch } from '../hooks/redux';
 import { logout } from '../store/slices/authSlice';
@@ -50,13 +52,10 @@ const Sidebar: React.FC = () => {
     { label: 'Search', path: '/search', icon: <SearchIcon /> },
     { label: 'Notifications', path: '/notifications', icon: <NotificationsIcon /> },
     { label: 'Expiry Tracking', path: '/expiry-tracking', icon: <ExpiryIcon /> },
-    // { label: 'Reports', path: '/reports', icon: <ReportsIcon /> },
-    // { label: 'Custom Dashboards', path: '/dashboard-management', icon: <AnalyticsIcon /> },
+    { label: 'Assets', path: '/assets', icon: <AssetsIcon /> },
+    { label: 'Assignments', path: '/asset-assignments', icon: <AssignmentsIcon /> },
     { label: 'Workflows', path: '/workflows', icon: <WorkflowsIcon /> },
     { label: 'Versioning', path: '/versioning', icon: <VersioningIcon /> },
-    // { label: 'Analytics', path: '/analytics', icon: <AnalyticsIcon /> },
-    // { label: 'ML Models', path: '/ml', icon: <MlIcon /> },
-    // { label: 'Integrations', path: '/integrations', icon: <IntegrationsIcon /> },
     { label: 'Health', path: '/health', icon: <HealthIcon /> },
     { label: 'Users', path: '/users', icon: <UsersIcon />, role: 'ADMIN' },
   ];

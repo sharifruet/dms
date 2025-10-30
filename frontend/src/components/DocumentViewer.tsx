@@ -335,7 +335,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           <Typography variant="subtitle2" color="textSecondary" gutterBottom>
             Uploaded By
           </Typography>
-          <Typography variant="body1">{doc.uploadedBy || 'Unknown'}</Typography>
+          <Typography variant="body1">{(doc as any)?.uploadedBy?.username || (doc as any)?.uploadedBy || 'Unknown'}</Typography>
         </Box>
         <Divider />
         <Box>

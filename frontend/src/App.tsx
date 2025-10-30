@@ -20,6 +20,8 @@ import Integrations from './pages/Integrations';
 import AdvancedAnalytics from './pages/AdvancedAnalytics';
 import MachineLearning from './pages/MachineLearning';
 import SystemHealth from './pages/SystemHealth';
+import Assets from './pages/Assets';
+import AssetAssignments from './pages/AssetAssignments';
 import { useAppSelector } from './hooks/redux';
 
 function App() {
@@ -69,6 +71,14 @@ function App() {
           <Route 
             path="/expiry-tracking" 
             element={isAuthenticated ? <ExpiryTracking /> : <Navigate to="/login" />} 
+          />
+          <Route 
+            path="/assets" 
+            element={isAuthenticated ? <Assets /> : <Navigate to="/login" />} 
+          />
+          <Route 
+            path="/asset-assignments" 
+            element={isAuthenticated ? <AssetAssignments /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/reports" 
