@@ -1,10 +1,12 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { Box } from '@mui/material';
+import { Box, useMediaQuery, useTheme } from '@mui/material';
 import Sidebar from './components/Sidebar';
+import MobileSidebar from './components/MobileSidebar';
+import NotificationPermissionPrompt from './components/NotificationPermissionPrompt';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
-import Documents from './pages/Documents';
+import DocumentsEnhanced from './pages/DocumentsEnhanced';
 import Users from './pages/Users';
 import Search from './pages/Search';
 import Notifications from './pages/Notifications';
@@ -18,19 +20,25 @@ import Integrations from './pages/Integrations';
 import AdvancedAnalytics from './pages/AdvancedAnalytics';
 import MachineLearning from './pages/MachineLearning';
 import SystemHealth from './pages/SystemHealth';
+import Assets from './pages/Assets';
+import AssetAssignments from './pages/AssetAssignments';
 import { useAppSelector } from './hooks/redux';
 
 function App() {
   const { isAuthenticated } = useAppSelector((state) => state.auth);
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', backgroundColor: '#ffffff' }}>
-      {isAuthenticated && <Sidebar />}
+      {isAuthenticated && !isMobile && <Sidebar />}
+      {isAuthenticated && isMobile && <MobileSidebar />}
+      {isAuthenticated && <NotificationPermissionPrompt />}
       <Box 
         component="main" 
         sx={{ 
           flexGrow: 1, 
-          ml: isAuthenticated ? '260px' : 0,
+          ml: isAuthenticated && !isMobile ? '260px' : 0,
           minHeight: '100vh',
           backgroundColor: '#ffffff',
         }}
@@ -46,7 +54,7 @@ function App() {
           />
           <Route 
             path="/documents" 
-            element={isAuthenticated ? <Documents /> : <Navigate to="/login" />} 
+            element={isAuthenticated ? <DocumentsEnhanced /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/users" 
@@ -63,6 +71,14 @@ function App() {
           <Route 
             path="/expiry-tracking" 
             element={isAuthenticated ? <ExpiryTracking /> : <Navigate to="/login" />} 
+          />
+          <Route 
+            path="/assets" 
+            element={isAuthenticated ? <Assets /> : <Navigate to="/login" />} 
+          />
+          <Route 
+            path="/asset-assignments" 
+            element={isAuthenticated ? <AssetAssignments /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/reports" 

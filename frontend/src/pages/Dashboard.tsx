@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Grid,
   Typography,
   Card,
   CardContent,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Description as DocumentsIcon,
@@ -12,8 +14,15 @@ import {
   Assessment as ReportsIcon,
   Notifications as NotificationsIcon,
 } from '@mui/icons-material';
+import ActivityFeed from '../components/ActivityFeed';
+import LineChartWidget from '../components/charts/LineChartWidget';
+import BarChartWidget from '../components/charts/BarChartWidget';
+import PieChartWidget from '../components/charts/PieChartWidget';
 
 const Dashboard: React.FC = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
   const stats = [
     {
       title: 'Total Documents',
@@ -45,15 +54,43 @@ const Dashboard: React.FC = () => {
     },
   ];
 
+  // Sample data for charts
+  const documentTrendsData = [
+    { name: 'Jan', uploaded: 65, processed: 58 },
+    { name: 'Feb', uploaded: 78, processed: 72 },
+    { name: 'Mar', uploaded: 90, processed: 85 },
+    { name: 'Apr', uploaded: 81, processed: 78 },
+    { name: 'May', uploaded: 95, processed: 90 },
+    { name: 'Jun', uploaded: 112, processed: 105 },
+  ];
+
+  const departmentData = [
+    { name: 'Finance', documents: 450 },
+    { name: 'HR', documents: 320 },
+    { name: 'IT', documents: 280 },
+    { name: 'Operations', documents: 220 },
+    { name: 'Legal', documents: 180 },
+  ];
+
+  const documentTypesData = [
+    { name: 'Contracts', value: 420 },
+    { name: 'Invoices', value: 380 },
+    { name: 'Reports', value: 320 },
+    { name: 'Certificates', value: 250 },
+    { name: 'Others', value: 180 },
+  ];
+
+  const chartColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+
   return (
-    <Box sx={{ p: 4 }}>
+    <Box sx={{ p: { xs: 2, md: 4 } }}>
       {/* Header */}
-      <Box sx={{ mb: 4 }}>
+      <Box sx={{ mb: { xs: 3, md: 4 } }}>
         <Typography
           variant="h4"
           sx={{
             fontWeight: 700,
-            fontSize: '1.875rem',
+            fontSize: { xs: '1.5rem', md: '1.875rem' },
             color: '#111827',
             mb: 1,
             letterSpacing: '-0.02em',
@@ -65,7 +102,7 @@ const Dashboard: React.FC = () => {
           variant="body2"
           sx={{
             color: '#6b7280',
-            fontSize: '0.9375rem',
+            fontSize: { xs: '0.875rem', md: '0.9375rem' },
           }}
         >
           Welcome back! Here's what's happening with your documents.
@@ -139,43 +176,49 @@ const Dashboard: React.FC = () => {
         ))}
       </Grid>
 
+      {/* Charts Grid */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} lg={8}>
+          <LineChartWidget
+            title="Document Trends"
+            data={documentTrendsData}
+            lines={[
+              { dataKey: 'uploaded', color: '#3b82f6', name: 'Uploaded' },
+              { dataKey: 'processed', color: '#10b981', name: 'Processed' },
+            ]}
+            height={300}
+          />
+        </Grid>
+        <Grid item xs={12} lg={4}>
+          <PieChartWidget
+            title="Document Types"
+            data={documentTypesData}
+            colors={chartColors}
+            height={300}
+          />
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} lg={6}>
+          <BarChartWidget
+            title="Documents by Department"
+            data={departmentData}
+            bars={[
+              { dataKey: 'documents', color: '#3b82f6', name: 'Documents' },
+            ]}
+            height={300}
+          />
+        </Grid>
+        <Grid item xs={12} lg={6}>
+          <Box sx={{ height: isMobile ? 500 : 345 }}>
+            <ActivityFeed />
+          </Box>
+        </Grid>
+      </Grid>
+
       {/* Content Cards */}
       <Grid container spacing={3}>
-        <Grid item xs={12} md={8}>
-          <Card
-            sx={{
-              borderRadius: 3,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.12)',
-              border: '1px solid #f3f4f6',
-            }}
-          >
-            <CardContent sx={{ p: 3 }}>
-              <Typography
-                variant="h6"
-                sx={{
-                  fontWeight: 600,
-                  fontSize: '1.125rem',
-                  color: '#111827',
-                  mb: 2,
-                }}
-              >
-                Recent Activity
-              </Typography>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  py: 8,
-                  color: '#9ca3af',
-                }}
-              >
-                <Typography variant="body2">No recent activity</Typography>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
         <Grid item xs={12} md={4}>
           <Card
             sx={{

@@ -1,17 +1,23 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Box,
+  Drawer,
+  IconButton,
   List,
   ListItem,
   ListItemButton,
   ListItemIcon,
   ListItemText,
   Typography,
-  IconButton,
-  Divider,
+  useMediaQuery,
+  useTheme,
+  AppBar,
+  Toolbar,
+  Badge,
 } from '@mui/material';
 import {
+  Menu as MenuIcon,
   Dashboard as DashboardIcon,
   Description as DocumentsIcon,
   Search as SearchIcon,
@@ -26,8 +32,7 @@ import {
   HealthAndSafety as HealthIcon,
   People as UsersIcon,
   Logout as LogoutIcon,
-  Inventory2 as AssetsIcon,
-  Assignment as AssignmentsIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { useAppSelector, useAppDispatch } from '../hooks/redux';
 import { logout } from '../store/slices/authSlice';
@@ -40,7 +45,10 @@ interface NavItem {
   role?: string;
 }
 
-const Sidebar: React.FC = () => {
+const MobileSidebar: React.FC = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [mobileOpen, setMobileOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useAppDispatch();
@@ -52,10 +60,13 @@ const Sidebar: React.FC = () => {
     { label: 'Search', path: '/search', icon: <SearchIcon /> },
     { label: 'Notifications', path: '/notifications', icon: <NotificationsIcon /> },
     { label: 'Expiry Tracking', path: '/expiry-tracking', icon: <ExpiryIcon /> },
-    { label: 'Assets', path: '/assets', icon: <AssetsIcon /> },
-    { label: 'Assignments', path: '/asset-assignments', icon: <AssignmentsIcon /> },
+    // { label: 'Reports', path: '/reports', icon: <ReportsIcon /> },
+    // { label: 'Custom Dashboards', path: '/dashboard-management', icon: <AnalyticsIcon /> },
     { label: 'Workflows', path: '/workflows', icon: <WorkflowsIcon /> },
     { label: 'Versioning', path: '/versioning', icon: <VersioningIcon /> },
+    // { label: 'Analytics', path: '/analytics', icon: <AnalyticsIcon /> },
+    // { label: 'ML Models', path: '/ml', icon: <MlIcon /> },
+    // { label: 'Integrations', path: '/integrations', icon: <IntegrationsIcon /> },
     { label: 'Health', path: '/health', icon: <HealthIcon /> },
     { label: 'Users', path: '/users', icon: <UsersIcon />, role: 'ADMIN' },
   ];
@@ -64,8 +75,15 @@ const Sidebar: React.FC = () => {
     (item) => !item.role || user?.role === item.role
   );
 
+  const handleDrawerToggle = () => {
+    setMobileOpen(!mobileOpen);
+  };
+
   const handleNavigation = (path: string) => {
     navigate(path);
+    if (isMobile) {
+      setMobileOpen(false);
+    }
   };
 
   const isActive = (path: string) => {
@@ -77,22 +95,16 @@ const Sidebar: React.FC = () => {
     navigate('/login');
   };
 
-  return (
+  const drawerContent = (
     <Box
       sx={{
-        width: 260,
-        height: '100vh',
-        backgroundColor: '#fafbfc',
-        borderRight: '1px solid #e5e7eb',
+        height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        position: 'fixed',
-        left: 0,
-        top: 0,
-        overflow: 'auto',
+        backgroundColor: '#fafbfc',
       }}
     >
-      {/* Logo & Notification Bell */}
+      {/* Logo & Close Button (Mobile) */}
       <Box
         sx={{
           px: 3,
@@ -115,11 +127,15 @@ const Sidebar: React.FC = () => {
               color: '#3b82f6',
             },
           }}
-          onClick={() => navigate('/dashboard')}
+          onClick={() => handleNavigation('/dashboard')}
         >
           Document Manager
         </Typography>
-        <NotificationBell />
+        {isMobile && (
+          <IconButton onClick={handleDrawerToggle} size="small">
+            <CloseIcon />
+          </IconButton>
+        )}
       </Box>
 
       {/* Navigation Items */}
@@ -130,9 +146,9 @@ const Sidebar: React.FC = () => {
               onClick={() => handleNavigation(item.path)}
               sx={{
                 borderRadius: 2,
-                py: 1,
+                py: 1.5,
                 px: 1.5,
-                minHeight: 40,
+                minHeight: 48,
                 backgroundColor: isActive(item.path) ? '#f0f4ff' : 'transparent',
                 '&:hover': {
                   backgroundColor: isActive(item.path) ? '#e8eeff' : '#f3f4f6',
@@ -151,7 +167,7 @@ const Sidebar: React.FC = () => {
               <ListItemText
                 primary={item.label}
                 primaryTypographyProps={{
-                  fontSize: '0.875rem',
+                  fontSize: '0.9375rem',
                   fontWeight: isActive(item.path) ? 600 : 500,
                   color: isActive(item.path) ? '#1e40af' : '#374151',
                 }}
@@ -212,6 +228,86 @@ const Sidebar: React.FC = () => {
       </Box>
     </Box>
   );
+
+  if (!isMobile) {
+    // Desktop: Fixed Sidebar
+    return (
+      <Box
+        sx={{
+          width: 260,
+          height: '100vh',
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          borderRight: '1px solid #e5e7eb',
+        }}
+      >
+        {drawerContent}
+      </Box>
+    );
+  }
+
+  // Mobile: AppBar + Drawer
+  return (
+    <>
+      <AppBar
+        position="fixed"
+        elevation={0}
+        sx={{
+          backgroundColor: '#ffffff',
+          borderBottom: '1px solid #e5e7eb',
+        }}
+      >
+        <Toolbar>
+          <IconButton
+            color="inherit"
+            edge="start"
+            onClick={handleDrawerToggle}
+            sx={{ mr: 2, color: '#1f2937' }}
+          >
+            <MenuIcon />
+          </IconButton>
+          <Typography
+            variant="h6"
+            noWrap
+            component="div"
+            sx={{
+              flexGrow: 1,
+              fontWeight: 600,
+              color: '#1f2937',
+              fontSize: '1.125rem',
+            }}
+          >
+            Document Manager
+          </Typography>
+          <NotificationBell />
+        </Toolbar>
+      </AppBar>
+      
+      {/* Mobile Drawer */}
+      <Drawer
+        variant="temporary"
+        open={mobileOpen}
+        onClose={handleDrawerToggle}
+        ModalProps={{
+          keepMounted: true, // Better open performance on mobile
+        }}
+        sx={{
+          display: { xs: 'block', md: 'none' },
+          '& .MuiDrawer-paper': {
+            boxSizing: 'border-box',
+            width: 280,
+          },
+        }}
+      >
+        {drawerContent}
+      </Drawer>
+
+      {/* Spacer for AppBar */}
+      <Toolbar />
+    </>
+  );
 };
 
-export default Sidebar;
+export default MobileSidebar;
+

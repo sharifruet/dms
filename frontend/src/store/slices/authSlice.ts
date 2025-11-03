@@ -12,10 +12,23 @@ interface AuthState {
   token: string | null;
 }
 
+// Restore auth state from localStorage
+const token = localStorage.getItem('token');
+const userStr = localStorage.getItem('user');
+let user: User | null = null;
+
+if (userStr) {
+  try {
+    user = JSON.parse(userStr);
+  } catch (e) {
+    console.error('Failed to parse user from localStorage');
+  }
+}
+
 const initialState: AuthState = {
-  isAuthenticated: false,
-  user: null,
-  token: localStorage.getItem('token'),
+  isAuthenticated: !!token && !!user,
+  user: user,
+  token: token,
 };
 
 const authSlice = createSlice({
@@ -27,12 +40,14 @@ const authSlice = createSlice({
       state.user = action.payload.user;
       state.token = action.payload.token;
       localStorage.setItem('token', action.payload.token);
+      localStorage.setItem('user', JSON.stringify(action.payload.user));
     },
     logout: (state) => {
       state.isAuthenticated = false;
       state.user = null;
       state.token = null;
       localStorage.removeItem('token');
+      localStorage.removeItem('user');
     },
     setUser: (state, action: PayloadAction<User>) => {
       state.user = action.payload;

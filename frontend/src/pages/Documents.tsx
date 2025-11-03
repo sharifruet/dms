@@ -42,6 +42,7 @@ import {
 } from '@mui/icons-material';
 import { useAppSelector } from '../hooks/redux';
 import { DocumentType } from '../types/document';
+import { documentService } from '../services/documentService';
 
 const Documents: React.FC = () => {
   const { user } = useAppSelector((state) => state.auth);
@@ -72,42 +73,10 @@ const Documents: React.FC = () => {
   const loadDocuments = async () => {
     try {
       setLoading(true);
-      // Simulate API call
-      const mockDocuments = [
-        {
-          id: 1,
-          fileName: 'Company Policy.pdf',
-          documentType: DocumentType.OTHER,
-          uploadedBy: 'John Doe',
-          uploadedAt: '2024-12-01T10:00:00Z',
-          department: 'HR',
-          size: '2.5 MB',
-          status: 'Active'
-        },
-        {
-          id: 2,
-          fileName: 'Financial Report Q4.docx',
-          documentType: DocumentType.OTHER,
-          uploadedBy: 'Jane Smith',
-          uploadedAt: '2024-12-02T14:30:00Z',
-          department: 'Finance',
-          size: '1.8 MB',
-          status: 'Active'
-        },
-        {
-          id: 3,
-          fileName: 'Technical Specification.pdf',
-          documentType: DocumentType.OTHER,
-          uploadedBy: 'Mike Johnson',
-          uploadedAt: '2024-12-03T09:15:00Z',
-          department: 'IT',
-          size: '3.2 MB',
-          status: 'Active'
-        }
-      ];
-      setDocuments(mockDocuments);
-    } catch (err) {
-      setError('Failed to load documents');
+      const resp = await documentService.getDocuments({ page: 0, size: 50 });
+      setDocuments(resp.content || []);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to load documents');
     } finally {
       setLoading(false);
     }
@@ -120,30 +89,22 @@ const Documents: React.FC = () => {
         return;
       }
 
-      // Simulate file upload
-      const newDocument = {
-        id: documents.length + 1,
-        fileName: uploadFile.name,
-        documentType: getFileType(uploadFile.name),
-        uploadedBy: user?.username || 'Current User',
-        uploadedAt: new Date().toISOString(),
+      await documentService.uploadDocument({
+        file: uploadFile,
+        title: formData.title || uploadFile.name,
+        description: formData.description,
+        documentType: formData.documentType as unknown as string,
         department: formData.department,
-        size: formatFileSize(uploadFile.size),
-        status: 'Active'
-      };
+        tags: formData.tags,
+        userId: (user as any)?.id || 0,
+      });
 
-      setDocuments([newDocument, ...documents]);
       setOpenUploadDialog(false);
       setUploadFile(null);
-      setFormData({
-        title: '',
-        description: '',
-        documentType: DocumentType.OTHER,
-        department: '',
-        tags: ''
-      });
-    } catch (err) {
-      setError('Failed to upload document');
+      setFormData({ title: '', description: '', documentType: DocumentType.OTHER, department: '', tags: '' });
+      await loadDocuments();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to upload document');
     }
   };
 
@@ -170,12 +131,10 @@ const Documents: React.FC = () => {
   };
 
   const handleDownloadDocument = (document: any) => {
-    // Simulate download
     console.log('Downloading document:', document.fileName);
   };
 
   const handleViewDocument = (document: any) => {
-    // Simulate document viewing
     console.log('Viewing document:', document.fileName);
   };
 
@@ -183,18 +142,12 @@ const Documents: React.FC = () => {
     const extension = fileName.split('.').pop()?.toLowerCase();
     switch (extension) {
       case 'pdf':
-        return DocumentType.OTHER;
       case 'docx':
-        return DocumentType.OTHER;
       case 'doc':
-        return DocumentType.OTHER;
       case 'txt':
-        return DocumentType.OTHER;
       case 'jpg':
       case 'jpeg':
-        return DocumentType.OTHER;
       case 'png':
-        return DocumentType.OTHER;
       default:
         return DocumentType.OTHER;
     }
@@ -212,24 +165,14 @@ const Documents: React.FC = () => {
     switch (type) {
       case DocumentType.OTHER:
         return 'error';
-      case DocumentType.OTHER:
-        return 'primary';
-      case DocumentType.OTHER:
-        return 'primary';
-      case DocumentType.OTHER:
-        return 'default';
-      case DocumentType.OTHER:
-        return 'success';
-      case DocumentType.OTHER:
-        return 'success';
       default:
         return 'default';
     }
   };
 
   const filteredDocuments = documents.filter(doc => {
-    const matchesSearch = doc.fileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         doc.department.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (doc.fileName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (doc.department || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterType === 'ALL' || doc.documentType === filterType;
     return matchesSearch && matchesFilter;
   });
@@ -407,25 +350,23 @@ const Documents: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {document.uploadedBy}
+                            {document.uploadedBy?.username || 'Unknown'}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {new Date(document.uploadedAt).toLocaleDateString()}
+                            {new Date(document.createdAt).toLocaleDateString()}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {document.size}
+                            {document.fileSize ? `${document.fileSize} B` : '-'}
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          <Chip
-                            label={document.status}
-                            color="success"
-                            size="small"
-                          />
+                          <Typography variant="body2">
+                            {document.isActive ? 'Active' : 'Inactive'}
+                          </Typography>
                         </TableCell>
                         <TableCell>
                           <Tooltip title="View Document">

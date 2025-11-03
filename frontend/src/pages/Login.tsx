@@ -42,6 +42,12 @@ const Login: React.FC = () => {
 
     try {
       const response = await authService.login(data);
+      console.log('[Login] Login successful:', {
+        username: response.username,
+        hasToken: !!response.token,
+        tokenPreview: response.token?.substring(0, 20) + '...'
+      });
+      
       dispatch(loginSuccess({
         user: {
           username: response.username,
@@ -50,8 +56,16 @@ const Login: React.FC = () => {
         },
         token: response.token,
       }));
+      
+      // Verify token was saved
+      const savedToken = localStorage.getItem('token');
+      const savedUser = localStorage.getItem('user');
+      console.log('[Login] After dispatch - Token saved:', !!savedToken);
+      console.log('[Login] After dispatch - User saved:', !!savedUser);
+      
       navigate('/dashboard');
     } catch (err: any) {
+      console.error('[Login] Login failed:', err);
       setError(err.response?.data || 'Login failed');
     } finally {
       setLoading(false);

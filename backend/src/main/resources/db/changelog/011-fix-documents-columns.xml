@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="011-001" author="dms">
+        <comment>Add missing optional columns to documents</comment>
+        <addColumn tableName="documents">
+            <column name="original_name" type="VARCHAR(255)"/>
+        </addColumn>
+        <addColumn tableName="documents">
+            <column name="mime_type" type="VARCHAR(100)"/>
+        </addColumn>
+        <addColumn tableName="documents">
+            <column name="tags" type="TEXT"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>
+

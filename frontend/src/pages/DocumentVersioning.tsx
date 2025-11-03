@@ -349,16 +349,18 @@ const DocumentVersioning: React.FC<DocumentVersioningProps> = ({ documentId }) =
                     </IconButton>
                   </Tooltip>
                   <Tooltip title="Restore Version">
-                    <IconButton
-                      size="small"
-                      onClick={() => {
-                        setVersionToRestore(version.versionNumber);
-                        setRestoreDialogOpen(true);
-                      }}
-                      disabled={version.isCurrent}
-                    >
-                      <RestoreFromTrash />
-                    </IconButton>
+                    <span>
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          setVersionToRestore(version.versionNumber);
+                          setRestoreDialogOpen(true);
+                        }}
+                        disabled={version.isCurrent}
+                      >
+                        <RestoreFromTrash />
+                      </IconButton>
+                    </span>
                   </Tooltip>
                 </TableCell>
               </TableRow>

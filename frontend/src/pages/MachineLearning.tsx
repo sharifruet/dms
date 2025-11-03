@@ -439,22 +439,26 @@ const MachineLearning: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           <Tooltip title="Train Model">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleTrainModel(model.id!)}
-                              disabled={model.status === 'TRAINING'}
-                            >
-                              <PlayIcon />
-                            </IconButton>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleTrainModel(model.id!)}
+                                disabled={model.status === 'TRAINING'}
+                              >
+                                <PlayIcon />
+                              </IconButton>
+                            </span>
                           </Tooltip>
                           <Tooltip title="Deploy Model">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleDeployModel(model.id!)}
-                              disabled={model.status !== 'TRAINED' || model.deploymentStatus === 'DEPLOYED'}
-                            >
-                              <SpeedIcon />
-                            </IconButton>
+                            <span>
+                              <IconButton
+                                size="small"
+                                onClick={() => handleDeployModel(model.id!)}
+                                disabled={model.status !== 'TRAINED' || model.deploymentStatus === 'DEPLOYED'}
+                              >
+                                <SpeedIcon />
+                              </IconButton>
+                            </span>
                           </Tooltip>
                           {user?.role === 'ADMIN' && (
                             <>
