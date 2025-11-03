@@ -32,16 +32,18 @@ public class EnterpriseIntegrationController {
      */
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<IntegrationConfig> createIntegration(@RequestBody IntegrationConfig integrationConfig) {
+    public ResponseEntity<IntegrationConfig> createIntegration(
+            @RequestBody IntegrationConfig integrationConfig,
+            Authentication authentication) {
         try {
-            IntegrationConfig created = integrationService.createIntegration(
-                integrationConfig.getIntegrationName(),
+            User user = getUserFromAuthentication(authentication);
+            IntegrationConfig created = integrationService.createIntegrationConfig(
+                integrationConfig.getName(),
+                integrationConfig.getDescription(),
                 integrationConfig.getIntegrationType(),
                 integrationConfig.getEndpointUrl(),
-                integrationConfig.getAuthenticationType(),
-                integrationConfig.getCredentials(),
-                integrationConfig.getConfiguration(),
-                integrationConfig.getIsEnabled()
+                integrationConfig.getAuthType(),
+                user
             );
             
             return ResponseEntity.ok(created);
