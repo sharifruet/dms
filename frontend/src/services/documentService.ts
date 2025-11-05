@@ -1,48 +1,4 @@
-import axios from 'axios';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
-
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add request interceptor to include JWT token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    console.log('[DocumentService] Request interceptor:', {
-      url: config.url,
-      hasToken: !!token,
-      tokenPreview: token ? token.substring(0, 20) + '...' : 'none'
-    });
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    } else {
-      console.warn('[DocumentService] No token found in localStorage!');
-    }
-    return config;
-  },
-  (error) => {
-    console.error('[DocumentService] Request interceptor error:', error);
-    return Promise.reject(error);
-  }
-);
-
-// Add response interceptor to handle token expiration
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
+import api from './api';
 
 export interface Document {
   id?: number;
@@ -96,18 +52,15 @@ export const documentService = {
   uploadDocument: async (uploadRequest: DocumentUploadRequest): Promise<Document> => {
     const formData = new FormData();
     formData.append('file', uploadRequest.file);
-    formData.append('userId', uploadRequest.userId.toString());
-    formData.append('title', uploadRequest.title);
-    formData.append('description', uploadRequest.description || '');
+    // Backend expects: file, documentType, description (optional)
+    // Backend gets user from Authentication, not from form data
     formData.append('documentType', uploadRequest.documentType);
-    formData.append('department', uploadRequest.department);
-    formData.append('tags', uploadRequest.tags || '');
+    if (uploadRequest.description) {
+      formData.append('description', uploadRequest.description);
+    }
 
-    const response = await api.post('/documents/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    // Don't set Content-Type manually - axios will set it with proper boundary for multipart/form-data
+    const response = await api.post('/documents/upload', formData);
     return response.data;
   },
 
@@ -117,9 +70,15 @@ export const documentService = {
     return response.data;
   },
 
-  // Get document by ID
-  getDocumentById: async (id: number): Promise<Document> => {
+  // Get document by ID (includes OCR text)
+  getDocumentById: async (id: number): Promise<{ document: Document; ocrText?: string; ocrConfidence?: number }> => {
     const response = await api.get(`/documents/${id}`);
+    return response.data;
+  },
+
+  // Get document OCR text
+  getDocumentOCR: async (id: number): Promise<{ ocrText: string; ocrConfidence: number; documentId: number }> => {
+    const response = await api.get(`/documents/${id}/ocr`);
     return response.data;
   },
 

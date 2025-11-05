@@ -1,0 +1,7 @@
+/Users/til/workspace/together/dms/backend/src/test/java/com/bpdb/dms/DmsApplicationTests.java
+/Users/til/workspace/together/dms/backend/src/test/java/com/bpdb/dms/performance/DocumentPerformanceTest.java
+/Users/til/workspace/together/dms/backend/src/test/java/com/bpdb/dms/service/FileUploadServiceTest.java
+/Users/til/workspace/together/dms/backend/src/test/java/com/bpdb/dms/integration/DocumentIntegrationTest.java
+/Users/til/workspace/together/dms/backend/src/test/java/com/bpdb/dms/controller/AuthControllerTest.java
+/Users/til/workspace/together/dms/backend/src/test/java/com/bpdb/dms/controller/HealthControllerTest.java
+/Users/til/workspace/together/dms/backend/src/test/java/com/bpdb/dms/controller/DocumentControllerTest.java

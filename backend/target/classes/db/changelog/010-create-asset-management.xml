@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="010-001" author="dms">
+        <comment>Create product categories</comment>
+        <createTable tableName="product_categories">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="parent_id" type="BIGINT"/>
+            <column name="name" type="VARCHAR(150)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="code" type="VARCHAR(100)"/>
+            <column name="active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint constraintName="fk_product_categories_parent"
+                                  baseTableName="product_categories" baseColumnNames="parent_id"
+                                  referencedTableName="product_categories" referencedColumnNames="id"/>
+        <createIndex tableName="product_categories" indexName="idx_product_categories_parent">
+            <column name="parent_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="010-002" author="dms">
+        <comment>Create products</comment>
+        <createTable tableName="products">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="category_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sku" type="VARCHAR(150)"/>
+            <column name="brand" type="VARCHAR(150)"/>
+            <column name="model" type="VARCHAR(150)"/>
+            <column name="specs_json" type="JSONB"/>
+            <column name="default_warranty_months" type="INT"/>
+            <column name="active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint constraintName="fk_products_category"
+                                  baseTableName="products" baseColumnNames="category_id"
+                                  referencedTableName="product_categories" referencedColumnNames="id"/>
+        <createIndex tableName="products" indexName="idx_products_category">
+            <column name="category_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="010-003" author="dms">
+        <comment>Create assets</comment>
+        <createTable tableName="assets">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="product_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="serial_no" type="VARCHAR(200)"/>
+            <column name="asset_tag" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(30)" defaultValue="IN_STOCK">
+                <constraints nullable="false"/>
+            </column>
+            <column name="location" type="VARCHAR(200)"/>
+            <column name="warranty_start" type="DATE"/>
+            <column name="warranty_end" type="DATE"/>
+            <column name="acquisition_cost" type="NUMERIC(12,2)"/>
+            <column name="custom_json" type="JSONB"/>
+        </createTable>
+        <addUniqueConstraint tableName="assets" columnNames="asset_tag" constraintName="uk_assets_asset_tag"/>
+        <createIndex tableName="assets" indexName="idx_assets_product">
+            <column name="product_id"/>
+        </createIndex>
+        <addForeignKeyConstraint constraintName="fk_assets_product"
+                                  baseTableName="assets" baseColumnNames="product_id"
+                                  referencedTableName="products" referencedColumnNames="id"/>
+    </changeSet>
+
+    <changeSet id="010-004" author="dms">
+        <comment>Create asset assignments</comment>
+        <createTable tableName="asset_assignments">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="asset_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="start_date" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="end_date" type="DATE"/>
+            <column name="expected_return_date" type="DATE"/>
+            <column name="status" type="VARCHAR(30)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="asset_assignments" indexName="idx_asset_assignments_asset">
+            <column name="asset_id"/>
+        </createIndex>
+        <createIndex tableName="asset_assignments" indexName="idx_asset_assignments_user">
+            <column name="user_id"/>
+        </createIndex>
+        <addForeignKeyConstraint constraintName="fk_asset_assignments_asset"
+                                  baseTableName="asset_assignments" baseColumnNames="asset_id"
+                                  referencedTableName="assets" referencedColumnNames="id"/>
+        <addForeignKeyConstraint constraintName="fk_asset_assignments_user"
+                                  baseTableName="asset_assignments" baseColumnNames="user_id"
+                                  referencedTableName="users" referencedColumnNames="id"/>
+    </changeSet>
+
+</databaseChangeLog>

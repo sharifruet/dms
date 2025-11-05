@@ -47,10 +47,10 @@ public class DocumentIndex {
     @Field(type = FieldType.Text, analyzer = "standard")
     private String uploadedByUsername;
     
-    @Field(type = FieldType.Date)
+    @Field(type = FieldType.Date, format = {}, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;
     
-    @Field(type = FieldType.Date)
+    @Field(type = FieldType.Date, format = {}, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime updatedAt;
     
     @Field(type = FieldType.Object)

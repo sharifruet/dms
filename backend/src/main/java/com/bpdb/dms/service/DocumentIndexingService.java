@@ -257,7 +257,7 @@ public class DocumentIndexingService {
         item.setDescription(document.getDescription());
         item.setDepartment(document.getDepartment());
         item.setUploadedBy(document.getUploadedByUsername());
-        item.setCreatedAt(document.getCreatedAt());
+        item.setCreatedAt(document.getCreatedAt() != null ? document.getCreatedAt().toString() : null);
         item.setOcrConfidence(document.getOcrConfidence());
         item.setClassificationConfidence(document.getClassificationConfidence());
         item.setScore(1.0f); // Default score for now
@@ -331,7 +331,7 @@ public class DocumentIndexingService {
         private String description;
         private String department;
         private String uploadedBy;
-        private LocalDateTime createdAt;
+        private String createdAt;
         private Double ocrConfidence;
         private Double classificationConfidence;
         private float score;
@@ -352,8 +352,8 @@ public class DocumentIndexingService {
         public void setDepartment(String department) { this.department = department; }
         public String getUploadedBy() { return uploadedBy; }
         public void setUploadedBy(String uploadedBy) { this.uploadedBy = uploadedBy; }
-        public LocalDateTime getCreatedAt() { return createdAt; }
-        public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+        public String getCreatedAt() { return createdAt; }
+        public void setCreatedAt(String createdAt) { this.createdAt = createdAt; }
         public Double getOcrConfidence() { return ocrConfidence; }
         public void setOcrConfidence(Double ocrConfidence) { this.ocrConfidence = ocrConfidence; }
         public Double getClassificationConfidence() { return classificationConfidence; }

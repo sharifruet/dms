@@ -131,6 +131,19 @@
     </changeSet>
 
     <changeSet id="002-008" author="dms">
+        <comment>Insert default admin user</comment>
+        <insert tableName="users">
+            <column name="username" value="admin"/>
+            <column name="email" value="admin@dms.local"/>
+            <column name="password" value="$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"/>
+            <column name="first_name" value="Admin"/>
+            <column name="last_name" value="User"/>
+            <column name="department" value="IT"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'ADMIN')"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="002-009" author="dms">
         <comment>Insert default permissions</comment>
         <insert tableName="permissions">
             <column name="name" value="USER_MANAGEMENT"/>
@@ -169,7 +182,7 @@
         </insert>
     </changeSet>
 
-    <changeSet id="002-009" author="dms">
+    <changeSet id="002-010" author="dms">
         <comment>Assign permissions to roles</comment>
         <sql>
             -- Admin gets all permissions

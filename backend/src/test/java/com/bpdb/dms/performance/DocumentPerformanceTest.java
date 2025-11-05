@@ -2,9 +2,14 @@ package com.bpdb.dms.performance;
 
 import com.bpdb.dms.entity.Document;
 import com.bpdb.dms.entity.DocumentType;
+import com.bpdb.dms.entity.Role;
+import com.bpdb.dms.entity.Role.RoleType;
 import com.bpdb.dms.entity.User;
 import com.bpdb.dms.repository.DocumentRepository;
+import com.bpdb.dms.repository.RoleRepository;
 import com.bpdb.dms.repository.UserRepository;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,15 +34,22 @@ class DocumentPerformanceTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private RoleRepository roleRepository;
+
     private User testUser;
 
     @BeforeEach
     void setUp() {
+        Role officerRole = new Role();
+        officerRole.setName(RoleType.OFFICER);
+        officerRole = roleRepository.save(officerRole);
+        
         testUser = new User();
         testUser.setUsername("perftest");
         testUser.setEmail("perf@example.com");
         testUser.setPassword("password");
-        testUser.setRole("OFFICER");
+        testUser.setRole(officerRole);
         testUser.setIsActive(true);
         testUser = userRepository.save(testUser);
     }
@@ -50,9 +62,9 @@ class DocumentPerformanceTest {
             Document doc = new Document();
             doc.setFileName("perf-test-" + i + ".pdf");
             doc.setFilePath("/uploads/perf-test-" + i + ".pdf");
-            doc.setDocumentType(DocumentType.PDF);
+            doc.setDocumentType(DocumentType.OTHER);
             doc.setUploadedBy(testUser);
-            doc.setUploadedAt(LocalDateTime.now());
+            doc.setCreatedAt(LocalDateTime.now());
             doc.setIsActive(true);
             documents.add(doc);
         }
@@ -78,9 +90,9 @@ class DocumentPerformanceTest {
             Document doc = new Document();
             doc.setFileName("search-test-" + i + ".pdf");
             doc.setFilePath("/uploads/search-test-" + i + ".pdf");
-            doc.setDocumentType(DocumentType.PDF);
+            doc.setDocumentType(DocumentType.OTHER);
             doc.setUploadedBy(testUser);
-            doc.setUploadedAt(LocalDateTime.now());
+            doc.setCreatedAt(LocalDateTime.now());
             doc.setIsActive(true);
             documents.add(doc);
         }
@@ -88,7 +100,8 @@ class DocumentPerformanceTest {
 
         // When
         long startTime = System.currentTimeMillis();
-        var results = documentRepository.findByFileNameContainingIgnoreCase("search-test");
+        Pageable pageable = PageRequest.of(0, 100);
+        var results = documentRepository.findByFileNameContaining("search-test", pageable);
         long endTime = System.currentTimeMillis();
 
         // Then
@@ -97,7 +110,7 @@ class DocumentPerformanceTest {
         
         // Performance assertion: Should complete within 1 second
         assertTrue(executionTime < 1000, "Search took too long: " + executionTime + "ms");
-        assertTrue(results.size() >= 100, "Search results incomplete");
+        assertTrue(results.getTotalElements() >= 100, "Search results incomplete");
     }
 
     @Test
@@ -108,9 +121,9 @@ class DocumentPerformanceTest {
             Document doc = new Document();
             doc.setFileName("page-test-" + i + ".pdf");
             doc.setFilePath("/uploads/page-test-" + i + ".pdf");
-            doc.setDocumentType(DocumentType.PDF);
+            doc.setDocumentType(DocumentType.OTHER);
             doc.setUploadedBy(testUser);
-            doc.setUploadedAt(LocalDateTime.now());
+            doc.setCreatedAt(LocalDateTime.now());
             doc.setIsActive(true);
             documents.add(doc);
         }

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.imageio.ImageIO;
+import jakarta.annotation.PostConstruct;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.file.Files;
@@ -37,6 +38,18 @@ public class OCRService {
     @Value("${app.tesseract.language:eng}")
     private String tesseractLanguage;
     
+    @Value("${app.ocr.psm:6}")
+    private int pageSegMode;
+
+    @Value("${app.tesseract.binary:tesseract}")
+    private String tesseractBinary;
+    
+    @Value("${app.ocr.enabled:true}")
+    private boolean ocrEnabled;
+    
+    @Value("${app.ocr.process-images:true}")
+    private boolean processImages;
+    
     @Autowired
     private AuditService auditService;
     
@@ -46,6 +59,10 @@ public class OCRService {
     public OCRService() {
         this.tesseract = new Tesseract();
         this.tika = new Tika();
+    }
+
+    @PostConstruct
+    private void postConstructInit() {
         initializeTesseract();
     }
     
@@ -54,14 +71,88 @@ public class OCRService {
      */
     private void initializeTesseract() {
         try {
+            // Resolve tessdata path if the configured one doesn't exist (common on macOS/Homebrew)
+            Path configuredPath = Paths.get(tesseractDataPath);
+            // tess4j expects datapath pointing to the PARENT of the 'tessdata' folder
+            if (configuredPath.getFileName() != null && configuredPath.getFileName().toString().equalsIgnoreCase("tessdata")) {
+                configuredPath = configuredPath.getParent();
+                if (configuredPath != null) {
+                    tesseractDataPath = configuredPath.toString();
+                }
+            }
+            if (!Files.exists(configuredPath)) {
+                String resolvedPath = resolveTessdataPathFallback();
+                if (resolvedPath != null && !resolvedPath.isBlank()) {
+                    logger.warn("Configured tessdata path not found: {}. Using detected path: {}", tesseractDataPath, resolvedPath);
+                    tesseractDataPath = resolvedPath;
+                } else {
+                    logger.warn("Configured tessdata path not found and no fallback found: {}", tesseractDataPath);
+                }
+            }
+
             tesseract.setDatapath(tesseractDataPath);
             tesseract.setLanguage(tesseractLanguage);
-            tesseract.setPageSegMode(1); // Automatic page segmentation with OSD
+            // Page segmentation mode: default to 6 (Assume a single uniform block of text)
+            tesseract.setPageSegMode(pageSegMode);
             tesseract.setOcrEngineMode(1); // Neural nets LSTM engine only
-            logger.info("Tesseract OCR initialized successfully");
+            // Quick sanity check: verify 'eng.traineddata' can be resolved
+            try {
+                Path trained = Paths.get(tesseractDataPath, "tessdata", tesseractLanguage + ".traineddata");
+                logger.info("Tesseract OCR initialized (datapath: {}, lang: {}, traineddata exists: {})",
+                        tesseractDataPath, tesseractLanguage, Files.exists(trained));
+            } catch (Exception ig) {
+                logger.info("Tesseract OCR initialized (datapath: {}, lang: {})", tesseractDataPath, tesseractLanguage);
+            }
         } catch (Exception e) {
-            logger.error("Failed to initialize Tesseract OCR: {}", e.getMessage());
+            logger.error("Failed to initialize Tesseract OCR", e);
         }
+    }
+
+    /**
+     * Attempt to resolve Tesseract tessdata directory automatically.
+     * Order: TESSDATA_PREFIX env -> `tesseract --print-tesseract-data-dir` -> common Homebrew paths.
+     */
+    private String resolveTessdataPathFallback() {
+        try {
+            // 1) Environment variable
+            String env = System.getenv("TESSDATA_PREFIX");
+            if (env != null && !env.isBlank()) {
+                Path envPath = Paths.get(env);
+                if (Files.exists(envPath)) {
+                    return envPath.toString();
+                }
+            }
+
+            // 2) Ask tesseract binary
+            try {
+                Process p = new ProcessBuilder("tesseract", "--print-tesseract-data-dir").redirectErrorStream(true).start();
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                    String line = br.readLine();
+                    if (line != null) {
+                        String candidate = line.trim();
+                        if (!candidate.isBlank() && Files.exists(Paths.get(candidate))) {
+                            return candidate;
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+                // Ignore - binary may not be on PATH
+            }
+
+            // 3) Common Homebrew paths (Apple Silicon / Intel)
+            String[] brewCandidates = new String[] {
+                "/opt/homebrew/share/tessdata",
+                "/usr/local/share/tessdata"
+            };
+            for (String candidate : brewCandidates) {
+                if (Files.exists(Paths.get(candidate))) {
+                    return candidate;
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to resolve tessdata path automatically: {}", e.getMessage());
+        }
+        return null;
     }
     
     /**
@@ -105,12 +196,41 @@ public class OCRService {
         result.setContentType(contentType);
         result.setFileSize(file.getSize());
         
+        // If OCR is completely disabled, skip all OCR processing
+        if (!ocrEnabled) {
+            logger.info("OCR is disabled, skipping OCR processing for file: {}", fileName);
+            result.setExtractedText("");
+            result.setSuccess(true);
+            result.setConfidence(0.0);
+            return result;
+        }
+        
         try {
             String extractedText;
             
             if (isImageFile(contentType)) {
-                // Process image files with OCR
-                extractedText = processImageWithOCR(file);
+                // Process image files with OCR (skip if disabled to prevent crashes)
+                if (processImages) {
+                    try {
+                        extractedText = processImageWithOCR(file);
+                    } catch (TesseractException te) {
+                        // Tesseract-specific errors (library not available, initialization issues)
+                        logger.error("Tesseract OCR error for image file {}: {}", fileName, te.getMessage());
+                        result.setErrorMessage("Tesseract OCR is not properly configured. " + 
+                            "Please ensure Tesseract is installed on the system. " + 
+                            "Details: " + te.getMessage());
+                        extractedText = "";
+                    } catch (Throwable t) {
+                        // Catch native crashes and other unexpected errors
+                        logger.error("OCR processing crashed for image file {}: {} - {}", 
+                            fileName, t.getClass().getSimpleName(), t.getMessage());
+                        result.setErrorMessage("OCR processing failed: " + t.getMessage());
+                        extractedText = "";
+                    }
+                } else {
+                    logger.info("OCR for images is disabled, skipping OCR for file: {}", fileName);
+                    extractedText = "";
+                }
             } else if (isPDFFile(contentType)) {
                 // Process PDF files
                 extractedText = processPDFWithOCR(file);
@@ -156,7 +276,94 @@ public class OCRService {
         // Preprocess image for better OCR results
         BufferedImage processedImage = preprocessImage(image);
         
-        return tesseract.doOCR(processedImage);
+        try {
+            return tesseract.doOCR(processedImage);
+        } catch (UnsatisfiedLinkError | NoClassDefFoundError ex) {
+            // Native library errors - try external fallback
+            logger.warn("tess4j native library error: {}. Trying external 'tesseract' fallback...", ex.toString());
+            String fb = runExternalTesseract(processedImage);
+            if (fb != null && !fb.trim().isEmpty()) {
+                logger.info("External tesseract fallback succeeded, extracted {} characters", fb.length());
+                return fb;
+            }
+            throw new TesseractException("tess4j native library failed and external tesseract fallback failed", ex);
+        } catch (TesseractException ex) {
+            // Tesseract-specific errors - try external fallback
+            logger.warn("tess4j OCR error: {}. Trying external 'tesseract' fallback...", ex.toString());
+            String fb = runExternalTesseract(processedImage);
+            if (fb != null && !fb.trim().isEmpty()) {
+                logger.info("External tesseract fallback succeeded, extracted {} characters", fb.length());
+                return fb;
+            }
+            throw ex;
+        } catch (Exception ex) {
+            // Other exceptions - try external fallback
+            logger.warn("Unexpected OCR error: {}. Trying external 'tesseract' fallback...", ex.toString());
+            String fb = runExternalTesseract(processedImage);
+            if (fb != null && !fb.trim().isEmpty()) {
+                logger.info("External tesseract fallback succeeded, extracted {} characters", fb.length());
+                return fb;
+            }
+            throw new TesseractException("OCR processing failed and external tesseract fallback failed", ex);
+        }
+    }
+
+    /**
+     * Fallback OCR using system 'tesseract' CLI by writing a temporary PNG and reading stdout.
+     */
+    private String runExternalTesseract(BufferedImage image) {
+        File tmp = null;
+        try {
+            tmp = File.createTempFile("ocr_img_", ".png");
+            ImageIO.write(image, "png", tmp);
+
+            // TESSDATA_PREFIX should point to the parent folder that contains 'tessdata'
+            String tessPrefix = tesseractDataPath;
+            if (tessPrefix != null) {
+                Path p = Paths.get(tessPrefix);
+                if (p.getFileName() != null && "tessdata".equalsIgnoreCase(p.getFileName().toString())) {
+                    Path parent = p.getParent();
+                    if (parent != null) {
+                        tessPrefix = parent.toString();
+                    }
+                }
+            }
+
+            ProcessBuilder pb = new ProcessBuilder(
+                    tesseractBinary,
+                    tmp.getAbsolutePath(),
+                    "stdout",
+                    "-l", tesseractLanguage,
+                    "--psm", String.valueOf(this.pageSegMode)
+            );
+            Map<String, String> env = pb.environment();
+            if (tessPrefix != null && !tessPrefix.isBlank()) {
+                env.put("TESSDATA_PREFIX", tessPrefix);
+            }
+            pb.redirectErrorStream(true);
+            Process proc = pb.start();
+
+            StringBuilder out = new StringBuilder();
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    out.append(line).append('\n');
+                }
+            }
+            int code = proc.waitFor();
+            if (code == 0) {
+                return out.toString();
+            } else {
+                logger.warn("External tesseract exited with code {}. Output: {}", code, out.toString());
+            }
+        } catch (Exception ex) {
+            logger.error("External tesseract fallback error: {}", ex.toString());
+        } finally {
+            if (tmp != null) {
+                try { Files.deleteIfExists(tmp.toPath()); } catch (Exception ignore) {}
+            }
+        }
+        return null;
     }
     
     /**
@@ -197,14 +404,46 @@ public class OCRService {
      * Preprocess image for better OCR results
      */
     private BufferedImage preprocessImage(BufferedImage originalImage) {
-        // Basic image preprocessing
-        // In a production system, you might want to add:
-        // - Noise reduction
-        // - Contrast enhancement
-        // - Deskewing
-        // - Binarization
+        // Convert to grayscale
+        BufferedImage gray = new BufferedImage(originalImage.getWidth(), originalImage.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
+        java.awt.Graphics2D g = gray.createGraphics();
+        g.drawImage(originalImage, 0, 0, null);
+        g.dispose();
         
-        return originalImage;
+        // Apply simple global thresholding (Otsu-like approximation)
+        int w = gray.getWidth();
+        int h = gray.getHeight();
+        int[] histogram = new int[256];
+        int[] pixels = new int[w * h];
+        gray.getRaster().getPixels(0, 0, w, h, pixels);
+        for (int i = 0; i < pixels.length; i++) {
+            int v = pixels[i];
+            if (v < 0) v = 0; if (v > 255) v = 255;
+            histogram[v]++;
+        }
+        // Compute threshold (basic Otsu)
+        int total = w * h;
+        float sum = 0;
+        for (int t = 0; t < 256; t++) sum += t * histogram[t];
+        float sumB = 0; int wB = 0; int wF; float varMax = 0; int threshold = 127;
+        for (int t = 0; t < 256; t++) {
+            wB += histogram[t]; if (wB == 0) continue; wF = total - wB; if (wF == 0) break;
+            sumB += (float) (t * histogram[t]);
+            float mB = sumB / wB; float mF = (sum - sumB) / wF;
+            float varBetween = (float) wB * (float) wF * (mB - mF) * (mB - mF);
+            if (varBetween > varMax) { varMax = varBetween; threshold = t; }
+        }
+        // Create binary image
+        BufferedImage binary = new BufferedImage(w, h, BufferedImage.TYPE_BYTE_BINARY);
+        int idx = 0;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int v = pixels[idx++];
+                int b = v > threshold ? 0xFFFFFF : 0x000000;
+                binary.setRGB(x, y, (0xFF << 24) | b);
+            }
+        }
+        return binary;
     }
     
     /**

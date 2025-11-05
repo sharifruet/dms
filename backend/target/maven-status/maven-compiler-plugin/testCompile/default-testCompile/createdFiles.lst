@@ -1,0 +1,7 @@
+com/bpdb/dms/controller/DocumentControllerTest.class
+com/bpdb/dms/controller/AuthControllerTest.class
+com/bpdb/dms/DmsApplicationTests.class
+com/bpdb/dms/controller/HealthControllerTest.class
+com/bpdb/dms/service/FileUploadServiceTest.class
+com/bpdb/dms/performance/DocumentPerformanceTest.class
+com/bpdb/dms/integration/DocumentIntegrationTest.class

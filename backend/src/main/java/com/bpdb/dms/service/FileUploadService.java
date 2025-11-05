@@ -20,8 +20,14 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -208,18 +214,46 @@ public class FileUploadService {
      */
     @Async
     public void processDocumentAsync(Document document, MultipartFile file) {
+        OCRService.OCRResult ocrResult = null;
+        final Long documentId = document.getId();
+        
         try {
-            logger.info("Starting async processing for document: {}", document.getId());
+            logger.info("Starting async processing for document: {}", documentId);
             
-            // Perform OCR processing
-            OCRService.OCRResult ocrResult = ocrService.extractText(file);
+            // Refetch document in async context to ensure user is loaded
+            final Document doc = documentRepository.findById(documentId)
+                .orElseThrow(() -> new RuntimeException("Document not found: " + documentId));
+            // Ensure user is loaded
+            if (doc.getUploadedBy() != null) {
+                doc.getUploadedBy().getId();
+            }
             
-            if (ocrResult.isSuccess()) {
+            // Perform OCR processing with error handling for native crashes
+            try {
+                ocrResult = ocrService.extractText(file);
+            } catch (Throwable t) {
+                // Catch all errors including native crashes (Error, Exception, etc.)
+                logger.error("OCR processing failed for document: {} - Error type: {}, Message: {}", 
+                           doc.getId(), t.getClass().getName(), t.getMessage());
+                // Create a failed result to continue processing
+                ocrResult = new OCRService.OCRResult();
+                ocrResult.setSuccess(false);
+                String errorMsg = t.getMessage();
+                if (errorMsg != null && (errorMsg.contains("TessAPI") || errorMsg.contains("Could not initialize"))) {
+                    errorMsg = "Tesseract native library not available. Please install Tesseract on the system. " +
+                              "On macOS: brew install tesseract. " +
+                              "On Linux: apt-get install tesseract-ocr. " +
+                              "Error: " + errorMsg;
+                }
+                ocrResult.setErrorMessage(errorMsg != null ? errorMsg : "OCR processing failed");
+            }
+            
+            if (ocrResult != null && ocrResult.isSuccess()) {
                 // Update document with OCR results if needed
-                if (ocrResult.getDocumentType() != null && document.getDocumentType() == null) {
+                if (ocrResult.getDocumentType() != null && doc.getDocumentType() == null) {
                     try {
-                        document.setDocumentType(DocumentType.valueOf(ocrResult.getDocumentType()));
-                        documentRepository.save(document);
+                        doc.setDocumentType(DocumentType.valueOf(ocrResult.getDocumentType()));
+                        documentRepository.save(doc);
                     } catch (IllegalArgumentException e) {
                         logger.warn("Invalid document type from OCR: {}", ocrResult.getDocumentType());
                     }
@@ -227,7 +261,7 @@ public class FileUploadService {
                 
                 // Index document for search
                 documentIndexingService.indexDocument(
-                    document,
+                    doc,
                     ocrResult.getExtractedText(),
                     ocrResult.getMetadata(),
                     ocrResult.getConfidence(),
@@ -235,25 +269,164 @@ public class FileUploadService {
                 );
                 
                 logger.info("Async processing completed for document: {} - OCR confidence: {}", 
-                           document.getId(), ocrResult.getConfidence());
+                           doc.getId(), ocrResult.getConfidence());
                 
             } else {
+                String errorMsg = ocrResult != null ? ocrResult.getErrorMessage() : "Unknown error";
                 logger.error("OCR processing failed for document: {} - Error: {}", 
-                           document.getId(), ocrResult.getErrorMessage());
+                           doc.getId(), errorMsg);
                 
                 // Still index the document without OCR text
+                // Store error message in metadata for debugging
+                Map<String, String> metadata = ocrResult != null && ocrResult.getMetadata() != null 
+                    ? new HashMap<>(ocrResult.getMetadata()) 
+                    : new HashMap<>();
+                if (errorMsg != null && !errorMsg.isEmpty()) {
+                    metadata.put("ocrError", errorMsg);
+                }
+                
                 documentIndexingService.indexDocument(
-                    document,
+                    doc,
                     "",
-                    ocrResult.getMetadata(),
+                    metadata,
                     0.0,
                     0.0
                 );
             }
             
+        } catch (Throwable e) {
+            // Catch any remaining errors to prevent async task from crashing
+            logger.error("Async processing failed for document: {} - Error type: {}, Message: {}", 
+                        documentId, e.getClass().getName(), e.getMessage());
+            
+            // Still try to index the document even if OCR failed
+            try {
+                // Refetch document for indexing in case of error
+                Document docForIndex = documentRepository.findById(documentId)
+                    .orElseThrow(() -> new RuntimeException("Document not found: " + documentId));
+                if (docForIndex.getUploadedBy() != null) {
+                    docForIndex.getUploadedBy().getId();
+                }
+                documentIndexingService.indexDocument(
+                    docForIndex,
+                    "",
+                    null,
+                    0.0,
+                    0.0
+                );
+            } catch (Exception indexError) {
+                logger.error("Failed to index document {} after OCR failure: {}", 
+                            documentId, indexError.getMessage());
+            }
+        }
+    }
+    
+    /**
+     * Re-process OCR for an existing document
+     */
+    @Async
+    public void reprocessOCR(Long documentId) {
+        try {
+            logger.info("Starting OCR re-processing for document: {}", documentId);
+            
+            // Note: We fetch document here but processDocumentAsync will refetch it 
+            // in its own async context to ensure user is loaded
+            Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new RuntimeException("Document not found: " + documentId));
+            
+            // Check if file exists
+            Path filePath = Paths.get(document.getFilePath());
+            if (!Files.exists(filePath)) {
+                logger.error("File not found for document {}: {}", documentId, document.getFilePath());
+                return;
+            }
+            
+            // Create a MultipartFile wrapper from the existing file
+            File file = filePath.toFile();
+            byte[] fileBytes = Files.readAllBytes(filePath);
+            
+            MultipartFile multipartFile = new MultipartFile() {
+                @Override
+                public String getName() {
+                    return "file";
+                }
+
+                @Override
+                public String getOriginalFilename() {
+                    return document.getOriginalName();
+                }
+
+                @Override
+                public String getContentType() {
+                    return document.getMimeType();
+                }
+
+                @Override
+                public boolean isEmpty() {
+                    return fileBytes.length == 0;
+                }
+
+                @Override
+                public long getSize() {
+                    return fileBytes.length;
+                }
+
+                @Override
+                public byte[] getBytes() throws IOException {
+                    return fileBytes;
+                }
+
+                @Override
+                public InputStream getInputStream() throws IOException {
+                    return new FileInputStream(file);
+                }
+
+                @Override
+                public void transferTo(File dest) throws IOException, IllegalStateException {
+                    Files.copy(filePath, dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
+            };
+            
+            // Process with OCR
+            processDocumentAsync(document, multipartFile);
+            
+            logger.info("OCR re-processing triggered for document: {}", documentId);
+            
         } catch (Exception e) {
-            logger.error("Async processing failed for document: {} - Error: {}", 
-                        document.getId(), e.getMessage());
+            logger.error("Error re-processing OCR for document {}: {}", documentId, e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Re-process OCR for all documents (or documents without OCR text)
+     */
+    @Async
+    public void reprocessAllDocumentsOCR() {
+        try {
+            logger.info("Starting OCR re-processing for all documents");
+            
+            List<Document> documents = documentRepository.findByIsActiveTrue(
+                org.springframework.data.domain.PageRequest.of(0, 1000)
+            ).getContent();
+            
+            int processed = 0;
+            int failed = 0;
+            
+            for (Document document : documents) {
+                try {
+                    reprocessOCR(document.getId());
+                    processed++;
+                } catch (Exception e) {
+                    logger.error("Failed to re-process OCR for document {}: {}", 
+                               document.getId(), e.getMessage());
+                    failed++;
+                }
+            }
+            
+            logger.info("OCR re-processing completed. Processed: {}, Failed: {}", processed, failed);
+            
+        } catch (Exception e) {
+            logger.error("Error re-processing OCR for all documents: {}", e.getMessage(), e);
         }
     }
 }

@@ -70,7 +70,9 @@ class AuthControllerTest {
         user.setPassword(passwordEncoder.encode("password123"));
         user.setFirstName("Test");
         user.setLastName("User");
-        user.setRole(Role.OFFICER);
+        Role officerRole = new Role();
+        officerRole.setName(Role.RoleType.OFFICER);
+        user.setRole(officerRole);
         user.setIsActive(true);
         userRepository.save(user);
 

@@ -1,7 +1,10 @@
 package com.bpdb.dms.service;
 
+import com.bpdb.dms.dto.FileUploadResponse;
 import com.bpdb.dms.entity.Document;
 import com.bpdb.dms.entity.DocumentType;
+import com.bpdb.dms.entity.Role;
+import com.bpdb.dms.entity.Role.RoleType;
 import com.bpdb.dms.entity.User;
 import com.bpdb.dms.repository.DocumentRepository;
 import com.bpdb.dms.repository.UserRepository;
@@ -48,19 +51,23 @@ class FileUploadServiceTest {
 
     @BeforeEach
     void setUp() {
+        Role officerRole = new Role();
+        officerRole.setId(2L);
+        officerRole.setName(RoleType.OFFICER);
+
         testUser = new User();
         testUser.setId(1L);
         testUser.setUsername("testuser");
         testUser.setEmail("test@example.com");
-        testUser.setRole("OFFICER");
+        testUser.setRole(officerRole);
 
         testDocument = new Document();
         testDocument.setId(1L);
         testDocument.setFileName("test.pdf");
         testDocument.setFilePath("/uploads/test.pdf");
-        testDocument.setDocumentType(DocumentType.PDF);
+        testDocument.setDocumentType(DocumentType.OTHER);
         testDocument.setUploadedBy(testUser);
-        testDocument.setUploadedAt(LocalDateTime.now());
+        testDocument.setCreatedAt(LocalDateTime.now());
         testDocument.setIsActive(true);
 
         testFile = new MockMultipartFile(
@@ -74,17 +81,15 @@ class FileUploadServiceTest {
     @Test
     void uploadFile_Success() {
         // Given
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
         when(documentRepository.save(any(Document.class))).thenReturn(testDocument);
 
         // When
-        var result = fileUploadService.uploadFile(testFile, 1L, "Test Document", DocumentType.PDF, "IT");
+        var result = fileUploadService.uploadFile(testFile, testUser, DocumentType.OTHER, "Test Document");
 
         // Then
         assertNotNull(result);
-        assertEquals("test.pdf", result.getFileName());
+        assertTrue(result.isSuccess());
         verify(documentRepository, times(1)).save(any(Document.class));
-        verify(auditService, times(1)).logActivity(anyString(), anyString(), anyString(), any());
     }
 
     @Test
@@ -97,27 +102,18 @@ class FileUploadServiceTest {
             "Executable content".getBytes()
         );
 
-        // When & Then
-        assertThrows(IllegalArgumentException.class, () -> {
-            fileUploadService.uploadFile(invalidFile, 1L, "Test Document", DocumentType.PDF, "IT");
-        });
-    }
+        // When
+        var result = fileUploadService.uploadFile(invalidFile, testUser, DocumentType.OTHER, "Test Document");
 
-    @Test
-    void uploadFile_UserNotFound() {
-        // Given
-        when(userRepository.findById(1L)).thenReturn(Optional.empty());
-
-        // When & Then
-        assertThrows(RuntimeException.class, () -> {
-            fileUploadService.uploadFile(testFile, 1L, "Test Document", DocumentType.PDF, "IT");
-        });
+        // Then
+        assertNotNull(result);
+        assertFalse(result.isSuccess());
     }
 
     @Test
     void uploadFile_FileTooLarge() {
         // Given
-        byte[] largeContent = new byte[11 * 1024 * 1024]; // 11MB
+        byte[] largeContent = new byte[101 * 1024 * 1024]; // 101MB (exceeds default 100MB limit)
         MultipartFile largeFile = new MockMultipartFile(
             "file",
             "large.pdf",
@@ -125,9 +121,11 @@ class FileUploadServiceTest {
             largeContent
         );
 
-        // When & Then
-        assertThrows(IllegalArgumentException.class, () -> {
-            fileUploadService.uploadFile(largeFile, 1L, "Test Document", DocumentType.PDF, "IT");
-        });
+        // When
+        var result = fileUploadService.uploadFile(largeFile, testUser, DocumentType.OTHER, "Test Document");
+
+        // Then
+        assertNotNull(result);
+        assertFalse(result.isSuccess());
     }
 }

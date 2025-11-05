@@ -256,7 +256,7 @@ const Login: React.FC = () => {
               }}
             >
               Username: admin<br />
-              Password: password
+              Password: admin123
             </Typography>
           </Box>
         </CardContent>

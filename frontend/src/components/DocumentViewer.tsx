@@ -22,7 +22,7 @@ import {
   ChevronLeft as PrevIcon,
   ChevronRight as NextIcon,
 } from '@mui/icons-material';
-import { Document } from '../services/documentService';
+import { Document, documentService } from '../services/documentService';
 
 interface DocumentViewerProps {
   open: boolean;
@@ -67,6 +67,9 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const [totalPages, setTotalPages] = useState(1);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [ocrText, setOcrText] = useState<string | null>(null);
+  const [ocrProcessing, setOcrProcessing] = useState<boolean>(false);
+  const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
+  const [ocrError, setOcrError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open && doc) {
@@ -79,8 +82,49 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
     };
   }, [open, doc]);
 
+  // Poll for OCR text when processing
+  useEffect(() => {
+    if (!ocrProcessing || !doc?.id) return;
+
+    let pollCount = 0;
+    const maxPolls = 6; // Poll for up to 30 seconds (6 * 5 seconds)
+    
+    const pollInterval = setInterval(async () => {
+      pollCount++;
+      try {
+        const ocrData = await documentService.getDocumentOCR(doc.id!);
+        if (ocrData.ocrText && ocrData.ocrText.trim() !== '') {
+          setOcrText(ocrData.ocrText);
+          setOcrProcessing(false);
+          setOcrConfidence(ocrData.ocrConfidence || null);
+          setOcrError(null);
+          clearInterval(pollInterval);
+        } else {
+          const ocrErrorMsg = (ocrData as any).ocrError;
+          if (ocrErrorMsg) {
+            // OCR failed, stop polling
+            setOcrProcessing(false);
+            setOcrError(ocrErrorMsg);
+            clearInterval(pollInterval);
+          } else if (pollCount >= maxPolls) {
+            // Stop polling after max attempts
+            setOcrProcessing(false);
+            clearInterval(pollInterval);
+          }
+        }
+      } catch (err) {
+        if (pollCount >= maxPolls) {
+          setOcrProcessing(false);
+          clearInterval(pollInterval);
+        }
+      }
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
+  }, [ocrProcessing, doc?.id]);
+
   const loadDocumentPreview = async () => {
-    if (!doc) return;
+    if (!doc || !doc.id) return;
 
     setLoading(true);
     setError(null);
@@ -91,8 +135,46 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       const mockPreview = generateMockPreview(doc);
       setPreviewUrl(mockPreview);
       
-      // Mock OCR text (in production, fetch from backend)
-      setOcrText(generateMockOCRText(doc));
+      // Fetch document details including OCR text from backend
+      try {
+        const documentData = await documentService.getDocumentById(doc.id);
+        if (documentData.ocrText && documentData.ocrText.trim() !== '') {
+          setOcrText(documentData.ocrText);
+          setOcrProcessing(false);
+          setOcrConfidence(documentData.ocrConfidence || null);
+          setOcrError(null);
+        } else {
+          // Check if OCR is still processing or failed
+          const isProcessing = (documentData as any).ocrProcessing === true;
+          const ocrErrorMsg = (documentData as any).ocrError;
+          setOcrProcessing(isProcessing);
+          setOcrError(ocrErrorMsg || null);
+          
+          // Try fetching OCR text specifically if not in main response
+          try {
+            const ocrData = await documentService.getDocumentOCR(doc.id);
+            if (ocrData.ocrText && ocrData.ocrText.trim() !== '') {
+              setOcrText(ocrData.ocrText);
+              setOcrProcessing(false);
+              setOcrConfidence(ocrData.ocrConfidence || null);
+              setOcrError(null);
+            } else {
+              setOcrText(null);
+              setOcrProcessing((ocrData as any).ocrProcessing === true);
+              setOcrError((ocrData as any).ocrError || null);
+            }
+          } catch (ocrErr) {
+            // OCR endpoint might not exist or document not indexed yet
+            setOcrText(null);
+            setOcrProcessing(true);
+            setOcrError(null);
+          }
+        }
+      } catch (fetchErr) {
+        // If fetching fails, set OCR text to null
+        setOcrText(null);
+        setOcrProcessing(true);
+      }
       
       setLoading(false);
     } catch (err: any) {
@@ -104,10 +186,6 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const generateMockPreview = (doc: Document): string => {
     // This is a placeholder - in production, you'd fetch actual document content
     return 'mock-preview-url';
-  };
-
-  const generateMockOCRText = (doc: Document): string => {
-    return `Extracted text from ${doc.fileName}\n\nThis is sample OCR text that would normally be extracted from the document using Tesseract OCR.\n\nThe system automatically processes uploaded documents and extracts text content for searching and indexing purposes.`;
   };
 
   const getFileType = (fileName: string): string => {
@@ -268,10 +346,64 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   };
 
   const renderOCRText = () => {
-    if (!ocrText) {
+    if (loading) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
+          <CircularProgress />
+        </Box>
+      );
+    }
+
+    if (ocrProcessing) {
       return (
         <Alert severity="info">
-          No OCR text available for this document.
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <CircularProgress size={20} />
+            <Box>
+              <Typography variant="body2" gutterBottom>
+                <strong>OCR processing in progress...</strong>
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 1, fontSize: '0.875rem' }}>
+                Extracting text from document. This typically takes:
+                <ul style={{ marginTop: '8px', marginBottom: '8px', paddingLeft: '20px' }}>
+                  <li><strong>Small images (1-2 pages):</strong> 5-15 seconds</li>
+                  <li><strong>Medium documents (3-10 pages):</strong> 15-45 seconds</li>
+                  <li><strong>Large documents (10+ pages):</strong> 45 seconds - 2 minutes</li>
+                </ul>
+                The page will automatically update when OCR completes.
+              </Typography>
+            </Box>
+          </Box>
+        </Alert>
+      );
+    }
+
+    if (!ocrText || ocrText.trim() === '') {
+      return (
+        <Alert severity={ocrError ? "warning" : "info"}>
+          <Typography variant="body2" gutterBottom>
+            <strong>
+              {ocrError ? "OCR processing failed" : "No OCR text available for this document."}
+            </strong>
+          </Typography>
+          {ocrError ? (
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              {ocrError}
+            </Typography>
+          ) : (
+            <>
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                This document may not contain extractable text, or OCR processing may have failed.
+                {ocrConfidence !== null && (
+                  <span> OCR confidence: {(ocrConfidence * 100).toFixed(1)}%</span>
+                )}
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 1, fontSize: '0.875rem', color: 'text.secondary' }}>
+                <strong>Note:</strong> If you just uploaded this document, please wait a few seconds and refresh.
+                OCR processing runs asynchronously after upload.
+              </Typography>
+            </>
+          )}
         </Alert>
       );
     }
@@ -288,19 +420,26 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           overflow: 'auto',
         }}
       >
-        <Typography
-          variant="body2"
-          component="pre"
-          sx={{
-            whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word',
-            fontFamily: 'monospace',
-            fontSize: '0.875rem',
-            lineHeight: 1.6,
-          }}
-        >
-          {ocrText}
-        </Typography>
+        <Box>
+          {ocrConfidence !== null && (
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+              OCR Confidence: {(ocrConfidence * 100).toFixed(1)}%
+            </Typography>
+          )}
+          <Typography
+            variant="body2"
+            component="pre"
+            sx={{
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+              fontFamily: 'monospace',
+              fontSize: '0.875rem',
+              lineHeight: 1.6,
+            }}
+          >
+            {ocrText}
+          </Typography>
+        </Box>
       </Box>
     );
   };

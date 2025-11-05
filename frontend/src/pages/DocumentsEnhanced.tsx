@@ -83,7 +83,7 @@ const DocumentsEnhanced: React.FC = () => {
   const [uploadForm, setUploadForm] = useState({
     title: '',
     description: '',
-    documentType: 'GENERAL',
+    documentType: 'OTHER',
     department: user?.department || '',
     tags: '',
   });
@@ -179,7 +179,7 @@ const DocumentsEnhanced: React.FC = () => {
       setUploadForm({
         title: '',
         description: '',
-        documentType: 'GENERAL',
+        documentType: 'OTHER',
         department: user?.department || '',
         tags: '',
       });
@@ -375,11 +375,14 @@ const DocumentsEnhanced: React.FC = () => {
                   sx={{ borderRadius: 2 }}
                 >
                   <MenuItem value="">All Types</MenuItem>
+                  <MenuItem value="TENDER">Tender Document</MenuItem>
+                  <MenuItem value="PURCHASE_ORDER">Purchase Order</MenuItem>
+                  <MenuItem value="LETTER_OF_CREDIT">Letter of Credit</MenuItem>
+                  <MenuItem value="BANK_GUARANTEE">Bank Guarantee</MenuItem>
                   <MenuItem value="CONTRACT">Contract</MenuItem>
-                  <MenuItem value="INVOICE">Invoice</MenuItem>
-                  <MenuItem value="REPORT">Report</MenuItem>
-                  <MenuItem value="LETTER">Letter</MenuItem>
-                  <MenuItem value="GENERAL">General</MenuItem>
+                  <MenuItem value="CORRESPONDENCE">Correspondence</MenuItem>
+                  <MenuItem value="STATIONERY_RECORD">Stationery Record</MenuItem>
+                  <MenuItem value="OTHER">Other</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
@@ -596,11 +599,14 @@ const DocumentsEnhanced: React.FC = () => {
                 label="Document Type"
                 onChange={(e) => setUploadForm({ ...uploadForm, documentType: e.target.value })}
               >
+                <MenuItem value="TENDER">Tender Document</MenuItem>
+                <MenuItem value="PURCHASE_ORDER">Purchase Order</MenuItem>
+                <MenuItem value="LETTER_OF_CREDIT">Letter of Credit</MenuItem>
+                <MenuItem value="BANK_GUARANTEE">Bank Guarantee</MenuItem>
                 <MenuItem value="CONTRACT">Contract</MenuItem>
-                <MenuItem value="INVOICE">Invoice</MenuItem>
-                <MenuItem value="REPORT">Report</MenuItem>
-                <MenuItem value="LETTER">Letter</MenuItem>
-                <MenuItem value="GENERAL">General</MenuItem>
+                <MenuItem value="CORRESPONDENCE">Correspondence</MenuItem>
+                <MenuItem value="STATIONERY_RECORD">Stationery Record</MenuItem>
+                <MenuItem value="OTHER">Other</MenuItem>
               </Select>
             </FormControl>
 

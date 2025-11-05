@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+
+    <changeSet id="009-001" author="dms">
+        <comment>Create analytics table</comment>
+        <createTable tableName="analytics">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="metric_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="metric_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="metric_value" type="DOUBLE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="metric_unit" type="VARCHAR(50)"/>
+            <column name="dimension_key" type="VARCHAR(255)"/>
+            <column name="dimension_value" type="VARCHAR(255)"/>
+            <column name="period_start" type="TIMESTAMP"/>
+            <column name="period_end" type="TIMESTAMP"/>
+            <column name="metadata" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="009-002" author="dms">
+        <comment>Create indexes for analytics table</comment>
+        <createIndex tableName="analytics" indexName="idx_analytics_metric_type">
+            <column name="metric_type"/>
+        </createIndex>
+        <createIndex tableName="analytics" indexName="idx_analytics_dimension">
+            <column name="dimension_key"/>
+            <column name="dimension_value"/>
+        </createIndex>
+        <createIndex tableName="analytics" indexName="idx_analytics_created">
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="009-003" author="dms">
+        <comment>Create ML models table</comment>
+        <createTable tableName="ml_models">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="TEXT"/>
+            <column name="model_type" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="VARCHAR(50)"/>
+            <column name="status" type="VARCHAR(50)" defaultValue="DRAFT"/>
+            <column name="accuracy" type="DOUBLE"/>
+            <column name="model_path" type="VARCHAR(500)"/>
+            <column name="training_data_path" type="VARCHAR(500)"/>
+            <column name="parameters" type="TEXT"/>
+            <column name="is_deployed" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="deployed_at" type="TIMESTAMP"/>
+            <column name="created_by" type="BIGINT">
+                <constraints foreignKeyName="fk_ml_models_created_by" references="users(id)"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="009-004" author="dms">
+        <comment>Create ML predictions table</comment>
+        <createTable tableName="ml_predictions">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="model_id" type="BIGINT">
+                <constraints foreignKeyName="fk_ml_predictions_model" references="ml_models(id)"/>
+            </column>
+            <column name="input_data" type="TEXT"/>
+            <column name="prediction_result" type="TEXT"/>
+            <column name="confidence_score" type="DOUBLE"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="009-005" author="dms">
+        <comment>Create dashboards table</comment>
+        <createTable tableName="dashboards">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="TEXT"/>
+            <column name="dashboard_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="layout_config" type="TEXT"/>
+            <column name="widgets_config" type="TEXT"/>
+            <column name="refresh_interval" type="INTEGER" defaultValue="300"/>
+            <column name="is_public" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="is_default" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="access_count" type="BIGINT" defaultValue="0"/>
+            <column name="last_accessed_at" type="TIMESTAMP"/>
+            <column name="created_by" type="BIGINT">
+                <constraints foreignKeyName="fk_dashboards_created_by" references="users(id)"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="009-006" author="dms">
+        <comment>Create system metrics table</comment>
+        <createTable tableName="system_metrics">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="metric_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="metric_value" type="DOUBLE"/>
+            <column name="metric_unit" type="VARCHAR(50)"/>
+            <column name="status" type="VARCHAR(50)"/>
+            <column name="threshold_warning" type="DOUBLE"/>
+            <column name="threshold_critical" type="DOUBLE"/>
+            <column name="collected_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="009-007" author="dms">
+        <comment>Create indexes for system metrics</comment>
+        <createIndex tableName="system_metrics" indexName="idx_system_metrics_name">
+            <column name="metric_name"/>
+        </createIndex>
+        <createIndex tableName="system_metrics" indexName="idx_system_metrics_collected">
+            <column name="collected_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

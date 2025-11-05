@@ -61,9 +61,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     
                     // Debug logging
                     System.out.println("JWT Auth Success - User: " + username + ", Authorities: " + userDetails.getAuthorities());
+                    System.out.println("Request URI: " + request.getRequestURI() + ", Method: " + request.getMethod());
                 } else {
                     System.out.println("JWT Auth Failed - Token invalid for user: " + username);
                 }
+            } else if (authorizationHeader == null) {
+                System.out.println("JWT Auth - No Authorization header found for: " + request.getRequestURI());
+            } else if (username == null) {
+                System.out.println("JWT Auth - Could not extract username from token for: " + request.getRequestURI());
             }
         } catch (Exception e) {
             // On any token parsing/validation exception, proceed without authentication
