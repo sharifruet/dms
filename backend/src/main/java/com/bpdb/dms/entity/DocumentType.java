@@ -4,6 +4,10 @@ package com.bpdb.dms.entity;
  * Document types supported by the DMS system
  */
 public enum DocumentType {
+    GENERAL("General Document"),
+    INVOICE("Invoice"),
+    REPORT("Report"),
+    LETTER("Letter"),
     TENDER("Tender Document"),
     PURCHASE_ORDER("Purchase Order"),
     LETTER_OF_CREDIT("Letter of Credit"),

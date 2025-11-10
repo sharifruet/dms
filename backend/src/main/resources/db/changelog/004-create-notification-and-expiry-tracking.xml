@@ -179,4 +179,45 @@
         </sql>
     </changeSet>
 
+    <changeSet id="004-007" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="notification_preferences" columnName="push_enabled"/>
+            </not>
+        </preConditions>
+        <comment>Add extended notification preference settings</comment>
+        <addColumn tableName="notification_preferences">
+            <column name="push_enabled" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="minimum_priority" type="VARCHAR(50)" defaultValue="MEDIUM">
+                <constraints nullable="false"/>
+            </column>
+            <column name="quiet_hours_start" type="VARCHAR(10)"/>
+            <column name="quiet_hours_end" type="VARCHAR(10)"/>
+            <column name="timezone" type="VARCHAR(50)" defaultValue="UTC">
+                <constraints nullable="false"/>
+            </column>
+            <column name="language" type="VARCHAR(10)" defaultValue="en">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <update tableName="notification_preferences">
+            <column name="push_enabled" valueBoolean="false"/>
+            <where>push_enabled IS NULL</where>
+        </update>
+        <update tableName="notification_preferences">
+            <column name="minimum_priority" value="MEDIUM"/>
+            <where>minimum_priority IS NULL</where>
+        </update>
+        <update tableName="notification_preferences">
+            <column name="timezone" value="UTC"/>
+            <where>timezone IS NULL</where>
+        </update>
+        <update tableName="notification_preferences">
+            <column name="language" value="en"/>
+            <where>language IS NULL</where>
+        </update>
+    </changeSet>
+
 </databaseChangeLog>
