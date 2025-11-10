@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -212,7 +213,32 @@ public class FileUploadService {
             logger.info("Starting async processing for document: {}", document.getId());
             
             // Perform OCR processing
-            OCRService.OCRResult ocrResult = ocrService.extractText(file);
+            if (!ocrService.isOcrAvailable()) {
+                logger.warn("Skipping OCR processing for document {} because OCR service is unavailable", document.getId());
+                documentIndexingService.indexDocument(
+                    document,
+                    "",
+                    Map.of("ocrStatus", "unavailable"),
+                    0.0,
+                    0.0
+                );
+                return;
+            }
+            
+            OCRService.OCRResult ocrResult;
+            try {
+                ocrResult = ocrService.extractText(file);
+            } catch (Throwable ocrError) {
+                logger.error("OCR extraction threw an error for document {}: {}", document.getId(), ocrError.getMessage());
+                documentIndexingService.indexDocument(
+                    document,
+                    "",
+                    Map.of("ocrStatus", "failed", "error", ocrError.getMessage() != null ? ocrError.getMessage() : "unknown"),
+                    0.0,
+                    0.0
+                );
+                return;
+            }
             
             if (ocrResult.isSuccess()) {
                 // Update document with OCR results if needed
@@ -251,7 +277,7 @@ public class FileUploadService {
                 );
             }
             
-        } catch (Exception e) {
+        } catch (Throwable e) {
             logger.error("Async processing failed for document: {} - Error: {}", 
                         document.getId(), e.getMessage());
         }
