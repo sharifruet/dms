@@ -329,4 +329,39 @@
         </addColumn>
     </changeSet>
 
+    <changeSet id="004-016" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="expiry_tracking" columnName="assigned_to"/>
+            </not>
+        </preConditions>
+        <comment>Extend expiry tracking metadata</comment>
+        <addColumn tableName="expiry_tracking">
+            <column name="renewal_date" type="TIMESTAMP"/>
+            <column name="renewal_document_id" type="BIGINT"/>
+            <column name="notes" type="TEXT"/>
+            <column name="assigned_to" type="BIGINT"/>
+            <column name="department" type="VARCHAR(255)"/>
+            <column name="vendor_name" type="VARCHAR(255)"/>
+            <column name="contract_value" type="NUMERIC(15,2)"/>
+            <column name="currency" type="VARCHAR(10)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="004-017" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <columnExists tableName="expiry_tracking" columnName="assigned_to"/>
+                <tableExists tableName="users"/>
+            </and>
+        </preConditions>
+        <comment>Add foreign key for expiry tracking assignee</comment>
+        <addForeignKeyConstraint baseTableName="expiry_tracking"
+                                 baseColumnNames="assigned_to"
+                                 constraintName="fk_expiry_tracking_assigned_to"
+                                 referencedTableName="users"
+                                 referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -84,4 +84,156 @@
                 onDelete="CASCADE"/>
     </changeSet>
 
+    <changeSet id="006-004" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="workflow_instances"/>
+            </not>
+        </preConditions>
+        <comment>Create workflow_instances table</comment>
+        <createTable tableName="workflow_instances">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="workflow_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="document_id" type="BIGINT"/>
+            <column name="initiated_by" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(30)" defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="current_step" type="INTEGER" defaultValueNumeric="0"/>
+            <column name="total_steps" type="INTEGER" defaultValueNumeric="0"/>
+            <column name="context_data" type="TEXT"/>
+            <column name="started_at" type="TIMESTAMP"/>
+            <column name="completed_at" type="TIMESTAMP"/>
+            <column name="due_date" type="TIMESTAMP"/>
+            <column name="priority" type="INTEGER" defaultValueNumeric="0"/>
+            <column name="notes" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="006-005" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="workflow_steps"/>
+            </not>
+        </preConditions>
+        <comment>Create workflow_steps table</comment>
+        <createTable tableName="workflow_steps">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="workflow_instance_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="step_number" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="step_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="step_description" type="TEXT"/>
+            <column name="step_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="assigned_to" type="BIGINT"/>
+            <column name="status" type="VARCHAR(30)" defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="due_date" type="TIMESTAMP"/>
+            <column name="started_at" type="TIMESTAMP"/>
+            <column name="completed_at" type="TIMESTAMP"/>
+            <column name="action_taken" type="TEXT"/>
+            <column name="comments" type="TEXT"/>
+            <column name="step_data" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="006-006" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="workflow_instances"/>
+                <tableExists tableName="workflows"/>
+                <tableExists tableName="documents"/>
+                <tableExists tableName="users"/>
+            </and>
+        </preConditions>
+        <comment>Add workflow instance constraints</comment>
+        <addForeignKeyConstraint baseTableName="workflow_instances"
+                                 baseColumnNames="workflow_id"
+                                 constraintName="fk_workflow_instances_workflow"
+                                 referencedTableName="workflows"
+                                 referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="workflow_instances"
+                                 baseColumnNames="document_id"
+                                 constraintName="fk_workflow_instances_document"
+                                 referencedTableName="documents"
+                                 referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+        <addForeignKeyConstraint baseTableName="workflow_instances"
+                                 baseColumnNames="initiated_by"
+                                 constraintName="fk_workflow_instances_initiated_by"
+                                 referencedTableName="users"
+                                 referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <createIndex tableName="workflow_instances" indexName="idx_workflow_instances_workflow">
+            <column name="workflow_id"/>
+        </createIndex>
+        <createIndex tableName="workflow_instances" indexName="idx_workflow_instances_document">
+            <column name="document_id"/>
+        </createIndex>
+        <createIndex tableName="workflow_instances" indexName="idx_workflow_instances_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="006-007" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <tableExists tableName="workflow_steps"/>
+                <tableExists tableName="workflow_instances"/>
+                <tableExists tableName="users"/>
+            </and>
+        </preConditions>
+        <comment>Add workflow step constraints</comment>
+        <addForeignKeyConstraint baseTableName="workflow_steps"
+                                 baseColumnNames="workflow_instance_id"
+                                 constraintName="fk_workflow_steps_instance"
+                                 referencedTableName="workflow_instances"
+                                 referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="workflow_steps"
+                                 baseColumnNames="assigned_to"
+                                 constraintName="fk_workflow_steps_assigned_to"
+                                 referencedTableName="users"
+                                 referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+        <createIndex tableName="workflow_steps" indexName="idx_workflow_steps_instance">
+            <column name="workflow_instance_id"/>
+        </createIndex>
+        <createIndex tableName="workflow_steps" indexName="idx_workflow_steps_assigned_to">
+            <column name="assigned_to"/>
+        </createIndex>
+        <createIndex tableName="workflow_steps" indexName="idx_workflow_steps_status">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
 </databaseChangeLog>
