@@ -1,10 +1,8 @@
 package com.bpdb.dms.service;
 
 import com.bpdb.dms.entity.Document;
-import com.bpdb.dms.entity.DocumentType;
 import com.bpdb.dms.entity.User;
 import com.bpdb.dms.repository.DocumentRepository;
-import com.bpdb.dms.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,10 +13,13 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -26,9 +27,6 @@ class FileUploadServiceTest {
 
     @Mock
     private DocumentRepository documentRepository;
-
-    @Mock
-    private UserRepository userRepository;
 
     @Mock
     private OCRService ocrService;
@@ -39,12 +37,18 @@ class FileUploadServiceTest {
     @Mock
     private AuditService auditService;
 
+    @Mock
+    private AppDocumentService appDocumentService;
+
+    @Mock
+    private DocumentMetadataService documentMetadataService;
+
     @InjectMocks
     private FileUploadService fileUploadService;
 
     private User testUser;
-    private Document testDocument;
-    private MultipartFile testFile;
+    private MultipartFile testPdfFile;
+    private MultipartFile testExcelFile;
 
     @BeforeEach
     void setUp() {
@@ -52,39 +56,52 @@ class FileUploadServiceTest {
         testUser.setId(1L);
         testUser.setUsername("testuser");
         testUser.setEmail("test@example.com");
-        testUser.setRole("OFFICER");
+        testUser.setDepartment("Finance");
 
-        testDocument = new Document();
-        testDocument.setId(1L);
-        testDocument.setFileName("test.pdf");
-        testDocument.setFilePath("/uploads/test.pdf");
-        testDocument.setDocumentType(DocumentType.PDF);
-        testDocument.setUploadedBy(testUser);
-        testDocument.setUploadedAt(LocalDateTime.now());
-        testDocument.setIsActive(true);
-
-        testFile = new MockMultipartFile(
+        testPdfFile = new MockMultipartFile(
             "file",
             "test.pdf",
             "application/pdf",
             "Test PDF content".getBytes()
+        );
+
+        testExcelFile = new MockMultipartFile(
+            "file",
+            "app-data.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "Excel content".getBytes()
         );
     }
 
     @Test
     void uploadFile_Success() {
         // Given
-        when(userRepository.findById(1L)).thenReturn(Optional.of(testUser));
-        when(documentRepository.save(any(Document.class))).thenReturn(testDocument);
+        AtomicReference<Document> storedDocument = new AtomicReference<>();
+        when(documentRepository.save(any(Document.class))).thenAnswer(invocation -> {
+            Document doc = invocation.getArgument(0);
+            doc.setId(1L);
+            doc.setUploadedBy(testUser);
+            doc.setCreatedAt(LocalDateTime.now());
+            doc.setUpdatedAt(LocalDateTime.now());
+            storedDocument.set(doc);
+            return doc;
+        });
+        when(documentRepository.findById(anyLong())).thenAnswer(invocation -> Optional.ofNullable(storedDocument.get()));
+        when(ocrService.isOcrAvailable()).thenReturn(false);
+        when(documentMetadataService.getMetadataMap(any(Document.class))).thenReturn(Map.of());
+        when(documentMetadataService.extractMetadataFromText(any(Document.class), anyString())).thenReturn(Map.of());
 
         // When
-        var result = fileUploadService.uploadFile(testFile, 1L, "Test Document", DocumentType.PDF, "IT");
+        var result = fileUploadService.uploadFile(testPdfFile, testUser, "BILL", "Monthly billing statement", Map.of());
 
         // Then
         assertNotNull(result);
-        assertEquals("test.pdf", result.getFileName());
+        assertTrue(result.isSuccess());
+        assertEquals("BILL", result.getDocumentType());
         verify(documentRepository, times(1)).save(any(Document.class));
-        verify(auditService, times(1)).logActivity(anyString(), anyString(), anyString(), any());
+        verify(documentIndexingService, times(1))
+            .indexDocument(any(Document.class), eq(""), eq(Map.of("ocrStatus", "unavailable")), eq(0.0), eq(0.0));
+        verify(appDocumentService, never()).processAndStoreEntries(any(), any());
     }
 
     @Test
@@ -98,20 +115,9 @@ class FileUploadServiceTest {
         );
 
         // When & Then
-        assertThrows(IllegalArgumentException.class, () -> {
-            fileUploadService.uploadFile(invalidFile, 1L, "Test Document", DocumentType.PDF, "IT");
-        });
-    }
-
-    @Test
-    void uploadFile_UserNotFound() {
-        // Given
-        when(userRepository.findById(1L)).thenReturn(Optional.empty());
-
-        // When & Then
-        assertThrows(RuntimeException.class, () -> {
-            fileUploadService.uploadFile(testFile, 1L, "Test Document", DocumentType.PDF, "IT");
-        });
+        var response = fileUploadService.uploadFile(invalidFile, testUser, "BILL", "Monthly billing statement", Map.of());
+        assertFalse(response.isSuccess());
+        verify(documentRepository, never()).save(any(Document.class));
     }
 
     @Test
@@ -126,8 +132,34 @@ class FileUploadServiceTest {
         );
 
         // When & Then
-        assertThrows(IllegalArgumentException.class, () -> {
-            fileUploadService.uploadFile(largeFile, 1L, "Test Document", DocumentType.PDF, "IT");
+        var response = fileUploadService.uploadFile(largeFile, testUser, "BILL", "Large document", Map.of());
+        assertFalse(response.isSuccess());
+        verify(documentRepository, never()).save(any(Document.class));
+    }
+
+    @Test
+    void uploadFile_ProcessesAppExcelEntries() {
+        // Given
+        AtomicReference<Document> storedDocument = new AtomicReference<>();
+        when(documentRepository.save(any(Document.class))).thenAnswer(invocation -> {
+            Document doc = invocation.getArgument(0);
+            doc.setId(5L);
+            doc.setUploadedBy(testUser);
+            storedDocument.set(doc);
+            return doc;
         });
+        when(documentRepository.findById(anyLong())).thenAnswer(invocation -> Optional.ofNullable(storedDocument.get()));
+        when(appDocumentService.processAndStoreEntries(any(Document.class), eq(testExcelFile)))
+            .thenReturn(Map.of("appStatus", "processed", "appEntryCount", "3"));
+        when(ocrService.isOcrAvailable()).thenReturn(false);
+        when(documentMetadataService.getMetadataMap(any(Document.class))).thenReturn(Map.of());
+        when(documentMetadataService.extractMetadataFromText(any(Document.class), anyString())).thenReturn(Map.of());
+
+        // When
+        var result = fileUploadService.uploadFile(testExcelFile, testUser, "CONTRACT", "APP spreadsheet", Map.of());
+
+        // Then
+        assertTrue(result.isSuccess());
+        verify(appDocumentService, times(1)).processAndStoreEntries(any(Document.class), eq(testExcelFile));
     }
 }

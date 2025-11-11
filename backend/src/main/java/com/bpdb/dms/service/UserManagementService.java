@@ -3,6 +3,7 @@ package com.bpdb.dms.service;
 import com.bpdb.dms.entity.Role;
 import com.bpdb.dms.entity.User;
 import com.bpdb.dms.repository.UserRepository;
+import com.bpdb.dms.repository.RoleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,8 +13,6 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 
 /**
@@ -32,13 +31,13 @@ public class UserManagementService {
     private PasswordEncoder passwordEncoder;
     
     @Autowired
-    private AuditService auditService;
+    private RoleRepository roleRepository;
     
     /**
      * Create a new user
      */
     public User createUser(String username, String email, String password, String firstName, 
-                          String lastName, Role role, String department) {
+                          String lastName, Long roleId, String department) {
         try {
             // Check if username already exists
             if (userRepository.existsByUsername(username)) {
@@ -49,6 +48,13 @@ public class UserManagementService {
             if (userRepository.existsByEmail(email)) {
                 throw new RuntimeException("Email already exists");
             }
+            
+            if (roleId == null) {
+                throw new RuntimeException("Role is required");
+            }
+            
+            Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new RuntimeException("Role not found"));
             
             User user = new User();
             user.setUsername(username);
@@ -75,7 +81,7 @@ public class UserManagementService {
      * Update user information
      */
     public User updateUser(Long userId, String firstName, String lastName, String email, 
-                          String department, Role role) {
+                          String department, Long roleId) {
         try {
             User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -89,7 +95,12 @@ public class UserManagementService {
             user.setLastName(lastName);
             user.setEmail(email);
             user.setDepartment(department);
-            user.setRole(role);
+            
+            if (roleId != null) {
+                Role role = roleRepository.findById(roleId)
+                    .orElseThrow(() -> new RuntimeException("Role not found"));
+                user.setRole(role);
+            }
             
             User updatedUser = userRepository.save(user);
             logger.info("User updated successfully: {}", user.getUsername());

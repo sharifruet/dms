@@ -1,4 +1,4 @@
-version: '3.8'
+#doversion: '3.8'
 
 services:
   # PostgreSQL Database
@@ -61,35 +61,36 @@ services:
       retries: 5
 
   # Spring Boot Backend
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: dms-backend
-    environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/dms_db
-      - SPRING_DATASOURCE_USERNAME=dms_user
-      - SPRING_DATASOURCE_PASSWORD=dms_password
-      - SPRING_REDIS_HOST=redis
-      - SPRING_REDIS_PORT=6379
-      - SPRING_ELASTICSEARCH_HOSTS=http://elasticsearch:9200
-    ports:
-      - "8080:8080"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      elasticsearch:
-        condition: service_healthy
-    networks:
-      - dms-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+  
+  #backend:
+   # build:
+   #   context: ./backend
+   #   dockerfile: Dockerfile
+   # container_name: dms-backend
+   # environment:
+    #  - SPRING_PROFILES_ACTIVE=docker
+     # - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/dms_db
+      #- SPRING_DATASOURCE_USERNAME=dms_user
+#      - SPRING_DATASOURCE_PASSWORD=dms_password
+ #     - SPRING_REDIS_HOST=redis
+#      - SPRING_REDIS_PORT=6379
+##      - SPRING_ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+ #   ports:
+#      - "8080:8080"
+#    depends_on:
+#      postgres:
+#        condition: service_healthy
+#      redis:
+#        condition: service_healthy
+#      elasticsearch:
+#        condition: service_healthy
+#    networks:
+#      - dms-network
+#    healthcheck:
+#      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+#      interval: 30s
+#      timeout: 10s
+#      retries: 5
 
   # React Frontend
   frontend:
@@ -106,8 +107,8 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
-    depends_on:
-      - backend
+    #depends_on:
+    #  - backend
     networks:
       - dms-network
     stdin_open: true

@@ -39,9 +39,17 @@ import {
   Analytics as AnalyticsIcon
 } from '@mui/icons-material';
 import { searchService, SearchFilters, SearchResult, SearchResultItem, SearchStatistics } from '../services/searchService';
-import { DocumentType } from '../types/document';
+import { documentService } from '../services/documentService';
+import { DocumentCategory } from '../types/document';
 
 interface SearchPageProps {}
+
+const DEFAULT_CATEGORIES: DocumentCategory[] = [
+  { id: -1, name: 'TENDER', displayName: 'Tender', description: 'Tender documents', isActive: true },
+  { id: -2, name: 'BILL', displayName: 'Bill', description: 'Bills and invoices', isActive: true },
+  { id: -3, name: 'CONTRACT', displayName: 'Contract', description: 'Contract documents', isActive: true },
+  { id: -4, name: 'GENERAL', displayName: 'General', description: 'General purpose documents', isActive: true },
+];
 
 const SearchPage: React.FC<SearchPageProps> = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,12 +74,14 @@ const SearchPage: React.FC<SearchPageProps> = () => {
   const [isActive, setIsActive] = useState<boolean | undefined>(true);
 
   // Available options for filters
-  const documentTypeOptions = Object.values(DocumentType);
+  const [categories, setCategories] = useState<DocumentCategory[]>(DEFAULT_CATEGORIES);
+  const documentTypeOptions = categories.map((category) => category.name);
   const departmentOptions = ['Finance', 'HR', 'IT', 'Operations', 'Legal', 'Procurement'];
   const userOptions = ['admin', 'user1', 'user2', 'manager'];
 
   useEffect(() => {
     loadSearchStatistics();
+    loadCategories();
   }, []);
 
   useEffect(() => {
@@ -89,6 +99,21 @@ const SearchPage: React.FC<SearchPageProps> = () => {
       setSearchStatistics(stats);
     } catch (err) {
       console.error('Failed to load search statistics:', err);
+    }
+  };
+
+  const loadCategories = async () => {
+    try {
+      const data = await documentService.getDocumentCategories();
+      if (!data || data.length === 0) {
+        console.warn('[SearchPage] No categories returned from API; using defaults');
+        setCategories(DEFAULT_CATEGORIES);
+      } else {
+        setCategories(data);
+      }
+    } catch (err) {
+      console.error('Failed to load document categories:', err);
+      setCategories(DEFAULT_CATEGORIES);
     }
   };
 
@@ -157,6 +182,21 @@ const SearchPage: React.FC<SearchPageProps> = () => {
     performSearch(0);
   };
 
+  const getCategoryDisplayName = (name?: string) => {
+    if (!name) return 'Unknown';
+    const category = categories.find((cat) => cat.name === name);
+    return category ? category.displayName || category.name : name;
+  };
+
+  const getDocumentTypeColor = (type?: string) => {
+    if (!type) return 'default';
+    const normalized = type.toUpperCase();
+    if (normalized.includes('BILL')) return 'warning';
+    if (normalized.includes('TENDER')) return 'primary';
+    if (normalized.includes('CONTRACT')) return 'success';
+    return 'default';
+  };
+
   const handleReindex = async () => {
     try {
       await searchService.reindexAllDocuments();
@@ -185,10 +225,10 @@ const SearchPage: React.FC<SearchPageProps> = () => {
             {item.originalName}
           </Typography>
           <Box display="flex" gap={1}>
-            <Chip 
-              label={item.documentType} 
-              size="small" 
-              color="primary" 
+            <Chip
+              label={getCategoryDisplayName(item.documentType)}
+              size="small"
+              color={getDocumentTypeColor(item.documentType) as any}
               variant="outlined"
             />
             <Chip 
@@ -354,14 +394,14 @@ const SearchPage: React.FC<SearchPageProps> = () => {
                       renderValue={(selected) => (
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                           {(selected as string[]).map((value) => (
-                            <Chip key={value} label={value} size="small" />
+                            <Chip key={value} label={getCategoryDisplayName(value)} size="small" />
                           ))}
                         </Box>
                       )}
                     >
                       {documentTypeOptions.map((type) => (
                         <MenuItem key={type} value={type}>
-                          {type}
+                          {getCategoryDisplayName(type)}
                         </MenuItem>
                       ))}
                     </Select>

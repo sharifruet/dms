@@ -1,7 +1,6 @@
 package com.bpdb.dms.repository;
 
 import com.bpdb.dms.entity.Document;
-import com.bpdb.dms.entity.DocumentType;
 import com.bpdb.dms.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -26,7 +25,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     /**
      * Find documents by document type
      */
-    Page<Document> findByDocumentType(DocumentType documentType, Pageable pageable);
+    Page<Document> findByDocumentType(String documentType, Pageable pageable);
     
     /**
      * Find documents by department
@@ -53,7 +52,7 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     /**
      * Count documents by type
      */
-    long countByDocumentType(DocumentType documentType);
+    long countByDocumentType(String documentType);
     
     /**
      * Count documents by department

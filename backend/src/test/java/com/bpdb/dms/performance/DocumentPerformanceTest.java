@@ -1,7 +1,6 @@
 package com.bpdb.dms.performance;
 
 import com.bpdb.dms.entity.Document;
-import com.bpdb.dms.entity.DocumentType;
 import com.bpdb.dms.entity.User;
 import com.bpdb.dms.repository.DocumentRepository;
 import com.bpdb.dms.repository.UserRepository;
@@ -37,7 +36,6 @@ class DocumentPerformanceTest {
         testUser.setUsername("perftest");
         testUser.setEmail("perf@example.com");
         testUser.setPassword("password");
-        testUser.setRole("OFFICER");
         testUser.setIsActive(true);
         testUser = userRepository.save(testUser);
     }
@@ -50,9 +48,10 @@ class DocumentPerformanceTest {
             Document doc = new Document();
             doc.setFileName("perf-test-" + i + ".pdf");
             doc.setFilePath("/uploads/perf-test-" + i + ".pdf");
-            doc.setDocumentType(DocumentType.PDF);
+            doc.setDocumentType("PDF");
             doc.setUploadedBy(testUser);
-            doc.setUploadedAt(LocalDateTime.now());
+            doc.setCreatedAt(LocalDateTime.now());
+            doc.setUpdatedAt(LocalDateTime.now());
             doc.setIsActive(true);
             documents.add(doc);
         }
@@ -78,9 +77,10 @@ class DocumentPerformanceTest {
             Document doc = new Document();
             doc.setFileName("search-test-" + i + ".pdf");
             doc.setFilePath("/uploads/search-test-" + i + ".pdf");
-            doc.setDocumentType(DocumentType.PDF);
+            doc.setDocumentType("PDF");
             doc.setUploadedBy(testUser);
-            doc.setUploadedAt(LocalDateTime.now());
+            doc.setCreatedAt(LocalDateTime.now());
+            doc.setUpdatedAt(LocalDateTime.now());
             doc.setIsActive(true);
             documents.add(doc);
         }
@@ -88,7 +88,7 @@ class DocumentPerformanceTest {
 
         // When
         long startTime = System.currentTimeMillis();
-        var results = documentRepository.findByFileNameContainingIgnoreCase("search-test");
+        var results = documentRepository.findByFileNameContaining("search-test", org.springframework.data.domain.PageRequest.of(0, 100));
         long endTime = System.currentTimeMillis();
 
         // Then
@@ -97,7 +97,7 @@ class DocumentPerformanceTest {
         
         // Performance assertion: Should complete within 1 second
         assertTrue(executionTime < 1000, "Search took too long: " + executionTime + "ms");
-        assertTrue(results.size() >= 100, "Search results incomplete");
+        assertTrue(results.getContent().size() >= 100, "Search results incomplete");
     }
 
     @Test
@@ -108,9 +108,10 @@ class DocumentPerformanceTest {
             Document doc = new Document();
             doc.setFileName("page-test-" + i + ".pdf");
             doc.setFilePath("/uploads/page-test-" + i + ".pdf");
-            doc.setDocumentType(DocumentType.PDF);
+            doc.setDocumentType("PDF");
             doc.setUploadedBy(testUser);
-            doc.setUploadedAt(LocalDateTime.now());
+            doc.setCreatedAt(LocalDateTime.now());
+            doc.setUpdatedAt(LocalDateTime.now());
             doc.setIsActive(true);
             documents.add(doc);
         }

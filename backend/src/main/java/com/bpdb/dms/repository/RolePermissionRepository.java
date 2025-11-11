@@ -34,4 +34,9 @@ public interface RolePermissionRepository extends JpaRepository<RolePermission, 
      * Delete role permission mapping
      */
     void deleteByRoleAndPermission(Role role, Permission permission);
+    
+    /**
+     * Delete all permissions associated with a role.
+     */
+    void deleteByRole(Role role);
 }

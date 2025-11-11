@@ -1,6 +1,7 @@
 package com.bpdb.dms.controller;
 
 import com.bpdb.dms.entity.*;
+import com.bpdb.dms.repository.UserRepository;
 import com.bpdb.dms.service.DocumentTemplateService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -24,6 +25,9 @@ public class DocumentTemplateController {
     
     @Autowired
     private DocumentTemplateService documentTemplateService;
+
+    @Autowired
+    private UserRepository userRepository;
     
     /**
      * Create a new document template
@@ -36,7 +40,7 @@ public class DocumentTemplateController {
                                                           @RequestParam(value = "templateContent", required = false) String templateContent,
                                                           Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = resolveCurrentUser(authentication);
             
             DocumentTemplate template = documentTemplateService.createTemplate(
                 name,
@@ -66,7 +70,7 @@ public class DocumentTemplateController {
                                                           @RequestParam(value = "templateContent", required = false) String templateContent,
                                                           Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = resolveCurrentUser(authentication);
             
             DocumentTemplate template = documentTemplateService.updateTemplate(
                 templateId,
@@ -108,7 +112,7 @@ public class DocumentTemplateController {
                                                              @RequestBody Map<String, Object> variables,
                                                              Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = resolveCurrentUser(authentication);
             
             String generatedContent = documentTemplateService.generateDocumentFromTemplate(
                 templateId,
@@ -168,7 +172,7 @@ public class DocumentTemplateController {
             @RequestParam(defaultValue = "10") int size,
             Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = resolveCurrentUser(authentication);
             Pageable pageable = PageRequest.of(page, size);
             
             Page<DocumentTemplate> templates = documentTemplateService.getTemplatesForUser(user, pageable);
@@ -272,5 +276,13 @@ public class DocumentTemplateController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }
+    }
+
+    private User resolveCurrentUser(Authentication authentication) {
+        if (authentication == null) {
+            throw new IllegalStateException("Missing authentication context");
+        }
+        return userRepository.findByUsername(authentication.getName())
+                .orElseThrow(() -> new IllegalStateException("Authenticated user not found: " + authentication.getName()));
     }
 }

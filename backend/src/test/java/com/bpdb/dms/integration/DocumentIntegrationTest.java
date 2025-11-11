@@ -1,7 +1,6 @@
 package com.bpdb.dms.integration;
 
 import com.bpdb.dms.entity.Document;
-import com.bpdb.dms.entity.DocumentType;
 import com.bpdb.dms.entity.User;
 import com.bpdb.dms.repository.DocumentRepository;
 import com.bpdb.dms.repository.UserRepository;
@@ -10,7 +9,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureWebMvc;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
@@ -48,7 +46,6 @@ class DocumentIntegrationTest {
         testUser.setUsername("testuser");
         testUser.setEmail("test@example.com");
         testUser.setPassword("password");
-        testUser.setRole("OFFICER");
         testUser.setIsActive(true);
         testUser = userRepository.save(testUser);
 
@@ -56,15 +53,16 @@ class DocumentIntegrationTest {
         testDocument = new Document();
         testDocument.setFileName("test.pdf");
         testDocument.setFilePath("/uploads/test.pdf");
-        testDocument.setDocumentType(DocumentType.PDF);
+        testDocument.setDocumentType("PDF");
         testDocument.setUploadedBy(testUser);
-        testDocument.setUploadedAt(LocalDateTime.now());
+        testDocument.setCreatedAt(LocalDateTime.now());
+        testDocument.setUpdatedAt(LocalDateTime.now());
         testDocument.setIsActive(true);
         testDocument = documentRepository.save(testDocument);
     }
 
     @Test
-    @WithMockUser(roles = "OFFICER")
+    @WithMockUser(username = "testuser", roles = "OFFICER")
     void uploadDocument_IntegrationTest() throws Exception {
         // Given
         MockMultipartFile file = new MockMultipartFile(
@@ -77,14 +75,12 @@ class DocumentIntegrationTest {
         // When & Then
         mockMvc.perform(multipart("/api/documents/upload")
                 .file(file)
-                .param("userId", testUser.getId().toString())
-                .param("title", "Integration Test Document")
-                .param("documentType", "PDF")
-                .param("department", "IT")
+                .param("documentType", "BILL")
+                .param("description", "Integration Test Document")
                 .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fileName").value("integration-test.pdf"))
-                .andExpect(jsonPath("$.documentType").value("PDF"));
+                .andExpect(jsonPath("$.documentType").value("BILL"));
     }
 
     @Test

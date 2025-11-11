@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { DocumentCategory } from '../types/document';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
 
@@ -49,10 +50,11 @@ export interface Document {
   fileName: string;
   filePath?: string;
   documentType: string;
-  uploadedBy?: string;
+  uploadedBy?: string | { username: string };
   uploadedAt?: string;
   department?: string;
-  size?: string;
+  size?: string | number;
+  fileSize?: string | number;
   status?: string;
   description?: string;
   tags?: string;
@@ -294,6 +296,11 @@ export const documentService = {
         'Content-Type': 'multipart/form-data',
       },
     });
+    return response.data;
+  },
+
+  getDocumentCategories: async (): Promise<DocumentCategory[]> => {
+    const response = await api.get('/document-categories');
     return response.data;
   }
 };

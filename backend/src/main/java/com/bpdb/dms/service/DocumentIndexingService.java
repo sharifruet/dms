@@ -36,6 +36,9 @@ public class DocumentIndexingService {
     
     @Autowired
     private AuditService auditService;
+
+    @Autowired
+    private DocumentCategoryService documentCategoryService;
     
     /**
      * Index a document for search
@@ -48,7 +51,7 @@ public class DocumentIndexingService {
             documentIndex.setFileName(document.getFileName());
             documentIndex.setOriginalName(document.getOriginalName());
             documentIndex.setExtractedText(extractedText);
-            documentIndex.setDocumentType(document.getDocumentType() != null ? document.getDocumentType().name() : "OTHER");
+            documentIndex.setDocumentType(document.getDocumentType() != null ? document.getDocumentType() : "OTHER");
             documentIndex.setDescription(document.getDescription());
             documentIndex.setTags(document.getTags());
             documentIndex.setDepartment(document.getDepartment());
@@ -83,7 +86,7 @@ public class DocumentIndexingService {
             if (existingIndex != null) {
                 existingIndex.setFileName(document.getFileName());
                 existingIndex.setOriginalName(document.getOriginalName());
-                existingIndex.setDocumentType(document.getDocumentType() != null ? document.getDocumentType().name() : "OTHER");
+                existingIndex.setDocumentType(document.getDocumentType() != null ? document.getDocumentType() : "OTHER");
                 existingIndex.setDescription(document.getDescription());
                 existingIndex.setTags(document.getTags());
                 existingIndex.setDepartment(document.getDepartment());
@@ -203,8 +206,9 @@ public class DocumentIndexingService {
             
             // Count by document type
             Map<String, Long> typeCounts = new HashMap<>();
-            for (String type : List.of("TENDER", "PURCHASE_ORDER", "LETTER_OF_CREDIT", "BANK_GUARANTEE", "CONTRACT", "CORRESPONDENCE", "OTHER")) {
-                typeCounts.put(type, documentIndexRepository.countByDocumentType(type));
+            List<String> categoryNames = documentCategoryService.getActiveCategoryNames();
+            for (String category : categoryNames) {
+                typeCounts.put(category, documentIndexRepository.countByDocumentType(category));
             }
             stats.put("documentTypeCounts", typeCounts);
             

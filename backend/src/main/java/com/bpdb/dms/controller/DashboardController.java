@@ -1,6 +1,7 @@
 package com.bpdb.dms.controller;
 
 import com.bpdb.dms.entity.*;
+import com.bpdb.dms.repository.UserRepository;
 import com.bpdb.dms.service.DashboardService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -20,9 +21,12 @@ import java.util.Optional;
 @RequestMapping("/api/dashboards")
 @CrossOrigin(origins = "*")
 public class DashboardController {
-    
+
     @Autowired
     private DashboardService dashboardService;
+
+    @Autowired
+    private UserRepository userRepository;
     
     /**
      * Create a new dashboard
@@ -33,7 +37,7 @@ public class DashboardController {
             Authentication authentication) {
         
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = resolveCurrentUser(authentication);
             
             Dashboard dashboard = dashboardService.createDashboard(
                 request.getName(),
@@ -61,7 +65,7 @@ public class DashboardController {
             Authentication authentication) {
         
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = resolveCurrentUser(authentication);
             Pageable pageable = PageRequest.of(page, size);
             Page<Dashboard> dashboards = dashboardService.dashboardRepository.findAccessibleToUser(user, pageable);
             
@@ -129,13 +133,21 @@ public class DashboardController {
     @GetMapping("/data/user")
     public ResponseEntity<Map<String, Object>> getUserDashboardData(Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = resolveCurrentUser(authentication);
             Map<String, Object> data = dashboardService.getUserDashboardData(user);
             return ResponseEntity.ok(data);
             
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }
+    }
+
+    private User resolveCurrentUser(Authentication authentication) {
+        if (authentication == null) {
+            throw new IllegalStateException("Missing authentication context");
+        }
+        return userRepository.findByUsername(authentication.getName())
+                .orElseThrow(() -> new IllegalStateException("Authenticated user not found: " + authentication.getName()));
     }
     
     /**

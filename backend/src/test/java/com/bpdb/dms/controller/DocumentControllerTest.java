@@ -1,16 +1,18 @@
 package com.bpdb.dms.controller;
 
+import com.bpdb.dms.dto.FileUploadResponse;
 import com.bpdb.dms.entity.Document;
-import com.bpdb.dms.entity.DocumentType;
+import com.bpdb.dms.entity.DocumentCategory;
 import com.bpdb.dms.entity.User;
+import com.bpdb.dms.repository.DocumentRepository;
+import com.bpdb.dms.repository.UserRepository;
+import com.bpdb.dms.service.DocumentCategoryService;
 import com.bpdb.dms.service.FileUploadService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
@@ -18,7 +20,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDateTime;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -33,8 +36,14 @@ class DocumentControllerTest {
     @MockBean
     private FileUploadService fileUploadService;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    @MockBean
+    private DocumentCategoryService documentCategoryService;
+
+    @MockBean
+    private DocumentRepository documentRepository;
+
+    @MockBean
+    private UserRepository userRepository;
 
     private User testUser;
     private Document testDocument;
@@ -45,20 +54,20 @@ class DocumentControllerTest {
         testUser.setId(1L);
         testUser.setUsername("testuser");
         testUser.setEmail("test@example.com");
-        testUser.setRole("OFFICER");
 
         testDocument = new Document();
         testDocument.setId(1L);
         testDocument.setFileName("test.pdf");
         testDocument.setFilePath("/uploads/test.pdf");
-        testDocument.setDocumentType(DocumentType.PDF);
+        testDocument.setDocumentType("BILL");
         testDocument.setUploadedBy(testUser);
-        testDocument.setUploadedAt(LocalDateTime.now());
+        testDocument.setCreatedAt(LocalDateTime.now());
+        testDocument.setUpdatedAt(LocalDateTime.now());
         testDocument.setIsActive(true);
     }
 
     @Test
-    @WithMockUser(roles = "OFFICER")
+    @WithMockUser(username = "testuser", roles = "OFFICER")
     void uploadDocument_Success() throws Exception {
         // Given
         MockMultipartFile file = new MockMultipartFile(
@@ -68,20 +77,28 @@ class DocumentControllerTest {
             "Test PDF content".getBytes()
         );
 
-        when(fileUploadService.uploadFile(any(), anyLong(), any(), any(), any()))
-            .thenReturn(testDocument);
+        FileUploadResponse response = FileUploadResponse.success(
+            testDocument.getId(),
+            testDocument.getFileName(),
+            testDocument.getOriginalName(),
+            testDocument.getFileSize(),
+            testDocument.getMimeType(),
+            testDocument.getDocumentType()
+        );
+
+        when(userRepository.findByUsernameWithRole("testuser")).thenReturn(java.util.Optional.of(testUser));
+        when(documentCategoryService.ensureCategoryExists(anyString())).thenReturn(new DocumentCategory("BILL", "Bill", null));
+        when(fileUploadService.uploadFile(any(), any(User.class), anyString(), any(), anyMap())).thenReturn(response);
 
         // When & Then
         mockMvc.perform(multipart("/api/documents/upload")
                 .file(file)
-                .param("userId", "1")
-                .param("title", "Test Document")
-                .param("documentType", "PDF")
-                .param("department", "IT")
+                .param("documentType", "BILL")
+                .param("description", "Monthly bill")
                 .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fileName").value("test.pdf"))
-                .andExpect(jsonPath("$.documentType").value("PDF"));
+                .andExpect(jsonPath("$.documentType").value("BILL"));
     }
 
     @Test
@@ -98,16 +115,13 @@ class DocumentControllerTest {
         // When & Then
         mockMvc.perform(multipart("/api/documents/upload")
                 .file(file)
-                .param("userId", "1")
-                .param("title", "Test Document")
-                .param("documentType", "PDF")
-                .param("department", "IT")
+                .param("documentType", "BILL")
                 .with(csrf()))
                 .andExpect(status().isForbidden());
     }
 
     @Test
-    @WithMockUser(roles = "OFFICER")
+    @WithMockUser(username = "testuser", roles = "OFFICER")
     void uploadDocument_InvalidFile() throws Exception {
         // Given
         MockMultipartFile invalidFile = new MockMultipartFile(
@@ -117,13 +131,16 @@ class DocumentControllerTest {
             "Executable content".getBytes()
         );
 
+        FileUploadResponse errorResponse = FileUploadResponse.error("File type not supported");
+
+        when(userRepository.findByUsernameWithRole("testuser")).thenReturn(java.util.Optional.of(testUser));
+        when(documentCategoryService.ensureCategoryExists(anyString())).thenReturn(new DocumentCategory("BILL", "Bill", null));
+        when(fileUploadService.uploadFile(any(), any(User.class), anyString(), any(), anyMap())).thenReturn(errorResponse);
+
         // When & Then
         mockMvc.perform(multipart("/api/documents/upload")
                 .file(invalidFile)
-                .param("userId", "1")
-                .param("title", "Test Document")
-                .param("documentType", "PDF")
-                .param("department", "IT")
+                .param("documentType", "BILL")
                 .with(csrf()))
                 .andExpect(status().isBadRequest());
     }

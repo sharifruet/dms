@@ -1,6 +1,7 @@
 package com.bpdb.dms.controller;
 
 import com.bpdb.dms.entity.*;
+import com.bpdb.dms.repository.UserRepository;
 import com.bpdb.dms.service.DocumentVersioningService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +23,9 @@ public class DocumentVersioningController {
     
     @Autowired
     private DocumentVersioningService documentVersioningService;
+
+    @Autowired
+    private UserRepository userRepository;
     
     /**
      * Create a new version of a document
@@ -33,7 +37,7 @@ public class DocumentVersioningController {
                                                                 @RequestParam("versionType") VersionType versionType,
                                                                 Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = resolveCurrentUser(authentication);
             
             DocumentVersion version = documentVersioningService.createDocumentVersion(
                 documentId,
@@ -90,7 +94,7 @@ public class DocumentVersioningController {
                                                            @PathVariable String versionNumber,
                                                            Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = resolveCurrentUser(authentication);
             
             Document document = documentVersioningService.restoreDocumentToVersion(
                 documentId,
@@ -155,5 +159,13 @@ public class DocumentVersioningController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }
+    }
+
+    private User resolveCurrentUser(Authentication authentication) {
+        if (authentication == null) {
+            throw new IllegalStateException("Missing authentication context");
+        }
+        return userRepository.findByUsername(authentication.getName())
+                .orElseThrow(() -> new IllegalStateException("Authenticated user not found: " + authentication.getName()));
     }
 }

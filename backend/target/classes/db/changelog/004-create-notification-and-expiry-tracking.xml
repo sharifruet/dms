@@ -220,4 +220,16 @@
         </update>
     </changeSet>
 
+    <changeSet id="004-008" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="notifications" columnName="channel"/>
+            </not>
+        </preConditions>
+        <comment>Add channel column to notifications</comment>
+        <addColumn tableName="notifications">
+            <column name="channel" type="VARCHAR(50)"/>
+        </addColumn>
+    </changeSet>
+
 </databaseChangeLog>

@@ -6,6 +6,11 @@
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
 
     <changeSet id="001-001" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="users"/>
+            </not>
+        </preConditions>
         <comment>Create users table</comment>
         <createTable tableName="users">
             <column name="id" type="BIGSERIAL">
@@ -41,6 +46,11 @@
     </changeSet>
 
     <changeSet id="001-002" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="documents"/>
+            </not>
+        </preConditions>
         <comment>Create documents table</comment>
         <createTable tableName="documents">
             <column name="id" type="BIGSERIAL">
@@ -77,6 +87,11 @@
     </changeSet>
 
     <changeSet id="001-003" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <foreignKeyConstraintExists foreignKeyName="fk_documents_uploaded_by"/>
+            </not>
+        </preConditions>
         <comment>Add foreign key constraint for documents.uploaded_by</comment>
         <addForeignKeyConstraint
                 baseTableName="documents"
@@ -87,23 +102,5 @@
                 onDelete="CASCADE"/>
     </changeSet>
 
-    <changeSet id="001-004" author="dms">
-        <comment>Create indexes for better performance</comment>
-        <createIndex tableName="users" indexName="idx_users_username">
-            <column name="username"/>
-        </createIndex>
-        <createIndex tableName="users" indexName="idx_users_email">
-            <column name="email"/>
-        </createIndex>
-        <createIndex tableName="documents" indexName="idx_documents_uploaded_by">
-            <column name="uploaded_by"/>
-        </createIndex>
-        <createIndex tableName="documents" indexName="idx_documents_type">
-            <column name="document_type"/>
-        </createIndex>
-        <createIndex tableName="documents" indexName="idx_documents_department">
-            <column name="department"/>
-        </createIndex>
-    </changeSet>
 
 </databaseChangeLog>

@@ -3,6 +3,7 @@ package com.bpdb.dms.security;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -16,7 +17,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.http.HttpMethod;
 
 import java.util.Arrays;
 
@@ -53,18 +53,17 @@ public class SecurityConfig {
                 .requestMatchers("/api/users/register").permitAll()
                 // WebSocket endpoints
                 .requestMatchers("/ws/**").permitAll()
-                // TEMP: Allow GET list of documents and related GET subpaths
-                .requestMatchers(HttpMethod.GET, "/api/documents", "/api/documents/**").permitAll()
-                // Allow upload for admins and officers
-                .requestMatchers(HttpMethod.POST, "/api/documents/upload").hasAnyRole("ADMIN", "OFFICER")
+                // Document endpoints
+                .requestMatchers(HttpMethod.GET, "/api/documents/**").hasAuthority(PermissionConstants.DOCUMENT_VIEW)
+                .requestMatchers(HttpMethod.GET, "/api/document-categories/**").hasAuthority(PermissionConstants.DOCUMENT_VIEW)
+                .requestMatchers(HttpMethod.POST, "/api/documents/upload").hasAuthority(PermissionConstants.DOCUMENT_UPLOAD)
+                .requestMatchers(HttpMethod.DELETE, "/api/documents/**").hasAuthority(PermissionConstants.DOCUMENT_DELETE)
                 // User management endpoints
-                .requestMatchers("/api/users/**").hasAnyRole("ADMIN", "OFFICER")
-                .requestMatchers("/api/users").hasRole("ADMIN")
-                .requestMatchers("/api/users/{userId}/reset-password").hasRole("ADMIN")
-                .requestMatchers("/api/users/{userId}/toggle-status").hasRole("ADMIN")
-                .requestMatchers("/api/users/statistics").hasRole("ADMIN")
+                .requestMatchers("/api/users/**").hasAuthority(PermissionConstants.USER_MANAGEMENT)
+                .requestMatchers("/api/roles/**").hasAuthority(PermissionConstants.USER_MANAGEMENT)
+                .requestMatchers("/api/permissions/**").hasAuthority(PermissionConstants.USER_MANAGEMENT)
                 // Audit log endpoints
-                .requestMatchers("/api/audit/**").hasAnyRole("ADMIN", "AUDITOR")
+                .requestMatchers("/api/audit/**").hasAuthority(PermissionConstants.AUDIT_VIEW)
                 // Workflow endpoints
                 .requestMatchers("/api/workflows/**").hasAnyRole("ADMIN", "OFFICER")
                 // Document versioning endpoints

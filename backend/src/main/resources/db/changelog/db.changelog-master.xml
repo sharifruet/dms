@@ -14,4 +14,7 @@
     <include file="db/changelog/008-create-testing-and-optimization.xml"/>
     <include file="db/changelog/010-create-asset-management.xml"/>
     <include file="db/changelog/011-fix-documents-columns.xml"/>
+    <include file="db/changelog/012-create-document-categories.xml"/>
+    <include file="db/changelog/013-add-document-metadata.xml"/>
+    <include file="db/changelog/014-ensure-admin-user.xml"/>
 </databaseChangeLog>

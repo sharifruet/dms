@@ -144,10 +144,10 @@
     </changeSet>
 
     <changeSet id="002-011" author="dms">
-        <comment>Ensure default admin uses the updated bcrypt password hash</comment>
         <preConditions onFail="MARK_RAN" onError="HALT">
             <tableExists tableName="users"/>
         </preConditions>
+        <comment>Ensure default admin uses the updated bcrypt password hash</comment>
         <update tableName="users">
             <column name="password" value="$2a$10$5fDg3/ZPUwMOzHpkTwarCeSk3ZdbFecLpiPiQ4IqUyayNlDgW70mW"/>
             <where>username = 'admin'</where>

@@ -2,7 +2,6 @@ package com.bpdb.dms.service;
 
 import com.bpdb.dms.dto.FileUploadResponse;
 import com.bpdb.dms.entity.Document;
-import com.bpdb.dms.entity.DocumentType;
 import com.bpdb.dms.entity.User;
 import com.bpdb.dms.repository.DocumentRepository;
 import org.slf4j.Logger;
@@ -21,9 +20,11 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.HashMap;
 
 /**
  * Service for handling file upload operations
@@ -62,12 +63,16 @@ public class FileUploadService {
     private DocumentIndexingService documentIndexingService;
     
     @Autowired
-    private AuditService auditService;
-    
+    private AppDocumentService appDocumentService;
+
+    @Autowired
+    private DocumentMetadataService documentMetadataService;
+
     /**
      * Upload a single file
      */
-    public FileUploadResponse uploadFile(MultipartFile file, User user, DocumentType documentType, String description) {
+    public FileUploadResponse uploadFile(MultipartFile file, User user, String documentType, String description,
+                                         Map<String, String> manualMetadata) {
         try {
             // Validate file
             String validationError = validateFile(file);
@@ -105,9 +110,20 @@ public class FileUploadService {
             
             // Save to database
             Document savedDocument = documentRepository.save(document);
+
+            Map<String, String> combinedMetadata = new HashMap<>();
+            if (manualMetadata != null && !manualMetadata.isEmpty()) {
+                combinedMetadata.putAll(documentMetadataService.applyManualMetadata(savedDocument, manualMetadata));
+            }
+
+            Map<String, String> additionalMetadata = Map.of();
+            if (isExcelFile(file.getContentType(), originalFilename)) {
+                additionalMetadata = appDocumentService.processAndStoreEntries(savedDocument, file);
+                combinedMetadata.putAll(additionalMetadata);
+            }
             
             // Process OCR and indexing asynchronously
-            processDocumentAsync(savedDocument, file);
+            processDocumentAsync(savedDocument, file, combinedMetadata);
             
             logger.info("File uploaded successfully: {} by user: {}", originalFilename, user.getUsername());
             
@@ -208,17 +224,26 @@ public class FileUploadService {
      * Process document with OCR and indexing asynchronously
      */
     @Async
-    public void processDocumentAsync(Document document, MultipartFile file) {
+    public void processDocumentAsync(Document document, MultipartFile file, Map<String, String> additionalMetadata) {
         try {
             logger.info("Starting async processing for document: {}", document.getId());
+
+            Document managedDocument = documentRepository.findById(document.getId())
+                .orElseThrow(() -> new RuntimeException("Document not found for OCR processing: " + document.getId()));
             
             // Perform OCR processing
+            Map<String, String> combinedMetadata = new HashMap<>(documentMetadataService.getMetadataMap(managedDocument));
+            if (additionalMetadata != null) {
+                combinedMetadata.putAll(additionalMetadata);
+            }
+            
             if (!ocrService.isOcrAvailable()) {
                 logger.warn("Skipping OCR processing for document {} because OCR service is unavailable", document.getId());
+                combinedMetadata.put("ocrStatus", "unavailable");
                 documentIndexingService.indexDocument(
-                    document,
+                    managedDocument,
                     "",
-                    Map.of("ocrStatus", "unavailable"),
+                    combinedMetadata,
                     0.0,
                     0.0
                 );
@@ -230,10 +255,12 @@ public class FileUploadService {
                 ocrResult = ocrService.extractText(file);
             } catch (Throwable ocrError) {
                 logger.error("OCR extraction threw an error for document {}: {}", document.getId(), ocrError.getMessage());
+                combinedMetadata.put("ocrStatus", "failed");
+                combinedMetadata.put("error", ocrError.getMessage() != null ? ocrError.getMessage() : "unknown");
                 documentIndexingService.indexDocument(
-                    document,
+                    managedDocument,
                     "",
-                    Map.of("ocrStatus", "failed", "error", ocrError.getMessage() != null ? ocrError.getMessage() : "unknown"),
+                    combinedMetadata,
                     0.0,
                     0.0
                 );
@@ -242,20 +269,22 @@ public class FileUploadService {
             
             if (ocrResult.isSuccess()) {
                 // Update document with OCR results if needed
-                if (ocrResult.getDocumentType() != null && document.getDocumentType() == null) {
-                    try {
-                        document.setDocumentType(DocumentType.valueOf(ocrResult.getDocumentType()));
-                        documentRepository.save(document);
-                    } catch (IllegalArgumentException e) {
-                        logger.warn("Invalid document type from OCR: {}", ocrResult.getDocumentType());
-                    }
+                if (ocrResult.getDocumentType() != null && managedDocument.getDocumentType() == null) {
+                    managedDocument.setDocumentType(ocrResult.getDocumentType());
+                    documentRepository.save(managedDocument);
                 }
+
+                if (ocrResult.getMetadata() != null) {
+                    combinedMetadata.putAll(ocrResult.getMetadata());
+                }
+
+                combinedMetadata.putAll(documentMetadataService.extractMetadataFromText(managedDocument, ocrResult.getExtractedText()));
                 
                 // Index document for search
                 documentIndexingService.indexDocument(
-                    document,
+                    managedDocument,
                     ocrResult.getExtractedText(),
-                    ocrResult.getMetadata(),
+                    combinedMetadata,
                     ocrResult.getConfidence(),
                     ocrResult.getClassificationConfidence()
                 );
@@ -265,13 +294,17 @@ public class FileUploadService {
                 
             } else {
                 logger.error("OCR processing failed for document: {} - Error: {}", 
-                           document.getId(), ocrResult.getErrorMessage());
+                           managedDocument.getId(), ocrResult.getErrorMessage());
                 
                 // Still index the document without OCR text
+                if (ocrResult.getMetadata() != null) {
+                    combinedMetadata.putAll(ocrResult.getMetadata());
+                }
+                combinedMetadata.put("ocrStatus", "failed");
                 documentIndexingService.indexDocument(
-                    document,
+                    managedDocument,
                     "",
-                    ocrResult.getMetadata(),
+                    combinedMetadata,
                     0.0,
                     0.0
                 );
@@ -281,5 +314,16 @@ public class FileUploadService {
             logger.error("Async processing failed for document: {} - Error: {}", 
                         document.getId(), e.getMessage());
         }
+    }
+    
+    private boolean isExcelFile(String contentType, String originalFilename) {
+        if (contentType != null && contentType.contains("excel")) {
+            return true;
+        }
+        if (originalFilename == null) {
+            return false;
+        }
+        String lowerName = originalFilename.toLowerCase();
+        return lowerName.endsWith(".xls") || lowerName.endsWith(".xlsx");
     }
 }

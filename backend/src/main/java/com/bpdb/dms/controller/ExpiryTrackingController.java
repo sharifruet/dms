@@ -1,6 +1,7 @@
 package com.bpdb.dms.controller;
 
 import com.bpdb.dms.entity.*;
+import com.bpdb.dms.repository.UserRepository;
 import com.bpdb.dms.service.ExpiryTrackingService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -25,6 +26,9 @@ public class ExpiryTrackingController {
     
     @Autowired
     private ExpiryTrackingService expiryTrackingService;
+
+    @Autowired
+    private UserRepository userRepository;
     
     /**
      * Create expiry tracking
@@ -35,7 +39,7 @@ public class ExpiryTrackingController {
             Authentication authentication) {
         
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = resolveCurrentUser(authentication);
             
             // For now, we'll create tracking without validating document existence
             // In production, you should validate that the document exists
@@ -219,5 +223,13 @@ public class ExpiryTrackingController {
         public void setRenewalDocumentId(Long renewalDocumentId) { this.renewalDocumentId = renewalDocumentId; }
         public String getNotes() { return notes; }
         public void setNotes(String notes) { this.notes = notes; }
+    }
+
+    private User resolveCurrentUser(Authentication authentication) {
+        if (authentication == null) {
+            throw new IllegalStateException("Missing authentication context");
+        }
+        return userRepository.findByUsername(authentication.getName())
+                .orElseThrow(() -> new IllegalStateException("Authenticated user not found: " + authentication.getName()));
     }
 }
