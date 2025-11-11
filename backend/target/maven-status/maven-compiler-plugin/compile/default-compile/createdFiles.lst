@@ -1,0 +1,11 @@
+com\bpdb\dms\service\SystemHealthMonitoringService$1.class
+com\bpdb\dms\service\ReportingService$1.class
+com\bpdb\dms\service\WordReportService$1.class
+com\bpdb\dms\service\ExpiryTrackingService$1.class
+com\bpdb\dms\service\MultiTenancyService$1.class
+com\bpdb\dms\service\EnterpriseIntegrationService$1.class
+com\bpdb\dms\service\PdfReportService$1.class
+com\bpdb\dms\service\DashboardService$1.class
+com\bpdb\dms\service\SystemOptimizationService$1.class
+com\bpdb\dms\service\ExcelReportService$1.class
+com\bpdb\dms\service\DocumentVersioningService$1.class

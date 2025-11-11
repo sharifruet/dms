@@ -232,4 +232,101 @@
         </addColumn>
     </changeSet>
 
+    <changeSet id="004-009" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="notifications" columnName="metadata"/>
+            </not>
+        </preConditions>
+        <comment>Add metadata column to notifications</comment>
+        <addColumn tableName="notifications">
+            <column name="metadata" type="TEXT"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="004-010" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="notifications" columnName="related_document_id"/>
+            </not>
+        </preConditions>
+        <comment>Add related_document_id column to notifications</comment>
+        <addColumn tableName="notifications">
+            <column name="related_document_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="004-011" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="notifications" columnName="related_entity_type"/>
+            </not>
+        </preConditions>
+        <comment>Add related_entity_type column to notifications</comment>
+        <addColumn tableName="notifications">
+            <column name="related_entity_type" type="VARCHAR(100)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="004-012" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="notifications" columnName="scheduled_at"/>
+            </not>
+        </preConditions>
+        <comment>Add scheduled_at column to notifications</comment>
+        <addColumn tableName="notifications">
+            <column name="scheduled_at" type="TIMESTAMP"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="004-013" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="notifications" columnName="sent_at"/>
+            </not>
+        </preConditions>
+        <comment>Add sent_at column to notifications</comment>
+        <addColumn tableName="notifications">
+            <column name="sent_at" type="TIMESTAMP"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="004-014" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="notifications"/>
+        </preConditions>
+        <comment>Align notification status default with application enum</comment>
+        <sql>
+            ALTER TABLE notifications ALTER COLUMN status SET DEFAULT 'PENDING';
+        </sql>
+        <sql>
+            UPDATE notifications SET status = 'PENDING'
+            WHERE status NOT IN ('PENDING','SENT','DELIVERED','READ','FAILED','CANCELLED','EXPIRED');
+        </sql>
+    </changeSet>
+
+    <changeSet id="004-015" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="expiry_tracking" columnName="alert_15_days"/>
+            </not>
+        </preConditions>
+        <comment>Add alert columns to expiry_tracking</comment>
+        <addColumn tableName="expiry_tracking">
+            <column name="alert_7_days" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="alert_15_days" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="alert_30_days" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="alert_expired" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
 </databaseChangeLog>
