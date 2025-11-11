@@ -62,6 +62,7 @@ export interface Document {
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  extractedText?: string;
 }
 
 export interface DocumentUploadRequest {

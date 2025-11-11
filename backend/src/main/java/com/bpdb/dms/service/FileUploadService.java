@@ -253,6 +253,8 @@ public class FileUploadService {
             OCRService.OCRResult ocrResult;
             try {
                 ocrResult = ocrService.extractText(file);
+                document.setExtractedText(ocrResult.getExtractedText());
+                documentRepository.save(document);
             } catch (Throwable ocrError) {
                 logger.error("OCR extraction threw an error for document {}: {}", document.getId(), ocrError.getMessage());
                 combinedMetadata.put("ocrStatus", "failed");
