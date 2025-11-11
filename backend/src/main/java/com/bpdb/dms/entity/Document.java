@@ -62,6 +62,9 @@ public class Document {
     
     @Column(name = "tags")
     private String tags;
+    
+    @Column(name = "extracted_text", columnDefinition = "TEXT")
+    private String extractedText;
 
     @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @JsonIgnoreProperties({"document"})
@@ -241,5 +244,13 @@ public class Document {
         }
         metadata.setDocument(this);
         this.metadataEntries.add(metadata);
+    }
+    
+    public void setExtractedText(String extractedText) {
+    	this.extractedText = extractedText;
+    }
+    
+    public String getExtractedText() {
+    	return extractedText;
     }
 }

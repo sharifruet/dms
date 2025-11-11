@@ -92,8 +92,8 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       setPreviewUrl(mockPreview);
       
       // Mock OCR text (in production, fetch from backend)
-      setOcrText(generateMockOCRText(doc));
-      
+      // setOcrText(generateMockOCRText(doc));
+      setOcrText(String(doc.extractedText ?? ""));
       setLoading(false);
     } catch (err: any) {
       setError(err.message || 'Failed to load document preview');
@@ -107,7 +107,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   };
 
   const generateMockOCRText = (doc: Document): string => {
-    return `Extracted text from ${doc.fileName}\n\nThis is sample OCR text that would normally be extracted from the document using Tesseract OCR.\n\nThe system automatically processes uploaded documents and extracts text content for searching and indexing purposes.`;
+    return `Extracted text from ${doc.extractedText}\n\nThis is sample OCR text that would normally be extracted from the document using Tesseract OCR.\n\nThe system automatically processes uploaded documents and extracts text content for searching and indexing purposes.`;
   };
 
   const getFileType = (fileName: string): string => {
