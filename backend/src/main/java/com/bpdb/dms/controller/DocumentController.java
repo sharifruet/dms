@@ -7,6 +7,7 @@ import com.bpdb.dms.repository.DocumentRepository;
 import com.bpdb.dms.repository.UserRepository;
 import com.bpdb.dms.service.DocumentCategoryService;
 import com.bpdb.dms.service.FileUploadService;
+import com.bpdb.dms.model.DocumentType;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -101,5 +103,13 @@ public class DocumentController {
         } catch (Exception ex) {
             throw new IllegalArgumentException("Invalid metadata payload: " + ex.getMessage());
         }
+    }
+
+    @GetMapping("/types")
+    public ResponseEntity<List<Map<String, String>>> getDocumentTypes() {
+        List<Map<String, String>> types = java.util.Arrays.stream(DocumentType.values())
+                .map(dt -> java.util.Map.of("value", dt.name(), "label", dt.getLabel()))
+                .toList();
+        return ResponseEntity.ok(types);
     }
 }

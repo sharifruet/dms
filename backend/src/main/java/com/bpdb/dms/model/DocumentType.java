@@ -50,6 +50,11 @@ public enum DocumentType {
         base.put(normalize("PG"), PERFORMANCE_GUARANTEE_PG);
         base.put(normalize("APP"), APP);
         base.put(normalize("Other"), OTHER);
+        // Frontend legacy aliases
+        base.put(normalize("TENDER"), TENDER_DOCUMENT);
+        base.put(normalize("CONTRACT"), CONTRACT_AGREEMENT);
+        base.put(normalize("GENERAL"), OTHER);
+        base.put(normalize("BILL"), OTHER);
 
         // Also map labels
         Arrays.stream(values()).forEach(dt -> base.put(normalize(dt.getLabel()), dt));

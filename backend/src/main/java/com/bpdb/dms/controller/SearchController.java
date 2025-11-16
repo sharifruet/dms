@@ -1,44 +1,5 @@
 package com.bpdb.dms.controller;
 
-import com.bpdb.dms.service.SearchService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Set;
-
-@RestController
-@RequestMapping("/api/search")
-@CrossOrigin(origins = "*")
-public class SearchController {
-
-    @Autowired
-    private SearchService searchService;
-
-    @GetMapping
-    public ResponseEntity<?> search(@RequestParam(required = false) String q,
-                                    @RequestParam(required = false) Set<String> documentTypes,
-                                    @RequestParam(required = false) Set<String> departments,
-                                    @RequestParam(required = false) Boolean isActive,
-                                    @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate createdFrom,
-                                    @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate createdTo,
-                                    @RequestParam(defaultValue = "0") int page,
-                                    @RequestParam(defaultValue = "20") int size) {
-        return ResponseEntity.ok(searchService.search(q, documentTypes, departments, isActive, createdFrom, createdTo, page, size));
-    }
-
-    @GetMapping("/suggest")
-    public ResponseEntity<List<String>> suggest(@RequestParam String prefix,
-                                                @RequestParam(defaultValue = "10") int limit) {
-        return ResponseEntity.ok(searchService.suggest(prefix, limit));
-    }
-}
-
-package com.bpdb.dms.controller;
-
 import com.bpdb.dms.service.DocumentIndexingService;
 import com.bpdb.dms.service.DocumentIndexingService.SearchFilters;
 import com.bpdb.dms.service.DocumentIndexingService.SearchResult;

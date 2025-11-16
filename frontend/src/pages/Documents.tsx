@@ -44,12 +44,7 @@ import { useAppSelector } from '../hooks/redux';
 import { documentService, Document as DmsDocument } from '../services/documentService';
 import { DocumentCategory } from '../types/document';
 
-const DEFAULT_CATEGORIES: DocumentCategory[] = [
-  { id: -1, name: 'TENDER', displayName: 'Tender', description: 'Tender documents', isActive: true },
-  { id: -2, name: 'BILL', displayName: 'Bill', description: 'Bills and invoices', isActive: true },
-  { id: -3, name: 'CONTRACT', displayName: 'Contract', description: 'Contract documents', isActive: true },
-  { id: -4, name: 'GENERAL', displayName: 'General', description: 'General purpose documents', isActive: true }
-];
+const DEFAULT_CATEGORIES: DocumentCategory[] = [];
 
 const Documents: React.FC = () => {
   const { user } = useAppSelector((state) => state.auth);
@@ -63,10 +58,11 @@ const Documents: React.FC = () => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    documentType: DEFAULT_CATEGORIES[0].name,
+    documentType: '',
     department: '',
     tags: ''
   });
+  const [tenderWorkflowInstanceId, setTenderWorkflowInstanceId] = useState<string>('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('');
@@ -91,25 +87,72 @@ const Documents: React.FC = () => {
 
   const loadCategories = async () => {
     try {
-      const data = await documentService.getDocumentCategories();
-      const normalized = (data && data.length > 0) ? data : DEFAULT_CATEGORIES;
-      if (!data || data.length === 0) {
-        console.warn('[Documents] No categories returned from API; using defaults');
-      }
-      setCategories(normalized);
+      const types = await documentService.getDocumentTypes();
+      const allowed = new Set([
+        'TENDER_NOTICE',
+        'TENDER_DOCUMENT',
+        'CONTRACT_AGREEMENT',
+        'BANK_GUARANTEE_BG',
+        'PERFORMANCE_SECURITY_PS',
+        'PERFORMANCE_GUARANTEE_PG',
+        'APP',
+        'OTHER',
+      ]);
+      const filtered = types.filter((t: any) => allowed.has(t.value));
+      const order: Record<string, number> = {
+        TENDER_NOTICE: 1,
+        TENDER_DOCUMENT: 2,
+        CONTRACT_AGREEMENT: 3,
+        BANK_GUARANTEE_BG: 4,
+        PERFORMANCE_SECURITY_PS: 5,
+        PERFORMANCE_GUARANTEE_PG: 6,
+        APP: 7,
+        OTHER: 99,
+      };
+      const mapped: DocumentCategory[] = filtered.map((t, idx) => ({
+        id: -(idx + 1),
+        name: t.value,
+        displayName: t.label,
+        description: t.label,
+        isActive: true
+      })).sort((a, b) => (order[a.name] ?? 100) - (order[b.name] ?? 100));
       setFormData((prev) => ({
         ...prev,
-        documentType: prev.documentType || (normalized[0]?.name ?? '')
+        documentType: prev.documentType || (mapped[0]?.name ?? '')
       }));
+      setCategories(mapped);
     } catch (err: any) {
-      console.error('Failed to load document categories', err);
-      setCategories(DEFAULT_CATEGORIES);
+      console.error('Failed to load document types', err);
+      setError(err.response?.data?.message || 'Failed to load document types');
+      // Hard fallback to requirements-compliant list (no BILL)
+      const fallback: DocumentCategory[] = [
+        { id: -1, name: 'TENDER_NOTICE', displayName: 'Tender Notice', description: 'Tender Notice', isActive: true },
+        { id: -2, name: 'TENDER_DOCUMENT', displayName: 'Tender Document', description: 'Tender Document', isActive: true },
+        { id: -3, name: 'CONTRACT_AGREEMENT', displayName: 'Contract Agreement', description: 'Contract Agreement', isActive: true },
+        { id: -4, name: 'BANK_GUARANTEE_BG', displayName: 'Bank Guarantee (BG)', description: 'Bank Guarantee (BG)', isActive: true },
+        { id: -5, name: 'PERFORMANCE_SECURITY_PS', displayName: 'Performance Security (PS)', description: 'Performance Security (PS)', isActive: true },
+        { id: -6, name: 'PERFORMANCE_GUARANTEE_PG', displayName: 'Performance Guarantee (PG)', description: 'Performance Guarantee (PG)', isActive: true },
+        { id: -7, name: 'APP', displayName: 'APP', description: 'Annual Project Plan (APP)', isActive: true },
+        { id: -8, name: 'OTHER', displayName: 'Other', description: 'Other related documents', isActive: true },
+      ];
+      setCategories(fallback);
       setFormData((prev) => ({
         ...prev,
-        documentType: prev.documentType || DEFAULT_CATEGORIES[0].name
+        documentType: prev.documentType || fallback[0].name
       }));
-      setError(err.response?.data?.message || 'Failed to load document categories; using defaults');
     }
+  };
+
+  const requiresTenderWorkflow = (docType: string) => {
+    const required = new Set([
+      'TENDER_DOCUMENT',
+      'CONTRACT_AGREEMENT',
+      'BANK_GUARANTEE_BG',
+      'PERFORMANCE_SECURITY_PS',
+      'PERFORMANCE_GUARANTEE_PG',
+      'APP',
+    ]);
+    return required.has(docType);
   };
 
   const handleUploadDocument = async () => {
@@ -132,6 +175,7 @@ const Documents: React.FC = () => {
         department: formData.department,
         tags: formData.tags,
         userId: (user as any)?.id || 0,
+        tenderWorkflowInstanceId: requiresTenderWorkflow(formData.documentType) ? (tenderWorkflowInstanceId || undefined) : undefined,
       });
 
       setOpenUploadDialog(false);
@@ -143,6 +187,7 @@ const Documents: React.FC = () => {
         department: '',
         tags: ''
       });
+      setTenderWorkflowInstanceId('');
       await loadDocuments();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to upload document');
@@ -482,6 +527,14 @@ const Documents: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
+            {formData.documentType === 'TENDER_NOTICE' && (
+              <Grid item xs={12}>
+                <Alert severity="info">
+                  Selecting <strong>Tender Notice</strong> will initiate a workflow automatically. 
+                  Upload subsequent documents (2–7) via that workflow.
+                </Alert>
+              </Grid>
+            )}
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth>
                 <InputLabel>Department</InputLabel>
@@ -507,6 +560,20 @@ const Documents: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               />
             </Grid>
+            {requiresTenderWorkflow(formData.documentType) && (
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Tender Workflow Instance ID"
+                  value={tenderWorkflowInstanceId}
+                  onChange={(e) => setTenderWorkflowInstanceId(e.target.value)}
+                  placeholder="Enter the workflow instance ID created with the Tender Notice"
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Documents 2–7 (Tender Document, Contract Agreement, BG, PS, PG, APP) must be uploaded via the Tender workflow.
+                </Typography>
+              </Grid>
+            )}
             <Grid item xs={12}>
               <TextField
                 fullWidth

@@ -95,8 +95,13 @@ export interface DocumentStatistics {
 }
 
 export const documentService = {
+  // Fetch canonical document types from backend
+  getDocumentTypes: async (): Promise<Array<{ value: string; label: string }>> => {
+    const response = await api.get('/documents/types');
+    return response.data;
+  },
   // Upload a new document
-  uploadDocument: async (uploadRequest: DocumentUploadRequest): Promise<Document> => {
+  uploadDocument: async (uploadRequest: DocumentUploadRequest & { tenderWorkflowInstanceId?: string }): Promise<Document> => {
     const formData = new FormData();
     formData.append('file', uploadRequest.file);
     formData.append('userId', uploadRequest.userId.toString());
@@ -105,6 +110,15 @@ export const documentService = {
     formData.append('documentType', uploadRequest.documentType);
     formData.append('department', uploadRequest.department);
     formData.append('tags', uploadRequest.tags || '');
+
+    // Optional metadata payload (JSON string), include tenderWorkflowInstanceId if provided
+    const metadata: Record<string, string> = {};
+    if (uploadRequest.tenderWorkflowInstanceId) {
+      metadata['tenderWorkflowInstanceId'] = uploadRequest.tenderWorkflowInstanceId;
+    }
+    if (Object.keys(metadata).length > 0) {
+      formData.append('metadata', JSON.stringify(metadata));
+    }
 
     const response = await api.post('/documents/upload', formData, {
       headers: {
