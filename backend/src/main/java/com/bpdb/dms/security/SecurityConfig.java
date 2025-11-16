@@ -59,6 +59,17 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/document-categories/**").hasAuthority(PermissionConstants.DOCUMENT_VIEW)
                 .requestMatchers(HttpMethod.POST, "/api/documents/upload").hasAuthority(PermissionConstants.DOCUMENT_UPLOAD)
                 .requestMatchers(HttpMethod.DELETE, "/api/documents/**").hasAuthority(PermissionConstants.DOCUMENT_DELETE)
+                // Smart Folder (DMC) endpoints
+                .requestMatchers(HttpMethod.POST, "/api/dmc/folders/**").hasAnyRole("ADMIN", "OFFICER")
+                .requestMatchers(HttpMethod.PUT, "/api/dmc/folders/**").hasAnyRole("ADMIN", "OFFICER")
+                .requestMatchers(HttpMethod.DELETE, "/api/dmc/folders/**").hasAnyRole("ADMIN", "OFFICER")
+                .requestMatchers(HttpMethod.GET, "/api/dmc/folders/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
+                // Finance endpoints
+                .requestMatchers(HttpMethod.POST, "/api/finance/app/import").hasAnyRole("ADMIN", "OFFICER")
+                .requestMatchers(HttpMethod.POST, "/api/finance/bills").hasAnyRole("ADMIN", "OFFICER")
+                .requestMatchers(HttpMethod.GET, "/api/finance/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
+                // Search endpoints
+                .requestMatchers("/api/search/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
                 // User management endpoints
                 .requestMatchers("/api/users/**").hasAuthority(PermissionConstants.USER_MANAGEMENT)
                 .requestMatchers("/api/roles/**").hasAuthority(PermissionConstants.USER_MANAGEMENT)

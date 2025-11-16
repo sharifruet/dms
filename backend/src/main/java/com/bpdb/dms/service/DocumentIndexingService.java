@@ -11,6 +11,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.CacheEvict;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -63,6 +64,8 @@ public class DocumentIndexingService {
             documentIndex.setIsActive(document.getIsActive());
             
             documentIndexRepository.save(documentIndex);
+            // Invalidate Smart Folder caches on index writes
+            clearDmcCache();
             
             logger.info("Document indexed successfully: {} (ID: {})", document.getOriginalName(), document.getId());
             
@@ -104,10 +107,12 @@ public class DocumentIndexingService {
     /**
      * Remove document from index
      */
+    @CacheEvict(cacheNames = "dmcEval", allEntries = true)
     public void removeDocumentFromIndex(Long documentId) {
         try {
             documentIndexRepository.deleteById(documentId.toString());
             logger.info("Document removed from index: {}", documentId);
+            clearDmcCache();
         } catch (Exception e) {
             logger.error("Failed to remove document from index {}: {}", documentId, e.getMessage());
         }
@@ -237,10 +242,23 @@ public class DocumentIndexingService {
             }
             
             logger.info("Full reindex completed. Processed {} documents", documents.size());
+            clearDmcCache();
             
         } catch (Exception e) {
             logger.error("Full reindex failed: {}", e.getMessage());
             throw new RuntimeException("Full reindex failed", e);
+        }
+    }
+
+    @Autowired(required = false)
+    private org.springframework.cache.CacheManager cacheManager;
+
+    private void clearDmcCache() {
+        if (cacheManager != null) {
+            var cache = cacheManager.getCache("dmcEval");
+            if (cache != null) {
+                cache.clear();
+            }
         }
     }
     

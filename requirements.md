@@ -44,6 +44,7 @@ The system will handle various document types including tenders, purchase orders
 - **OCR Processing Engine**: Extracts text and metadata from documents
 - **Metadata Management System**: Manages document attributes and relationships
 - **Search and Retrieval Engine**: Provides advanced search capabilities
+- **Smart Folder Engine (DMC)**: Dynamically groups documents into rule-based, virtual folders
 - **Notification System**: Manages alerts and reminders
 - **Audit and Compliance Module**: Tracks all system activities
 - **User Management System**: Handles authentication and authorization
@@ -84,6 +85,11 @@ The system will handle various document types including tenders, purchase orders
 - **Database Connection Pool**: HikariCP (Default Spring Boot connection pool)
 - **ORM Framework**: Hibernate 6.4.x (via Spring Data JPA)
 - **Database Migration**: Flyway 9.x for database versioning
+  - **Schema Additions (Finance & Billing)**:
+    - APP (Annual Project Plan) entities for headers and line items with yearly scope and budget amounts
+    - Bill entities (header and line) linked to APP lines and fiscal year
+    - Aggregations/materialized views for APP vs Bills and Remaining Budget by year, department, project, and vendor
+    - Constraints to enforce fiscal year consistency between APP and linked Bills
 
 #### 3.1.3 Search Engine Technology
 - **Primary Search Engine**: Elasticsearch 8.11.x (Latest stable version)
@@ -94,6 +100,7 @@ The system will handle various document types including tenders, purchase orders
     - Faceted search
     - Auto-complete suggestions
     - Highlighting and snippet generation
+    - Saved queries for reuse in Smart Folders (DMC)
 - **Alternative Search Engine**: Apache Solr 9.4.x (Fallback option)
   - **Minimum Version**: Solr 9.0.x
   - **Features**: Similar to Elasticsearch with Solr-specific configurations
@@ -113,6 +120,7 @@ The system will handle various document types including tenders, purchase orders
 - **Caching**: Redis 7.2.x (Latest stable version)
   - **Minimum Version**: Redis 6.0.x
   - **Use Cases**: Session storage, document metadata caching, search result caching
+  - **Smart Folder Caching**: Cache Smart Folder (DMC) rule evaluations and result sets with invalidation on relevant document/index changes
 - **Session Management**: Spring Session with Redis backend
 - **Cache Abstraction**: Spring Cache with Redis implementation
 
@@ -165,7 +173,7 @@ The system will handle various document types including tenders, purchase orders
 #### 3.2.5 Routing and Navigation
 - **Routing**: React Router 6.20.x
   - **Features**: Nested routing, protected routes, lazy loading
-- **Navigation**: Custom navigation components with breadcrumbs
+- **Navigation**: Custom navigation components with breadcrumbs, including Smart Folder (DMC) contexts and deep links to rule-based views
 
 #### 3.2.6 Data Visualization and Charts
 - **Chart Library**: Chart.js 4.4.x with React wrapper
@@ -317,16 +325,19 @@ The system will handle various document types including tenders, purchase orders
 
 #### 4.1.3 Document Classification
 - **FR-007**: System shall automatically detect document types:
-  - Tender documents
-  - Purchase Orders (PO)
-  - Letters of Credit (LC)
-  - Bank Guarantees (BG)
-  - Correspondence
-  - Contracts
-  - Stationery Records
-  - Other organizational documents
+  - 1. Tender Notice
+  - 2. Tender Document
+  - 3. Contract Agreement
+  - 4. Bank Guarantee (BG)
+  - 5. Performance Security (PS)
+  - 6. Performance Guarantee (PG)
+  - 7. APP
+  - 8. Other related documents
 - **FR-008**: System shall allow manual override of auto-detected document types
 - **FR-009**: System shall support custom document type definitions
+  - Note: APP is an Excel file; the system shall parse APP contents and persist them into a dedicated database table for structured reporting and retrieval.
+  - Workflow Rule: When a Tender Notice is created, the system shall automatically create a workflow. Documents 2 through 7 listed above shall be uploaded via this workflow to ensure traceability and process compliance.
+  - Smart Folder Rule Templates: Provide out-of-the-box Smart Folder (DMC) templates for these document types (e.g., “All Active BG”, “PS expiring in 30 days”, “Tenders awaiting documents 2–7”, “Contracts with missing PS/PG”).
 
 #### 4.1.4 OCR-Based Metadata Extraction
 - **FR-010**: System shall extract metadata using OCR technology:
@@ -375,6 +386,20 @@ The system will handle various document types including tenders, purchase orders
 - **FR-031**: System shall support folder-wise categorization
 - **FR-032**: System shall support department-wise organization
 - **FR-033**: System shall implement version control for all documents
+ 
+#### 4.3.1.a Smart Folders (DMC)
+- **FR-033a**: System shall provide Smart Folders (DMC) as dynamic, virtual folders that organize documents based on rules (metadata, content, relationships, status, dates, roles).
+- **FR-033b**: Smart Folders shall not duplicate files; they reference documents via queries over metadata and index content.
+- **FR-033c**: Users shall be able to define, save, and share Smart Folder definitions (rule sets) with scope options (private, department, organization).
+- **FR-033d**: Smart Folder rules shall support:
+  - Boolean logic (AND/OR/NOT), ranges, and relative date filters (e.g., “next 30 days”).
+  - Document relationships (e.g., “Contracts with active BG”).
+  - Role/department constraints and permission-aware results.
+- **FR-033e**: System shall provide predefined Smart Folders:
+  - “My Pending Approvals”, “Upcoming Expiries (30/15/7)”, “Unclassified/Needs Review”, “Recent Uploads”, “By Vendor/PO/LC/BG/PS/PG”, “By Tender”.
+- **FR-033f**: Smart Folders shall support user personalization (column sets, sort, pinned filters) and quick actions (bulk operations subject to permissions).
+- **FR-033g**: Smart Folders shall support drill-through to linked document sets (Contract ↔ LC ↔ BG ↔ PO) and show relationship badges.
+- **FR-033h**: Smart Folders shall be searchable, exportable, and embeddable in dashboards.
 
 #### 4.3.2 Document Relationships
 - **FR-034**: System shall support linked document views:
@@ -409,6 +434,7 @@ The system will handle various document types including tenders, purchase orders
   - Document Type
 - **FR-044**: System shall support Boolean search operators
 - **FR-045**: System shall provide search suggestions and auto-complete
+- **FR-045a**: System shall support saved searches that can be reused as Smart Folder (DMC) definitions.
 
 #### 4.4.2 Filtering and Sorting
 - **FR-046**: System shall provide multiple filter options
@@ -489,6 +515,9 @@ The system will handle various document types including tenders, purchase orders
   - Document count statistics
   - Document status overview
   - Expiry alerts summary
+- **FR-079a**: Dashboard shall support embedding Smart Folder (DMC) widgets and quick links
+- **FR-079b**: Dashboard shall display APP vs Bills summary cards (Budget, Actuals, Remaining, Utilization%) for selected fiscal year
+- **FR-079c**: Dashboard shall display interactive charts for APP vs Bills and Remaining Budget with drill-through to detailed reports
 - **FR-080**: System shall display vendor-wise summaries
 - **FR-081**: System shall display department-wise summaries
 - **FR-082**: System shall provide graphical charts for management overview
@@ -501,6 +530,7 @@ The system will handle various document types including tenders, purchase orders
 - **FR-084**: System shall provide monthly summaries
 - **FR-085**: System shall provide quarterly summaries
 - **FR-086**: System shall support custom report generation
+ - **FR-086a**: System shall include standard “APP vs Bills (Yearly)” and “Remaining Budget (Year/Department/Project)” report templates
 
 ### 4.8 Audit Trail & Compliance
 
@@ -691,17 +721,42 @@ The system will handle various document types including tenders, purchase orders
 - **FR-190**: System shall control approved asset distribution and access
 - **FR-191**: System shall monitor brand guideline compliance
 
-#### 4.12.17 Virtual Folder System
-- **FR-192**: System shall create virtual folders based on metadata, content, or rules
-- **FR-193**: System shall support cross-referencing documents across multiple virtual folders
-- **FR-194**: System shall provide smart folder suggestions based on document analysis
-- **FR-195**: System shall support custom folder hierarchies and views
+#### 4.12.17 Smart Folder (DMC) Enhancements
+- **FR-192**: System shall provide AI-assisted Smart Folder (DMC) suggestions based on usage patterns and document analysis
+- **FR-193**: System shall learn user preferences to propose personalized rule templates and views
+- **FR-194**: System shall support Smart Folder performance analytics (rule hit counts, freshness, coverage)
+- **FR-195**: System shall enable bulk rule management and versioning for Smart Folder definitions
 
 #### 4.12.18 Intelligent Document Grouping
 - **FR-196**: System shall provide AI-powered document clustering
 - **FR-197**: System shall create project-based virtual folders
 - **FR-198**: System shall support time-based and category-based organization
 - **FR-199**: System shall provide personalized folder views per user role
+
+### 4.15 Finance & Billing
+
+#### 4.15.1 APP (Annual Project Plan) Budgets
+- **FR-241**: System shall parse APP Excel files to load annual project plans with per-line budgets into dedicated APP tables (header and line).
+- **FR-242**: Each APP line shall include at minimum: fiscal year, project identifier/name, department, cost center, category, budget amount, and optional vendor/contract references.
+- **FR-243**: System shall validate APP uploads for duplicate years and structural integrity; partial failures shall produce detailed row-level error feedback.
+
+#### 4.15.2 Bill Entry and Management
+- **FR-244**: System shall provide bill entry (manual and file-import) with header and line items.
+- **FR-245**: Bills shall be linked to fiscal year and optionally mapped to an APP line (project/cost center/category).
+- **FR-246**: System shall validate that bill year matches the target APP year when linkage is provided.
+- **FR-247**: System shall support vendor, invoice number, invoice date, tax, and amount fields; totals shall be auto-calculated from line items.
+- **FR-248**: Bills may optionally attach supporting documents; attachments shall be stored and indexed for search.
+
+#### 4.15.3 APP vs Bills Reporting
+- **FR-249**: System shall provide year-wise reports comparing APP budgets vs Bills actuals with the following metrics per year and per APP line: budget amount, bill amount (actuals), remaining budget = budget − actuals, utilization percentage.
+- **FR-250**: Reports shall support filters: year, department, project, vendor, category, cost center, and date ranges.
+- **FR-251**: Reports shall support drill-down from yearly aggregates to APP line, then to underlying bills and attachments.
+- **FR-252**: Reports shall be exportable to PDF and Excel.
+
+#### 4.15.4 Dashboards and Visualizations
+- **FR-253**: Dashboard shall include graphical widgets for APP vs Bills by year: bar/column charts for budget vs actual, and stacked/line charts for cumulative utilization.
+- **FR-254**: Dashboard shall include a Remaining Budget visualization showing budget, actuals, and remaining for the selected year, department, or project.
+- **FR-255**: Widgets shall support interactive filters (year, department, project) and quick links to underlying reports and Smart Folders (DMC) for the filtered data.
 
 ### 4.13 Mobile and Offline Capabilities
 
@@ -774,6 +829,8 @@ The system will handle various document types including tenders, purchase orders
 - **NFR-003**: OCR processing shall complete within 60 seconds for standard documents
 - **NFR-004**: Search results shall be returned within 3 seconds
 - **NFR-005**: System shall maintain 99.5% uptime
+ - **NFR-006**: Smart Folder (DMC) evaluations shall resolve within 1 second for cached rule results and within 3 seconds for uncached complex rules on datasets up to 1 million documents
+ - **NFR-007**: APP vs Bills aggregations shall return within 2 seconds for cached views and within 5 seconds for uncached computations on up to 1 million bills
 
 ### 5.2 Scalability Requirements
 - **NFR-006**: System shall support storage of at least 1 million documents
@@ -997,6 +1054,10 @@ The system will handle various document types including tenders, purchase orders
   - Metadata-based search
   - Search result filtering
   - Document preview functionality
+ - **Finance & Billing (Initial)**:
+   - APP Excel parsing to database (header and line items)
+   - Bill entry (manual)
+   - Year consistency validation between APP and Bills
 
 #### 11.2.3 Key Features
 - Advanced file upload with progress indicators
@@ -1032,6 +1093,7 @@ The system will handle various document types including tenders, purchase orders
   - Department-wise categorization
   - Document archiving and restoration
   - Folder summary views
+  - Smart Folders (DMC) with rule-based virtual organization
 - **Document Relationships**:
   - Document linking system (Contract ↔ LC ↔ BG ↔ PO)
   - Relationship visualization
@@ -1042,6 +1104,7 @@ The system will handle various document types including tenders, purchase orders
   - Auto-complete suggestions
   - Search result highlighting
   - Saved search filters
+  - Saved searches convertible into Smart Folder definitions
 
 #### 11.3.3 Key Features
 - Full-text search across all document content
@@ -1057,6 +1120,7 @@ The system will handle various document types including tenders, purchase orders
 - Document relationships properly maintained
 - Repository navigation intuitive and efficient
 - Search accuracy >95% for relevant documents
+ - Smart Folders (DMC) provide accurate, permission-aware dynamic groupings
 
 ### 11.4 Phase 4: Notification and Alert System (Months 10-12)
 
@@ -1132,6 +1196,10 @@ The system will handle various document types including tenders, purchase orders
   - Department performance metrics
   - Document lifecycle analytics
   - Compliance status overview
+ - **Finance & Billing (Reports & Dashboards)**:
+   - APP vs Bills (Yearly) reports with drill-down to APP line and Bills
+   - Remaining Budget widgets and charts with filters (year/department/project)
+   - Cached aggregations/materialized views for performance
 
 #### 11.5.3 Key Features
 - Interactive dashboards with real-time data

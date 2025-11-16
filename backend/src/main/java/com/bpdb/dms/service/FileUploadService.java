@@ -3,7 +3,12 @@ package com.bpdb.dms.service;
 import com.bpdb.dms.dto.FileUploadResponse;
 import com.bpdb.dms.entity.Document;
 import com.bpdb.dms.entity.User;
+import com.bpdb.dms.model.DocumentType;
 import com.bpdb.dms.repository.DocumentRepository;
+import com.bpdb.dms.entity.WorkflowInstance;
+import com.bpdb.dms.entity.WorkflowInstanceStatus;
+import com.bpdb.dms.entity.WorkflowType;
+import com.bpdb.dms.repository.WorkflowInstanceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -68,6 +73,12 @@ public class FileUploadService {
     @Autowired
     private DocumentMetadataService documentMetadataService;
 
+    @Autowired
+    private WorkflowService workflowService;
+
+    @Autowired
+    private WorkflowInstanceRepository workflowInstanceRepository;
+
     /**
      * Upload a single file
      */
@@ -78,6 +89,43 @@ public class FileUploadService {
             String validationError = validateFile(file);
             if (validationError != null) {
                 return FileUploadResponse.error(validationError);
+            }
+
+            // Validate and normalize document type
+            DocumentType resolvedType = DocumentType.resolve(documentType).orElse(null);
+            if (resolvedType == null) {
+                String message = "Invalid document type. Allowed types are: " + DocumentType.allowedTypesList();
+                logger.warn("Document type validation failed for value '{}': {}", documentType, message);
+                return FileUploadResponse.error(message);
+            }
+
+            // Enforce workflow for follow-up documents (types 2–7)
+            boolean requiresTenderWorkflow = requiresTenderWorkflow(resolvedType);
+            Long providedWorkflowInstanceId = null;
+            if (requiresTenderWorkflow) {
+                if (manualMetadata == null || !manualMetadata.containsKey("tenderWorkflowInstanceId")) {
+                    return FileUploadResponse.error("This document type must be uploaded via a Tender workflow. Please provide 'tenderWorkflowInstanceId'.");
+                }
+                try {
+                    providedWorkflowInstanceId = Long.parseLong(manualMetadata.get("tenderWorkflowInstanceId"));
+                } catch (NumberFormatException nfe) {
+                    return FileUploadResponse.error("Invalid 'tenderWorkflowInstanceId'. It must be a numeric ID.");
+                }
+                WorkflowInstance instance = workflowInstanceRepository.findById(providedWorkflowInstanceId)
+                    .orElse(null);
+                if (instance == null) {
+                    return FileUploadResponse.error("Workflow instance not found for ID: " + providedWorkflowInstanceId);
+                }
+                if (instance.getStatus() == WorkflowInstanceStatus.COMPLETED ||
+                    instance.getStatus() == WorkflowInstanceStatus.CANCELLED ||
+                    instance.getStatus() == WorkflowInstanceStatus.REJECTED) {
+                    return FileUploadResponse.error("The referenced workflow instance is not active. Please start a new Tender workflow.");
+                }
+                // Ensure the workflow is tied to a Tender Notice
+                if (instance.getDocument() == null || instance.getDocument().getDocumentType() == null ||
+                    !DocumentType.TENDER_NOTICE.name().equals(instance.getDocument().getDocumentType())) {
+                    return FileUploadResponse.error("Provided 'tenderWorkflowInstanceId' is not associated with a Tender Notice.");
+                }
             }
             
             // Generate unique filename
@@ -102,7 +150,7 @@ public class FileUploadService {
             document.setFilePath(filePath.toString());
             document.setFileSize(file.getSize());
             document.setMimeType(file.getContentType());
-            document.setDocumentType(documentType);
+            document.setDocumentType(resolvedType.name());
             document.setDescription(description);
             document.setUploadedBy(user);
             document.setDepartment(user.getDepartment());
@@ -114,6 +162,30 @@ public class FileUploadService {
             Map<String, String> combinedMetadata = new HashMap<>();
             if (manualMetadata != null && !manualMetadata.isEmpty()) {
                 combinedMetadata.putAll(documentMetadataService.applyManualMetadata(savedDocument, manualMetadata));
+            }
+
+            // If Tender Notice, auto-create and start a workflow; store its ID in metadata
+            if (resolvedType == DocumentType.TENDER_NOTICE) {
+                String definition = "{\"steps\":[{\"order\":1,\"name\":\"Collect Tender Documents (2–7)\",\"type\":\"SEQUENTIAL\"},{\"order\":2,\"name\":\"Review & Finalize\",\"type\":\"APPROVAL\"}]}";
+                var workflow = workflowService.createWorkflow(
+                    "Tender Package - " + (originalFilename != null ? originalFilename : savedDocument.getId()),
+                    "Workflow to collect documents 2–7 for the tender package",
+                    WorkflowType.CUSTOM_WORKFLOW,
+                    definition,
+                    user
+                );
+                WorkflowInstance instance = workflowService.startWorkflow(workflow.getId(), savedDocument.getId(), user);
+                String instanceIdStr = String.valueOf(instance.getId());
+                combinedMetadata.put("tenderWorkflowInstanceId", instanceIdStr);
+                documentMetadataService.applyManualMetadata(savedDocument, Map.of("tenderWorkflowInstanceId", instanceIdStr));
+            }
+
+            // For follow-ups, persist and index the workflow reference if provided
+            if (requiresTenderWorkflow && providedWorkflowInstanceId != null) {
+                String instanceIdStr = String.valueOf(providedWorkflowInstanceId);
+                combinedMetadata.put("tenderWorkflowInstanceId", instanceIdStr);
+                // ensure persisted in metadata entries
+                documentMetadataService.applyManualMetadata(savedDocument, Map.of("tenderWorkflowInstanceId", instanceIdStr));
             }
 
             Map<String, String> additionalMetadata = Map.of();
@@ -318,6 +390,15 @@ public class FileUploadService {
         }
     }
     
+    private boolean requiresTenderWorkflow(DocumentType type) {
+        return type == DocumentType.TENDER_DOCUMENT
+            || type == DocumentType.CONTRACT_AGREEMENT
+            || type == DocumentType.BANK_GUARANTEE_BG
+            || type == DocumentType.PERFORMANCE_SECURITY_PS
+            || type == DocumentType.PERFORMANCE_GUARANTEE_PG
+            || type == DocumentType.APP;
+    }
+
     private boolean isExcelFile(String contentType, String originalFilename) {
         if (contentType != null && contentType.contains("excel")) {
             return true;

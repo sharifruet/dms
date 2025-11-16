@@ -13,6 +13,8 @@
     <include file="db/changelog/006-create-advanced-features.xml"/>
     <include file="db/changelog/007-create-enterprise-features.xml"/>
     <include file="db/changelog/008-create-testing-and-optimization.xml"/>
+    <include file="db/changelog/009-create-smart-folders.xml"/>
+    <include file="db/changelog/010-create-finance-app-billing.xml"/>
 
 </databaseChangeLog>
 

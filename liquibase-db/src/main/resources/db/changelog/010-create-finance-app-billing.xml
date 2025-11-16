@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="010-01-create-app-tables" author="dms">
+        <createTable tableName="app_headers">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="fiscal_year" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="department" type="VARCHAR(255)"/>
+            <column name="created_by" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_app_headers_created_by"
+                             references="users(id)"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+
+        <createTable tableName="app_lines">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="header_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_app_lines_header"
+                             references="app_headers(id)"/>
+            </column>
+            <column name="project_identifier" type="VARCHAR(255)"/>
+            <column name="project_name" type="VARCHAR(500)"/>
+            <column name="department" type="VARCHAR(255)"/>
+            <column name="cost_center" type="VARCHAR(255)"/>
+            <column name="category" type="VARCHAR(255)"/>
+            <column name="vendor" type="VARCHAR(255)"/>
+            <column name="contract_ref" type="VARCHAR(255)"/>
+            <column name="budget_amount" type="NUMERIC(18,2)"/>
+            <column name="row_number" type="INT"/>
+            <column name="validation_errors" type="VARCHAR(1000)"/>
+        </createTable>
+
+        <createIndex indexName="idx_app_lines_header" tableName="app_lines">
+            <column name="header_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="010-02-create-billing-tables" author="dms">
+        <createTable tableName="bill_headers">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="fiscal_year" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="vendor" type="VARCHAR(255)"/>
+            <column name="invoice_number" type="VARCHAR(255)"/>
+            <column name="invoice_date" type="DATE"/>
+            <column name="created_by" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_bill_headers_created_by"
+                             references="users(id)"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+
+        <createTable tableName="bill_lines">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="header_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_bill_lines_header"
+                             references="bill_headers(id)"/>
+            </column>
+            <column name="app_line_id" type="BIGINT">
+                <constraints nullable="true" foreignKeyName="fk_bill_lines_app_line"
+                             references="app_lines(id)"/>
+            </column>
+            <column name="project_identifier" type="VARCHAR(255)"/>
+            <column name="department" type="VARCHAR(255)"/>
+            <column name="cost_center" type="VARCHAR(255)"/>
+            <column name="category" type="VARCHAR(255)"/>
+            <column name="amount" type="NUMERIC(18,2)"/>
+            <column name="tax_amount" type="NUMERIC(18,2)"/>
+        </createTable>
+
+        <createIndex indexName="idx_bill_lines_header" tableName="bill_lines">
+            <column name="header_id"/>
+        </createIndex>
+        <createIndex indexName="idx_bill_lines_app_line" tableName="bill_lines">
+            <column name="app_line_id"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- Ensure APP header-year matches bill header fiscal year when linked (enforced in application layer) -->
+
+</databaseChangeLog>
+
+
