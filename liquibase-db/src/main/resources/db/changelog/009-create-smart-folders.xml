@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="009-01-create-smart-folders-table" author="dms">
+        <createTable tableName="smart_folders">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="VARCHAR(1000)"/>
+            <column name="owner_id" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_smart_folders_owner"
+                             references="users(id)"/>
+            </column>
+            <column name="scope" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="definition" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+
+        <createIndex indexName="idx_smart_folders_owner" tableName="smart_folders">
+            <column name="owner_id"/>
+        </createIndex>
+
+        <createIndex indexName="idx_smart_folders_scope" tableName="smart_folders">
+            <column name="scope"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+
+

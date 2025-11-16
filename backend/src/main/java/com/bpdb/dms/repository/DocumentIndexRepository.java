@@ -49,6 +49,15 @@ public interface DocumentIndexRepository extends ElasticsearchRepository<Documen
     Page<DocumentIndex> findByCreatedAtBetween(LocalDate startDate, LocalDate endDate, Pageable pageable);
     
     /**
+     * Suggestions by file name or original name prefix (simple wildcard)
+     */
+    @Query("{\"wildcard\": {\"fileName\": \"?0*\"}}")
+    List<DocumentIndex> suggestByFileNamePrefix(String prefix);
+    
+    @Query("{\"wildcard\": {\"originalName\": \"?0*\"}}")
+    List<DocumentIndex> suggestByOriginalNamePrefix(String prefix);
+    
+    /**
      * Search documents by OCR confidence
      */
     Page<DocumentIndex> findByOcrConfidenceGreaterThan(Double minConfidence, Pageable pageable);
