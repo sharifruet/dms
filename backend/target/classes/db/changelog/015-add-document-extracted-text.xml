@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="015-001" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="documents" columnName="extracted_text"/>
+            </not>
+        </preConditions>
+        <comment>Add extracted text column to documents</comment>
+        <addColumn tableName="documents">
+            <column name="extracted_text" type="TEXT"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>
+

@@ -2,7 +2,6 @@ package com.bpdb.dms.service;
 
 import com.bpdb.dms.entity.Document;
 import com.bpdb.dms.entity.DocumentIndex;
-import com.bpdb.dms.entity.User;
 import com.bpdb.dms.repository.DocumentIndexRepository;
 import com.bpdb.dms.repository.DocumentRepository;
 import org.slf4j.Logger;
@@ -35,9 +34,6 @@ public class DocumentIndexingService {
     private DocumentRepository documentRepository;
     
     @Autowired
-    private AuditService auditService;
-
-    @Autowired
     private DocumentCategoryService documentCategoryService;
     
     /**
@@ -57,8 +53,8 @@ public class DocumentIndexingService {
             documentIndex.setDepartment(document.getDepartment());
             documentIndex.setUploadedBy(document.getUploadedBy().getId().toString());
             documentIndex.setUploadedByUsername(document.getUploadedBy().getUsername());
-            documentIndex.setCreatedAt(document.getCreatedAt());
-            documentIndex.setUpdatedAt(document.getUpdatedAt());
+            documentIndex.setCreatedAt(document.getCreatedAt() != null ? document.getCreatedAt().toLocalDate() : null);
+            documentIndex.setUpdatedAt(document.getUpdatedAt() != null ? document.getUpdatedAt().toLocalDate() : null);
             documentIndex.setMetadata(metadata);
             documentIndex.setOcrConfidence(ocrConfidence);
             documentIndex.setClassificationConfidence(classificationConfidence);
@@ -90,7 +86,7 @@ public class DocumentIndexingService {
                 existingIndex.setDescription(document.getDescription());
                 existingIndex.setTags(document.getTags());
                 existingIndex.setDepartment(document.getDepartment());
-                existingIndex.setUpdatedAt(document.getUpdatedAt());
+                existingIndex.setUpdatedAt(document.getUpdatedAt() != null ? document.getUpdatedAt().toLocalDate() : null);
                 existingIndex.setIsActive(document.getIsActive());
                 
                 documentIndexRepository.save(existingIndex);
@@ -261,7 +257,7 @@ public class DocumentIndexingService {
         item.setDescription(document.getDescription());
         item.setDepartment(document.getDepartment());
         item.setUploadedBy(document.getUploadedByUsername());
-        item.setCreatedAt(document.getCreatedAt());
+        item.setCreatedAt(document.getCreatedAt() != null ? document.getCreatedAt().atStartOfDay() : null);
         item.setOcrConfidence(document.getOcrConfidence());
         item.setClassificationConfidence(document.getClassificationConfidence());
         item.setScore(1.0f); // Default score for now

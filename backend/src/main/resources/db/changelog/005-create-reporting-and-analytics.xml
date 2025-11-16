@@ -144,9 +144,12 @@
 
     <changeSet id="005-006" author="dms">
         <preConditions onFail="MARK_RAN" onError="HALT">
-            <not>
-                <columnExists tableName="system_health_checks" columnName="actual_value"/>
-            </not>
+            <and>
+                <tableExists tableName="system_health_checks"/>
+                <not>
+                    <columnExists tableName="system_health_checks" columnName="actual_value"/>
+                </not>
+            </and>
         </preConditions>
         <comment>Extend system health check metrics</comment>
         <addColumn tableName="system_health_checks">
