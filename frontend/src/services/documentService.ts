@@ -6,7 +6,7 @@ export interface Document {
   fileName: string;
   filePath?: string;
   documentType: string;
-  uploadedBy?: string | { username: string };
+  uploadedBy?: string | { username: string; id?: number };
   uploadedAt?: string;
   department?: string;
   size?: string | number;

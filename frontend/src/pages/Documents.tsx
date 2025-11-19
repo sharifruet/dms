@@ -174,7 +174,7 @@ const Documents: React.FC = () => {
         documentType: formData.documentType,
         department: formData.department,
         tags: formData.tags,
-        userId: (user as any)?.id || 0,
+        userId: user?.id || 0,
         tenderWorkflowInstanceId: requiresTenderWorkflow(formData.documentType) ? (tenderWorkflowInstanceId || undefined) : undefined,
       });
 

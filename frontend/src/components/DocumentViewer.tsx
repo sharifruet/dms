@@ -100,7 +100,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           setOcrError(null);
           clearInterval(pollInterval);
         } else {
-          const ocrErrorMsg = (ocrData as any).ocrError;
+          const ocrErrorMsg = (ocrData as { ocrError?: string }).ocrError;
           if (ocrErrorMsg) {
             // OCR failed, stop polling
             setOcrProcessing(false);
@@ -145,8 +145,8 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           setOcrError(null);
         } else {
           // Check if OCR is still processing or failed
-          const isProcessing = (documentData as any).ocrProcessing === true;
-          const ocrErrorMsg = (documentData as any).ocrError;
+          const isProcessing = (documentData as { ocrProcessing?: boolean }).ocrProcessing === true;
+          const ocrErrorMsg = (documentData as { ocrError?: string }).ocrError;
           setOcrProcessing(isProcessing);
           setOcrError(ocrErrorMsg || null);
           
@@ -160,8 +160,8 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
               setOcrError(null);
             } else {
               setOcrText(null);
-              setOcrProcessing((ocrData as any).ocrProcessing === true);
-              setOcrError((ocrData as any).ocrError || null);
+              setOcrProcessing((ocrData as { ocrProcessing?: boolean }).ocrProcessing === true);
+              setOcrError((ocrData as { ocrError?: string }).ocrError || null);
             }
           } catch (ocrErr) {
             // OCR endpoint might not exist or document not indexed yet
@@ -475,7 +475,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           <Typography variant="subtitle2" color="textSecondary" gutterBottom>
             Uploaded By
           </Typography>
-          <Typography variant="body1">{(doc as any)?.uploadedBy?.username || (doc as any)?.uploadedBy || 'Unknown'}</Typography>
+          <Typography variant="body1">{typeof doc.uploadedBy === 'string' ? doc.uploadedBy : doc.uploadedBy?.username || 'Unknown'}</Typography>
         </Box>
         <Divider />
         <Box>
