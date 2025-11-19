@@ -2,7 +2,6 @@ package com.bpdb.dms.service;
 
 import com.bpdb.dms.dto.FileUploadResponse;
 import com.bpdb.dms.entity.Document;
-import com.bpdb.dms.entity.Folder;
 import com.bpdb.dms.entity.User;
 import com.bpdb.dms.model.DocumentType;
 import com.bpdb.dms.repository.DocumentRepository;
@@ -29,12 +28,14 @@ import java.time.format.DateTimeFormatter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
-import java.util.HashMap;
 
 /**
  * Service for handling file upload operations
@@ -86,6 +87,9 @@ public class FileUploadService {
 
     @Autowired
     private WorkflowInstanceRepository workflowInstanceRepository;
+    
+    @Autowired
+    private DocumentVersioningService documentVersioningService;
 
     /**
      * Upload a single file
@@ -136,6 +140,27 @@ public class FileUploadService {
                 }
             }
             
+            // Calculate file hash for duplicate detection
+            String fileHash = calculateFileHash(file);
+            
+            // Check for duplicate files
+            Optional<Document> existingDocument = documentRepository.findFirstByFileHashAndIsActiveTrue(fileHash);
+            if (existingDocument.isPresent()) {
+                // Return duplicate information - frontend will handle the decision
+                Document duplicate = existingDocument.get();
+                return FileUploadResponse.duplicate(
+                    duplicate.getId(),
+                    duplicate.getFileName(),
+                    duplicate.getOriginalName(),
+                    duplicate.getFileSize(),
+                    duplicate.getMimeType(),
+                    duplicate.getDocumentType(),
+                    duplicate.getCreatedAt(),
+                    duplicate.getUploadedBy() != null ? duplicate.getUploadedBy().getUsername() : "Unknown",
+                    "A file with identical content already exists in the system."
+                );
+            }
+            
             // Generate unique filename
             String originalFilename = file.getOriginalFilename();
             String fileExtension = getFileExtension(originalFilename);
@@ -163,6 +188,7 @@ public class FileUploadService {
             document.setUploadedBy(user);
             document.setDepartment(user.getDepartment());
             document.setIsActive(true);
+            document.setFileHash(fileHash);
             
             // Set folder if provided
             if (folderId != null) {
@@ -573,5 +599,198 @@ public class FileUploadService {
         }
         String lowerName = originalFilename.toLowerCase();
         return lowerName.endsWith(".xls") || lowerName.endsWith(".xlsx");
+    }
+    
+    /**
+     * Handle duplicate file upload with user's choice
+     * @param file The file being uploaded
+     * @param user The user uploading
+     * @param documentType Document type
+     * @param description Description
+     * @param manualMetadata Manual metadata
+     * @param folderId Folder ID
+     * @param duplicateDocumentId The ID of the duplicate document
+     * @param action The action to take: "skip", "version", or "replace"
+     * @return FileUploadResponse
+     */
+    public FileUploadResponse handleDuplicateUpload(MultipartFile file, User user, String documentType,
+                                                    String description, Map<String, String> manualMetadata,
+                                                    Long folderId, Long duplicateDocumentId, String action) {
+        try {
+            // Verify duplicate document exists
+            if (!documentRepository.existsById(duplicateDocumentId)) {
+                return FileUploadResponse.error("Duplicate document not found");
+            }
+            
+            switch (action.toLowerCase()) {
+                case "skip":
+                    return FileUploadResponse.error("Upload skipped - duplicate file already exists");
+                    
+                case "version":
+                    // Upload as a new version of the duplicate document
+                    return uploadAsVersion(file, user, duplicateDocumentId, description, manualMetadata);
+                    
+                case "replace":
+                    // Replace the duplicate document
+                    return replaceDocument(file, user, duplicateDocumentId, documentType, description, manualMetadata, folderId);
+                    
+                default:
+                    return FileUploadResponse.error("Invalid action. Must be 'skip', 'version', or 'replace'");
+            }
+        } catch (Exception e) {
+            logger.error("Error handling duplicate upload: {}", e.getMessage());
+            return FileUploadResponse.error("Failed to handle duplicate upload: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Upload file as a new version of an existing document
+     */
+    private FileUploadResponse uploadAsVersion(MultipartFile file, User user, Long documentId,
+                                              String description, Map<String, String> manualMetadata) {
+        try {
+            Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new RuntimeException("Document not found"));
+            
+            // Create a new version
+            com.bpdb.dms.entity.VersionType versionType = com.bpdb.dms.entity.VersionType.PATCH;
+            String changeDescription = description != null ? description : "New version uploaded";
+            
+            documentVersioningService.createDocumentVersion(
+                documentId,
+                file,
+                changeDescription,
+                versionType,
+                user
+            );
+            
+            logger.info("File uploaded as new version of document: {} by user: {}", 
+                      document.getOriginalName(), user.getUsername());
+            
+            return FileUploadResponse.success(
+                documentId,
+                document.getFileName(),
+                document.getOriginalName(),
+                document.getFileSize(),
+                document.getMimeType(),
+                document.getDocumentType()
+            );
+        } catch (Exception e) {
+            logger.error("Error uploading as version: {}", e.getMessage());
+            return FileUploadResponse.error("Failed to upload as version: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Replace an existing document with a new file
+     */
+    private FileUploadResponse replaceDocument(MultipartFile file, User user, Long documentId,
+                                              String documentType, String description,
+                                              Map<String, String> manualMetadata, Long folderId) {
+        try {
+            Document document = documentRepository.findById(documentId)
+                .orElseThrow(() -> new RuntimeException("Document not found"));
+            
+            // Validate file
+            String validationError = validateFile(file);
+            if (validationError != null) {
+                return FileUploadResponse.error(validationError);
+            }
+            
+            // Validate and normalize document type
+            DocumentType resolvedType = DocumentType.resolve(documentType).orElse(null);
+            if (resolvedType == null) {
+                String message = "Invalid document type. Allowed types are: " + DocumentType.allowedTypesList();
+                return FileUploadResponse.error(message);
+            }
+            
+            // Generate unique filename
+            String originalFilename = file.getOriginalFilename();
+            String fileExtension = getFileExtension(originalFilename);
+            String uniqueFilename = generateUniqueFilename(fileExtension);
+            
+            // Create upload directory if it doesn't exist
+            Path uploadPath = Paths.get(uploadDir);
+            if (!Files.exists(uploadPath)) {
+                Files.createDirectories(uploadPath);
+            }
+            
+            // Save new file
+            Path filePath = uploadPath.resolve(uniqueFilename);
+            Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
+            
+            // Calculate new file hash
+            String fileHash = calculateFileHash(file);
+            
+            // Update document
+            document.setFileName(uniqueFilename);
+            if (originalFilename != null && !originalFilename.equals(document.getOriginalName())) {
+                document.setOriginalName(originalFilename);
+            }
+            document.setFilePath(filePath.toString());
+            document.setFileSize(file.getSize());
+            document.setMimeType(file.getContentType());
+            document.setDocumentType(resolvedType.name());
+            if (description != null) {
+                document.setDescription(description);
+            }
+            document.setFileHash(fileHash);
+            
+            // Set folder if provided
+            if (folderId != null) {
+                folderRepository.findById(folderId).ifPresent(document::setFolder);
+            }
+            
+            Document savedDocument = documentRepository.save(document);
+            
+            // Apply metadata
+            Map<String, String> combinedMetadata = new HashMap<>();
+            if (manualMetadata != null && !manualMetadata.isEmpty()) {
+                combinedMetadata.putAll(documentMetadataService.applyManualMetadata(savedDocument, manualMetadata));
+            }
+            
+            // Process OCR and indexing asynchronously
+            processDocumentAsync(savedDocument, file, combinedMetadata);
+            
+            logger.info("Document replaced successfully: {} by user: {}", 
+                      savedDocument.getOriginalName(), user.getUsername());
+            
+            return FileUploadResponse.success(
+                savedDocument.getId(),
+                savedDocument.getFileName(),
+                savedDocument.getOriginalName(),
+                savedDocument.getFileSize(),
+                savedDocument.getMimeType(),
+                savedDocument.getDocumentType()
+            );
+        } catch (Exception e) {
+            logger.error("Error replacing document: {}", e.getMessage());
+            return FileUploadResponse.error("Failed to replace document: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * Calculate SHA-256 hash of file content for duplicate detection
+     */
+    private String calculateFileHash(MultipartFile file) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] hash = md.digest(file.getBytes());
+            
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+            
+            return hexString.toString();
+            
+        } catch (NoSuchAlgorithmException | IOException e) {
+            logger.error("Failed to calculate file hash: {}", e.getMessage());
+            return "";
+        }
     }
 }

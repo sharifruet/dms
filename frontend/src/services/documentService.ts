@@ -17,6 +17,10 @@ export interface Document {
   tags?: string;
   fileHash?: string;
   isActive?: boolean;
+  isArchived?: boolean;
+  archivedAt?: string;
+  deletedAt?: string;
+  assignedEmployee?: { id: number; username: string; firstName?: string; lastName?: string; email?: string };
   createdAt?: string;
   updatedAt?: string;
   extractedText?: string;
@@ -60,7 +64,7 @@ export const documentService = {
     return response.data;
   },
   // Upload a new document
-  uploadDocument: async (uploadRequest: DocumentUploadRequest & { tenderWorkflowInstanceId?: string }): Promise<Document> => {
+  uploadDocument: async (uploadRequest: DocumentUploadRequest & { tenderWorkflowInstanceId?: string }): Promise<import('../types/document').FileUploadResponse> => {
     const formData = new FormData();
     formData.append('file', uploadRequest.file);
     // Backend expects: file, documentType, description (optional), folderId (optional)
@@ -84,6 +88,35 @@ export const documentService = {
 
     // Don't set Content-Type manually - axios will set it with proper boundary for multipart/form-data
     const response = await api.post('/documents/upload', formData);
+    return response.data;
+  },
+
+  // Handle duplicate upload with user's choice
+  handleDuplicateUpload: async (
+    file: File,
+    documentType: string,
+    duplicateDocumentId: number,
+    action: 'skip' | 'version' | 'replace',
+    description?: string,
+    metadata?: Record<string, string>,
+    folderId?: number
+  ): Promise<import('../types/document').FileUploadResponse> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('documentType', documentType);
+    formData.append('duplicateDocumentId', duplicateDocumentId.toString());
+    formData.append('action', action);
+    if (description) {
+      formData.append('description', description);
+    }
+    if (folderId) {
+      formData.append('folderId', folderId.toString());
+    }
+    if (metadata && Object.keys(metadata).length > 0) {
+      formData.append('metadata', JSON.stringify(metadata));
+    }
+
+    const response = await api.post('/documents/upload-duplicate', formData);
     return response.data;
   },
 
@@ -113,7 +146,61 @@ export const documentService = {
 
   // Delete document (soft delete)
   deleteDocument: async (id: number): Promise<void> => {
-    await api.delete(`/documents/${id}`);
+    await api.post(`/documents/${id}/delete`);
+  },
+
+  // Archive document
+  archiveDocument: async (id: number): Promise<Document> => {
+    const response = await api.post(`/documents/${id}/archive`);
+    return response.data;
+  },
+
+  // Restore archived document
+  restoreArchivedDocument: async (id: number): Promise<Document> => {
+    const response = await api.post(`/documents/${id}/restore-archive`);
+    return response.data;
+  },
+
+  // Restore deleted document
+  restoreDeletedDocument: async (id: number): Promise<Document> => {
+    const response = await api.post(`/documents/${id}/restore-delete`);
+    return response.data;
+  },
+
+  // Get archived documents
+  getArchivedDocuments: async (params?: { page?: number; size?: number }): Promise<{ content: Document[]; totalElements: number; totalPages: number }> => {
+    const response = await api.get('/documents/archived', { params });
+    return response.data;
+  },
+
+  // Get deleted documents
+  getDeletedDocuments: async (params?: { page?: number; size?: number }): Promise<{ content: Document[]; totalElements: number; totalPages: number }> => {
+    const response = await api.get('/documents/deleted', { params });
+    return response.data;
+  },
+
+  // Get archive statistics
+  getArchiveStatistics: async (): Promise<{ archivedCount: number; deletedCount: number; activeCount: number }> => {
+    const response = await api.get('/documents/archive/statistics');
+    return response.data;
+  },
+
+  // Batch archive documents
+  archiveDocuments: async (documentIds: number[]): Promise<Document[]> => {
+    const response = await api.post('/documents/archive/batch', documentIds);
+    return response.data;
+  },
+
+  // Batch restore archived documents
+  restoreArchivedDocuments: async (documentIds: number[]): Promise<Document[]> => {
+    const response = await api.post('/documents/restore-archive/batch', documentIds);
+    return response.data;
+  },
+
+  // Batch restore deleted documents
+  restoreDeletedDocuments: async (documentIds: number[]): Promise<Document[]> => {
+    const response = await api.post('/documents/restore-delete/batch', documentIds);
+    return response.data;
   },
 
   // Download document
@@ -282,7 +369,40 @@ export const documentService = {
   getDocumentCategories: async (): Promise<DocumentCategory[]> => {
     const response = await api.get('/document-categories');
     return response.data;
-  }
+  },
+
+  // Stationery tracking methods
+  assignStationeryToEmployee: async (documentId: number, employeeId: number): Promise<Document> => {
+    const response = await api.post(`/documents/${documentId}/assign-stationery`, null, {
+      params: { employeeId }
+    });
+    return response.data;
+  },
+
+  unassignStationeryFromEmployee: async (documentId: number): Promise<Document> => {
+    const response = await api.post(`/documents/${documentId}/unassign-stationery`);
+    return response.data;
+  },
+
+  getStationeryRecords: async (params?: { page?: number; size?: number }): Promise<{ content: Document[]; totalElements: number; totalPages: number }> => {
+    const response = await api.get('/documents/stationery', { params });
+    return response.data;
+  },
+
+  getStationeryRecordsByEmployee: async (employeeId: number): Promise<Document[]> => {
+    const response = await api.get(`/documents/stationery/employee/${employeeId}`);
+    return response.data;
+  },
+
+  getStationeryStatistics: async (): Promise<{ totalStationeryRecords: number; assignedRecords: number; unassignedRecords: number; employeesWithStationery: number }> => {
+    const response = await api.get('/documents/stationery/statistics');
+    return response.data;
+  },
+
+  getStationeryStatisticsPerEmployee: async (): Promise<Array<{ employeeId: number; username: string; firstName?: string; lastName?: string; email?: string; stationeryCount: number; stationeryRecords: Document[] }>> => {
+    const response = await api.get('/documents/stationery/statistics/employee');
+    return response.data;
+  },
 };
 
 export default documentService;

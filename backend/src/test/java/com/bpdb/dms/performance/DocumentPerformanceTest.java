@@ -7,6 +7,7 @@ import com.bpdb.dms.entity.User;
 import com.bpdb.dms.repository.DocumentRepository;
 import com.bpdb.dms.repository.RoleRepository;
 import com.bpdb.dms.repository.UserRepository;
+import com.bpdb.dms.model.DocumentType;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,6 +50,7 @@ class DocumentPerformanceTest {
         testUser.setEmail("perf@example.com");
         testUser.setPassword("password");
         testUser.setIsActive(true);
+        testUser.setRole(officerRole);
         testUser = userRepository.save(testUser);
     }
 
@@ -60,12 +62,10 @@ class DocumentPerformanceTest {
             Document doc = new Document();
             doc.setFileName("perf-test-" + i + ".pdf");
             doc.setFilePath("/uploads/perf-test-" + i + ".pdf");
-<<<<<<< HEAD
-            doc.setDocumentType("PDF");
+            doc.setDocumentType(DocumentType.TENDER_DOCUMENT.name());
             doc.setUploadedBy(testUser);
             doc.setCreatedAt(LocalDateTime.now());
             doc.setUpdatedAt(LocalDateTime.now());
->>>>>>> origin/main
             doc.setIsActive(true);
             documents.add(doc);
         }
@@ -91,12 +91,10 @@ class DocumentPerformanceTest {
             Document doc = new Document();
             doc.setFileName("search-test-" + i + ".pdf");
             doc.setFilePath("/uploads/search-test-" + i + ".pdf");
-<<<<<<< HEAD
-            doc.setDocumentType("PDF");
+            doc.setDocumentType(DocumentType.TENDER_DOCUMENT.name());
             doc.setUploadedBy(testUser);
             doc.setCreatedAt(LocalDateTime.now());
             doc.setUpdatedAt(LocalDateTime.now());
->>>>>>> origin/main
             doc.setIsActive(true);
             documents.add(doc);
         }
@@ -124,12 +122,10 @@ class DocumentPerformanceTest {
             Document doc = new Document();
             doc.setFileName("page-test-" + i + ".pdf");
             doc.setFilePath("/uploads/page-test-" + i + ".pdf");
-<<<<<<< HEAD
-            doc.setDocumentType("PDF");
+            doc.setDocumentType(DocumentType.TENDER_DOCUMENT.name());
             doc.setUploadedBy(testUser);
             doc.setCreatedAt(LocalDateTime.now());
             doc.setUpdatedAt(LocalDateTime.now());
->>>>>>> origin/main
             doc.setIsActive(true);
             documents.add(doc);
         }

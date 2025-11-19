@@ -33,6 +33,11 @@ import {
   People as UsersIcon,
   Logout as LogoutIcon,
   Close as CloseIcon,
+  EditNote as FieldsIcon,
+  Inventory2 as AssetsIcon,
+  Assignment as AssignmentsIcon,
+  Archive as ArchiveIcon,
+  Inventory as StationeryIcon,
 } from '@mui/icons-material';
 import { useAppSelector, useAppDispatch } from '../hooks/redux';
 import { logout } from '../store/slices/authSlice';
@@ -57,18 +62,23 @@ const MobileSidebar: React.FC = () => {
   const navItems: NavItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: <DashboardIcon /> },
     { label: 'Documents', path: '/documents', icon: <DocumentsIcon /> },
+    { label: 'Archive', path: '/archive', icon: <ArchiveIcon /> },
+    { label: 'Stationery', path: '/stationery', icon: <StationeryIcon /> },
     { label: 'Search', path: '/search', icon: <SearchIcon /> },
     { label: 'Notifications', path: '/notifications', icon: <NotificationsIcon /> },
     { label: 'Expiry Tracking', path: '/expiry-tracking', icon: <ExpiryIcon /> },
-    // { label: 'Reports', path: '/reports', icon: <ReportsIcon /> },
-    // { label: 'Custom Dashboards', path: '/dashboard-management', icon: <AnalyticsIcon /> },
+    { label: 'Assets', path: '/assets', icon: <AssetsIcon /> },
+    { label: 'Assignments', path: '/asset-assignments', icon: <AssignmentsIcon /> },
     { label: 'Workflows', path: '/workflows', icon: <WorkflowsIcon /> },
     { label: 'Versioning', path: '/versioning', icon: <VersioningIcon /> },
-    // { label: 'Analytics', path: '/analytics', icon: <AnalyticsIcon /> },
-    // { label: 'ML Models', path: '/ml', icon: <MlIcon /> },
-    // { label: 'Integrations', path: '/integrations', icon: <IntegrationsIcon /> },
+    { label: 'Reports', path: '/reports', icon: <ReportsIcon /> },
+    { label: 'Analytics', path: '/analytics', icon: <AnalyticsIcon /> },
+    { label: 'Dashboard Management', path: '/dashboard-management', icon: <AnalyticsIcon /> },
+    { label: 'ML Models', path: '/ml', icon: <MlIcon /> },
+    { label: 'Integrations', path: '/integrations', icon: <IntegrationsIcon /> },
     { label: 'Health', path: '/health', icon: <HealthIcon /> },
     { label: 'Users', path: '/users', icon: <UsersIcon />, role: 'ADMIN' },
+    { label: 'Document Fields', path: '/document-type-fields', icon: <FieldsIcon />, role: 'ADMIN' },
   ];
 
   const filteredNavItems = navItems.filter(

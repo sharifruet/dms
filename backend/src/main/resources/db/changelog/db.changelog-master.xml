@@ -24,4 +24,8 @@
     <include file="db/changelog/015-add-document-extracted-text.xml"/>
     <include file="db/changelog/016-fix-admin-password.xml"/>
     <include file="db/changelog/016-create-system-health-checks-table.xml"/>
+    <include file="db/changelog/017-update-document-categories-to-enum.xml"/>
+    <include file="db/changelog/018-create-document-type-fields.xml"/>
+    <include file="db/changelog/019-add-document-archive-fields.xml"/>
+    <include file="db/changelog/020-add-stationery-tracking.xml"/>
 </databaseChangeLog>

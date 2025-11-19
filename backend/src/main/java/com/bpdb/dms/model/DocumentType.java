@@ -17,6 +17,7 @@ public enum DocumentType {
     PERFORMANCE_SECURITY_PS("Performance Security (PS)"),
     PERFORMANCE_GUARANTEE_PG("Performance Guarantee (PG)"),
     APP("APP"),
+    STATIONERY_RECORD("Stationery Record"),
     OTHER("Other");
 
     private final String label;
@@ -49,6 +50,8 @@ public enum DocumentType {
         base.put(normalize("Performance Guarantee"), PERFORMANCE_GUARANTEE_PG);
         base.put(normalize("PG"), PERFORMANCE_GUARANTEE_PG);
         base.put(normalize("APP"), APP);
+        base.put(normalize("Stationery Record"), STATIONERY_RECORD);
+        base.put(normalize("Stationery"), STATIONERY_RECORD);
         base.put(normalize("Other"), OTHER);
         // Frontend legacy aliases
         base.put(normalize("TENDER"), TENDER_DOCUMENT);

@@ -350,6 +350,17 @@ The system will handle various document types including tenders, purchase orders
 - **FR-011**: System shall provide manual verification and correction interface
 - **FR-012**: System shall maintain accuracy validation metrics
 
+#### 4.1.5 Configurable Document Type Fields
+- **FR-010a**: System shall support configurable fields for each document type
+- **FR-010b**: Each document type shall have its own set of custom fields (e.g., Tender Notice: Tender Id, Tender Type; Contract Agreement: Contract Number, Vendor Name, Amount)
+- **FR-010c**: System shall allow administrators to define and configure fields for each document type
+- **FR-010d**: System shall support different field types: text, number, date, select, multi-select
+- **FR-010e**: System shall allow users to manually enter field values during document upload
+- **FR-010f**: System shall automatically populate fields from OCR data when available
+- **FR-010g**: System shall support field validation rules (required, format, range)
+- **FR-010h**: System shall allow mapping OCR extracted data to specific fields based on field names and patterns
+- **FR-010i**: System shall display field values in document details and search results
+
 #### 4.1.5 Document Indexing and Naming
 - **FR-013**: System shall implement automatic indexing based on document content
 - **FR-014**: System shall follow predefined naming conventions

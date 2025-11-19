@@ -27,6 +27,15 @@ export interface FileUploadResponse {
   fileSize?: number;
   mimeType?: string;
   documentType?: string;
+  isDuplicate?: boolean;
+  duplicateDocumentId?: number;
+  duplicateFileName?: string;
+  duplicateOriginalName?: string;
+  duplicateFileSize?: number;
+  duplicateMimeType?: string;
+  duplicateDocumentType?: string;
+  duplicateCreatedAt?: string;
+  duplicateUploadedBy?: string;
 }
 
 export interface DocumentCategory {

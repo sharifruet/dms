@@ -28,6 +28,9 @@ import {
   Logout as LogoutIcon,
   Inventory2 as AssetsIcon,
   Assignment as AssignmentsIcon,
+  EditNote as FieldsIcon,
+  Archive as ArchiveIcon,
+  Inventory as StationeryIcon,
 } from '@mui/icons-material';
 import { useAppSelector, useAppDispatch } from '../hooks/redux';
 import { logout } from '../store/slices/authSlice';
@@ -49,6 +52,8 @@ const Sidebar: React.FC = () => {
   const navItems: NavItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: <DashboardIcon /> },
     { label: 'Documents', path: '/documents', icon: <DocumentsIcon /> },
+    { label: 'Archive', path: '/archive', icon: <ArchiveIcon /> },
+    { label: 'Stationery', path: '/stationery', icon: <StationeryIcon /> },
     { label: 'Search', path: '/search', icon: <SearchIcon /> },
     { label: 'Notifications', path: '/notifications', icon: <NotificationsIcon /> },
     { label: 'Expiry Tracking', path: '/expiry-tracking', icon: <ExpiryIcon /> },
@@ -56,8 +61,14 @@ const Sidebar: React.FC = () => {
     { label: 'Assignments', path: '/asset-assignments', icon: <AssignmentsIcon /> },
     { label: 'Workflows', path: '/workflows', icon: <WorkflowsIcon /> },
     { label: 'Versioning', path: '/versioning', icon: <VersioningIcon /> },
+    { label: 'Reports', path: '/reports', icon: <ReportsIcon /> },
+    { label: 'Analytics', path: '/analytics', icon: <AnalyticsIcon /> },
+    { label: 'Dashboard Management', path: '/dashboard-management', icon: <AnalyticsIcon /> },
+    { label: 'Integrations', path: '/integrations', icon: <IntegrationsIcon /> },
+    { label: 'ML Models', path: '/ml', icon: <MlIcon /> },
     { label: 'Health', path: '/health', icon: <HealthIcon /> },
     { label: 'Users', path: '/users', icon: <UsersIcon />, role: 'ADMIN' },
+    { label: 'Document Fields', path: '/document-type-fields', icon: <FieldsIcon />, role: 'ADMIN' },
   ];
 
   const filteredNavItems = navItems.filter(

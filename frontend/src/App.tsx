@@ -22,6 +22,9 @@ import MachineLearning from './pages/MachineLearning';
 import SystemHealth from './pages/SystemHealth';
 import Assets from './pages/Assets';
 import AssetAssignments from './pages/AssetAssignments';
+import DocumentTypeFields from './pages/DocumentTypeFields';
+import Archive from './pages/Archive';
+import StationeryTracking from './pages/StationeryTracking';
 import { useAppSelector } from './hooks/redux';
 
 function App() {
@@ -111,6 +114,18 @@ function App() {
           <Route 
             path="/health" 
             element={isAuthenticated ? <SystemHealth /> : <Navigate to="/login" />} 
+          />
+          <Route 
+            path="/document-type-fields" 
+            element={isAuthenticated ? <DocumentTypeFields /> : <Navigate to="/login" />} 
+          />
+          <Route 
+            path="/archive" 
+            element={isAuthenticated ? <Archive /> : <Navigate to="/login" />} 
+          />
+          <Route 
+            path="/stationery" 
+            element={isAuthenticated ? <StationeryTracking /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/" 

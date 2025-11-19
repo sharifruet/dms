@@ -38,7 +38,9 @@ import {
   Visibility as ViewIcon,
   Upload as UploadIcon,
   Search as SearchIcon,
-  FilterList as FilterIcon
+  FilterList as FilterIcon,
+  Archive as ArchiveIcon,
+  Unarchive as UnarchiveIcon
 } from '@mui/icons-material';
 import { useAppSelector } from '../hooks/redux';
 import { documentService, Document as DmsDocument } from '../services/documentService';
@@ -67,6 +69,8 @@ const Documents: React.FC = () => {
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('');
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [duplicateInfo, setDuplicateInfo] = useState<import('../types/document').FileUploadResponse | null>(null);
 
   const departments = ['IT', 'HR', 'Finance', 'Operations', 'Legal', 'Marketing'];
   useEffect(() => {
@@ -144,7 +148,7 @@ const Documents: React.FC = () => {
         return;
       }
 
-      await documentService.uploadDocument({
+      const response = await documentService.uploadDocument({
         file: uploadFile,
         title: formData.title || uploadFile.name,
         description: formData.description,
@@ -155,6 +159,14 @@ const Documents: React.FC = () => {
         tenderWorkflowInstanceId: requiresTenderWorkflow(formData.documentType) ? (tenderWorkflowInstanceId || undefined) : undefined,
       });
 
+      // Check if duplicate was detected
+      if (response.isDuplicate) {
+        setDuplicateInfo(response);
+        setDuplicateDialogOpen(true);
+        return;
+      }
+
+      // Success - close dialog and refresh
       setOpenUploadDialog(false);
       setUploadFile(null);
       setFormData({
@@ -168,6 +180,49 @@ const Documents: React.FC = () => {
       await loadDocuments();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to upload document');
+    }
+  };
+
+  const handleDuplicateAction = async (action: 'skip' | 'version' | 'replace') => {
+    if (!uploadFile || !duplicateInfo || !duplicateInfo.duplicateDocumentId) {
+      return;
+    }
+
+    try {
+      const metadata: Record<string, string> = {};
+      if (requiresTenderWorkflow(formData.documentType) && tenderWorkflowInstanceId) {
+        metadata['tenderWorkflowInstanceId'] = tenderWorkflowInstanceId;
+      }
+
+      const response = await documentService.handleDuplicateUpload(
+        uploadFile,
+        formData.documentType,
+        duplicateInfo.duplicateDocumentId,
+        action,
+        formData.description,
+        Object.keys(metadata).length > 0 ? metadata : undefined,
+        undefined // folderId
+      );
+
+      if (response.success) {
+        setDuplicateDialogOpen(false);
+        setDuplicateInfo(null);
+        setOpenUploadDialog(false);
+        setUploadFile(null);
+        setFormData({
+          title: '',
+          description: '',
+          documentType: categories[0]?.name || '',
+          department: '',
+          tags: ''
+        });
+        setTenderWorkflowInstanceId('');
+        await loadDocuments();
+      } else {
+        setError(response.message || 'Failed to handle duplicate upload');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to handle duplicate upload');
     }
   };
 
@@ -186,9 +241,21 @@ const Documents: React.FC = () => {
   const handleDeleteDocument = async (id: number) => {
     if (window.confirm('Are you sure you want to delete this document?')) {
       try {
-        setDocuments(documents.filter(doc => doc.id !== id));
-      } catch (err) {
-        setError('Failed to delete document');
+        await documentService.deleteDocument(id);
+        await loadDocuments();
+      } catch (err: any) {
+        setError(err.response?.data?.message || 'Failed to delete document');
+      }
+    }
+  };
+
+  const handleArchiveDocument = async (id: number) => {
+    if (window.confirm('Are you sure you want to archive this document?')) {
+      try {
+        await documentService.archiveDocument(id);
+        await loadDocuments();
+      } catch (err: any) {
+        setError(err.response?.data?.message || 'Failed to archive document');
       }
     }
   };
@@ -424,6 +491,23 @@ const Documents: React.FC = () => {
                               <EditIcon />
                             </IconButton>
                           </Tooltip>
+                          {!document.isArchived && (
+                            <Tooltip title="Archive">
+                              <IconButton
+                                size="small"
+                                onClick={() => {
+                                  if (!document.id) {
+                                    setError('Unable to archive a document without an id');
+                                    return;
+                                  }
+                                  handleArchiveDocument(document.id);
+                                }}
+                                color="warning"
+                              >
+                                <ArchiveIcon />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                           <Tooltip title="Delete">
                             <IconButton
                               size="small"
@@ -558,6 +642,96 @@ const Documents: React.FC = () => {
           <Button onClick={() => setOpenUploadDialog(false)}>Cancel</Button>
           <Button onClick={handleUploadDocument} variant="contained">
             Upload
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Duplicate Detection Dialog */}
+      <Dialog open={duplicateDialogOpen} onClose={() => setDuplicateDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Duplicate File Detected</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            A file with identical content already exists in the system.
+          </Alert>
+          
+          {duplicateInfo && (
+            <Box sx={{ mb: 3 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Existing Document:
+              </Typography>
+              <Box sx={{ pl: 2, borderLeft: 2, borderColor: 'divider' }}>
+                <Typography variant="body2">
+                  <strong>File:</strong> {duplicateInfo.duplicateOriginalName || duplicateInfo.duplicateFileName}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Type:</strong> {duplicateInfo.duplicateDocumentType}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Size:</strong> {formatFileSize(duplicateInfo.duplicateFileSize)}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Uploaded by:</strong> {duplicateInfo.duplicateUploadedBy}
+                </Typography>
+                {duplicateInfo.duplicateCreatedAt && (
+                  <Typography variant="body2">
+                    <strong>Uploaded on:</strong> {new Date(duplicateInfo.duplicateCreatedAt).toLocaleString()}
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          )}
+
+          <Typography variant="subtitle2" gutterBottom>
+            Choose an action:
+          </Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+            <Button
+              variant="outlined"
+              fullWidth
+              onClick={() => handleDuplicateAction('skip')}
+              sx={{ justifyContent: 'flex-start', textAlign: 'left' }}
+            >
+              <Box sx={{ textAlign: 'left' }}>
+                <Typography variant="body1" fontWeight="bold">Skip Upload</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Cancel this upload. The existing document will remain unchanged.
+                </Typography>
+              </Box>
+            </Button>
+            <Button
+              variant="outlined"
+              fullWidth
+              onClick={() => handleDuplicateAction('version')}
+              sx={{ justifyContent: 'flex-start', textAlign: 'left' }}
+            >
+              <Box sx={{ textAlign: 'left' }}>
+                <Typography variant="body1" fontWeight="bold">Upload as New Version</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Create a new version of the existing document. Version history will be maintained.
+                </Typography>
+              </Box>
+            </Button>
+            <Button
+              variant="outlined"
+              fullWidth
+              onClick={() => handleDuplicateAction('replace')}
+              sx={{ justifyContent: 'flex-start', textAlign: 'left' }}
+            >
+              <Box sx={{ textAlign: 'left' }}>
+                <Typography variant="body1" fontWeight="bold">Replace Existing Document</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Replace the existing document with this file. The old file will be overwritten.
+                </Typography>
+              </Box>
+            </Button>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setDuplicateDialogOpen(false);
+            setDuplicateInfo(null);
+          }}>
+            Cancel
           </Button>
         </DialogActions>
       </Dialog>

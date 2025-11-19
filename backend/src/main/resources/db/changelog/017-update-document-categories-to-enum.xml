@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="017-001" author="dms">
+        <comment>Deactivate old document categories that don't match DocumentType enum</comment>
+        <update tableName="document_categories">
+            <column name="is_active" valueBoolean="false"/>
+            <where>name IN ('TENDER', 'BILL', 'CONTRACT', 'GENERAL')</where>
+        </update>
+    </changeSet>
+
+    <changeSet id="017-002" author="dms">
+        <comment>Insert new document categories aligned with DocumentType enum</comment>
+        <sql>
+            INSERT INTO document_categories (name, display_name, description, is_active)
+            SELECT 'TENDER_NOTICE', 'Tender Notice', 'Tender notice documents', true
+            WHERE NOT EXISTS (SELECT 1 FROM document_categories WHERE name = 'TENDER_NOTICE');
+        </sql>
+        <sql>
+            INSERT INTO document_categories (name, display_name, description, is_active)
+            SELECT 'TENDER_DOCUMENT', 'Tender Document', 'Tender and bid related documents', true
+            WHERE NOT EXISTS (SELECT 1 FROM document_categories WHERE name = 'TENDER_DOCUMENT');
+        </sql>
+        <sql>
+            INSERT INTO document_categories (name, display_name, description, is_active)
+            SELECT 'CONTRACT_AGREEMENT', 'Contract Agreement', 'Contractual agreements', true
+            WHERE NOT EXISTS (SELECT 1 FROM document_categories WHERE name = 'CONTRACT_AGREEMENT');
+        </sql>
+        <sql>
+            INSERT INTO document_categories (name, display_name, description, is_active)
+            SELECT 'BANK_GUARANTEE_BG', 'Bank Guarantee (BG)', 'Bank guarantee documents', true
+            WHERE NOT EXISTS (SELECT 1 FROM document_categories WHERE name = 'BANK_GUARANTEE_BG');
+        </sql>
+        <sql>
+            INSERT INTO document_categories (name, display_name, description, is_active)
+            SELECT 'PERFORMANCE_SECURITY_PS', 'Performance Security (PS)', 'Performance security documents', true
+            WHERE NOT EXISTS (SELECT 1 FROM document_categories WHERE name = 'PERFORMANCE_SECURITY_PS');
+        </sql>
+        <sql>
+            INSERT INTO document_categories (name, display_name, description, is_active)
+            SELECT 'PERFORMANCE_GUARANTEE_PG', 'Performance Guarantee (PG)', 'Performance guarantee documents', true
+            WHERE NOT EXISTS (SELECT 1 FROM document_categories WHERE name = 'PERFORMANCE_GUARANTEE_PG');
+        </sql>
+        <sql>
+            INSERT INTO document_categories (name, display_name, description, is_active)
+            SELECT 'APP', 'APP', 'APP documents', true
+            WHERE NOT EXISTS (SELECT 1 FROM document_categories WHERE name = 'APP');
+        </sql>
+        <sql>
+            INSERT INTO document_categories (name, display_name, description, is_active)
+            SELECT 'OTHER', 'Other', 'Other documents', true
+            WHERE NOT EXISTS (SELECT 1 FROM document_categories WHERE name = 'OTHER');
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
+

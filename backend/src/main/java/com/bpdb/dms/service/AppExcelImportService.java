@@ -80,10 +80,11 @@ public class AppExcelImportService {
             }
 
             // Upsert header for year (one per year)
-            AppHeader header = appHeaderRepository.findByFiscalYear(detectedYear)
+            final Integer fiscalYear = detectedYear;
+            AppHeader header = appHeaderRepository.findByFiscalYear(fiscalYear)
                 .orElseGet(() -> {
                     AppHeader h = new AppHeader();
-                    h.setFiscalYear(detectedYear);
+                    h.setFiscalYear(fiscalYear);
                     h.setDepartment(user.getDepartment());
                     h.setCreatedBy(user);
                     return h;

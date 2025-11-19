@@ -23,6 +23,7 @@ import {
   ChevronRight as NextIcon,
 } from '@mui/icons-material';
 import { Document, documentService } from '../services/documentService';
+import DocumentRelationships from './DocumentRelationships';
 
 interface DocumentViewerProps {
   open: boolean;
@@ -528,6 +529,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
             <Tab label="Preview" />
             <Tab label="OCR Text" />
             <Tab label="Metadata" />
+            <Tab label="Relationships" />
           </Tabs>
         </Box>
 
@@ -541,6 +543,10 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
 
         <TabPanel value={tabValue} index={2}>
           {renderMetadata()}
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={3}>
+          {doc && <DocumentRelationships document={doc} />}
         </TabPanel>
       </DialogContent>
       <DialogActions>

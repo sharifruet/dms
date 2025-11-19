@@ -84,8 +84,12 @@ public class SecurityConfig {
                 .requestMatchers("/api/permissions/**").hasAuthority(PermissionConstants.USER_MANAGEMENT)
                 // Audit log endpoints
                 .requestMatchers("/api/audit/**").hasAuthority(PermissionConstants.AUDIT_VIEW)
-                // Workflow endpoints
+                // Workflow endpoints - allow all authenticated users to GET workflow data (must come before general workflow matcher)
+                .requestMatchers(HttpMethod.GET, "/api/workflows/**").authenticated()
                 .requestMatchers("/api/workflows/**").hasAnyRole("ADMIN", "OFFICER")
+                // Document type fields endpoints
+                .requestMatchers(HttpMethod.GET, "/api/document-type-fields/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
+                .requestMatchers("/api/document-type-fields/**").hasAnyRole("ADMIN", "OFFICER")
                 // Document versioning endpoints
                 .requestMatchers("/api/documents/*/versions/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
                 // Webhook endpoints
@@ -129,10 +133,13 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
+        // Use allowedOriginPatterns for wildcard support with credentials
         configuration.setAllowedOriginPatterns(Arrays.asList("*"));
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setExposedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L); // Cache preflight for 1 hour
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

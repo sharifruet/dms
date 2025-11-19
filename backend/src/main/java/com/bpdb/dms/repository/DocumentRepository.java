@@ -106,4 +106,63 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
      */
     @Query("SELECT d.department, COUNT(d) FROM Document d GROUP BY d.department")
     java.util.List<Object[]> getDocumentCountByDepartment();
+    
+    /**
+     * Find documents by file hash (for duplicate detection)
+     */
+    List<Document> findByFileHashAndIsActiveTrue(String fileHash);
+    
+    /**
+     * Find a single document by file hash (for duplicate detection)
+     */
+    @Query("SELECT d FROM Document d WHERE d.fileHash = :fileHash AND d.isActive = true ORDER BY d.createdAt DESC")
+    java.util.Optional<Document> findFirstByFileHashAndIsActiveTrue(@Param("fileHash") String fileHash);
+    
+    /**
+     * Find archived documents
+     */
+    @Query("SELECT d FROM Document d WHERE d.isArchived = true AND d.isActive = true AND d.deletedAt IS NULL")
+    Page<Document> findArchivedDocuments(Pageable pageable);
+    
+    /**
+     * Find deleted documents (soft deleted)
+     */
+    @Query("SELECT d FROM Document d WHERE d.deletedAt IS NOT NULL")
+    Page<Document> findDeletedDocuments(Pageable pageable);
+    
+    /**
+     * Find active, non-archived documents
+     */
+    @Query("SELECT d FROM Document d WHERE d.isActive = true AND (d.isArchived = false OR d.isArchived IS NULL) AND d.deletedAt IS NULL")
+    Page<Document> findActiveNonArchivedDocuments(Pageable pageable);
+    
+    /**
+     * Count archived documents
+     */
+    @Query("SELECT COUNT(d) FROM Document d WHERE d.isArchived = true AND d.isActive = true AND d.deletedAt IS NULL")
+    long countArchivedDocuments();
+    
+    /**
+     * Count deleted documents
+     */
+    @Query("SELECT COUNT(d) FROM Document d WHERE d.deletedAt IS NOT NULL")
+    long countDeletedDocuments();
+    
+    /**
+     * Find stationery records assigned to an employee
+     */
+    @Query("SELECT d FROM Document d WHERE d.documentType = 'STATIONERY_RECORD' AND d.assignedEmployee.id = :employeeId AND d.isActive = true AND d.deletedAt IS NULL")
+    List<Document> findStationeryRecordsByEmployee(@Param("employeeId") Long employeeId);
+    
+    /**
+     * Find all stationery records
+     */
+    @Query("SELECT d FROM Document d WHERE d.documentType = 'STATIONERY_RECORD' AND d.isActive = true AND d.deletedAt IS NULL")
+    Page<Document> findStationeryRecords(Pageable pageable);
+    
+    /**
+     * Count stationery records per employee
+     */
+    @Query("SELECT d.assignedEmployee.id, COUNT(d) FROM Document d WHERE d.documentType = 'STATIONERY_RECORD' AND d.isActive = true AND d.deletedAt IS NULL GROUP BY d.assignedEmployee.id")
+    List<Object[]> countStationeryRecordsPerEmployee();
 }

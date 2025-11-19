@@ -4,6 +4,8 @@ import com.bpdb.dms.entity.Document;
 import com.bpdb.dms.entity.DocumentMetadata;
 import com.bpdb.dms.entity.DocumentMetadata.MetadataSource;
 import com.bpdb.dms.repository.DocumentRepository;
+import com.bpdb.dms.service.DocumentTypeFieldService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +21,9 @@ import java.util.stream.Collectors;
 @Service
 @Transactional
 public class DocumentMetadataService {
+
+    @Autowired(required = false)
+    private DocumentTypeFieldService documentTypeFieldService;
 
     private static final Map<String, List<String>> REQUIRED_FIELDS = Map.of(
         "CONTRACT", List.of("title", "contractNo", "date"),
@@ -115,20 +120,40 @@ public class DocumentMetadataService {
         Map<String, String> inferred = new LinkedHashMap<>();
         String fallbackTitle = deriveTitle(document);
 
+        // First, try to use configured field mappings if available
+        if (documentTypeFieldService != null) {
+            Map<String, String> mappedFields = documentTypeFieldService.mapOcrDataToFields(documentType, extractedText);
+            inferred.putAll(mappedFields);
+        }
+
+        // Fallback to legacy extraction patterns
         switch (documentType) {
-            case "CONTRACT" -> {
+            case "CONTRACT", "CONTRACT_AGREEMENT" -> {
                 inferred.putIfAbsent("title", fallbackTitle);
-                extractFirstMatch(CONTRACT_NO_PATTERN, extractedText, 2).ifPresent(value -> inferred.put("contractNo", value));
-                extractDate(extractedText).ifPresent(date -> inferred.put("date", date));
+                if (!inferred.containsKey("contractNumber") && !inferred.containsKey("contractNo")) {
+                    extractFirstMatch(CONTRACT_NO_PATTERN, extractedText, 2)
+                        .ifPresent(value -> inferred.put("contractNumber", value));
+                }
+                if (!inferred.containsKey("contractDate") && !inferred.containsKey("date")) {
+                    extractDate(extractedText).ifPresent(date -> inferred.put("contractDate", date));
+                }
             }
-            case "TENDER" -> {
+            case "TENDER", "TENDER_NOTICE", "TENDER_DOCUMENT" -> {
                 inferred.putIfAbsent("title", fallbackTitle);
-                extractExpiryDate(extractedText).ifPresent(value -> inferred.put("expiryDate", value));
-                extractDate(extractedText).ifPresent(date -> inferred.putIfAbsent("date", date));
+                if (!inferred.containsKey("expiryDate") && !inferred.containsKey("closingDate")) {
+                    extractExpiryDate(extractedText).ifPresent(value -> inferred.put("closingDate", value));
+                }
+                if (!inferred.containsKey("tenderDate") && !inferred.containsKey("date")) {
+                    extractDate(extractedText).ifPresent(date -> inferred.put("tenderDate", date));
+                }
             }
             case "BILL" -> {
-                extractDate(extractedText).ifPresent(date -> inferred.put("date", date));
-                extractAmount(extractedText).ifPresent(amount -> inferred.put("amount", amount));
+                if (!inferred.containsKey("date")) {
+                    extractDate(extractedText).ifPresent(date -> inferred.put("date", date));
+                }
+                if (!inferred.containsKey("amount")) {
+                    extractAmount(extractedText).ifPresent(amount -> inferred.put("amount", amount));
+                }
                 inferred.putIfAbsent("title", fallbackTitle);
             }
             case "APP" -> inferred.putIfAbsent("title", fallbackTitle);

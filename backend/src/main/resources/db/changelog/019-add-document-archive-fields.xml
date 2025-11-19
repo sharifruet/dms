@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="019-add-document-archive-fields" author="system">
+        <comment>Add archive and delete tracking fields to documents table</comment>
+        
+        <!-- Add is_archived field -->
+        <addColumn tableName="documents">
+            <column name="is_archived" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        
+        <!-- Add archived_at field -->
+        <addColumn tableName="documents">
+            <column name="archived_at" type="TIMESTAMP">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        
+        <!-- Add deleted_at field for soft delete tracking -->
+        <addColumn tableName="documents">
+            <column name="deleted_at" type="TIMESTAMP">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        
+        <!-- Create index for archived documents -->
+        <createIndex indexName="idx_documents_is_archived" tableName="documents">
+            <column name="is_archived"/>
+        </createIndex>
+        
+        <!-- Create index for deleted documents -->
+        <createIndex indexName="idx_documents_deleted_at" tableName="documents">
+            <column name="deleted_at"/>
+        </createIndex>
+        
+    </changeSet>
+
+</databaseChangeLog>
+

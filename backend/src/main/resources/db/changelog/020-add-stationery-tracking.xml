@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="020-add-stationery-tracking" author="system">
+        <comment>Add assigned employee field for stationery tracking</comment>
+        
+        <!-- Add assigned_employee_id field for stationery records -->
+        <addColumn tableName="documents">
+            <column name="assigned_employee_id" type="BIGINT">
+                <constraints nullable="true" foreignKeyName="fk_documents_assigned_employee" 
+                             referencedTableName="users" referencedColumnNames="id"/>
+            </column>
+        </addColumn>
+        
+        <!-- Create index for assigned employee queries -->
+        <createIndex indexName="idx_documents_assigned_employee" tableName="documents">
+            <column name="assigned_employee_id"/>
+        </createIndex>
+        
+        <!-- Create index for stationery records -->
+        <createIndex indexName="idx_documents_stationery" tableName="documents">
+            <column name="document_type"/>
+            <column name="assigned_employee_id"/>
+        </createIndex>
+        
+    </changeSet>
+
+</databaseChangeLog>
+

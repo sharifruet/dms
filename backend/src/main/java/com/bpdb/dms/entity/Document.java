@@ -83,11 +83,25 @@ public class Document {
     @JsonIgnoreProperties({"parentFolder", "subFolders", "documents", "hibernateLazyInitializer", "handler"})
     private Folder folder;
     
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_employee_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    private User assignedEmployee;
+    
     @Column(name = "department")
     private String department;
     
     @Column(name = "is_active")
     private Boolean isActive = true;
+    
+    @Column(name = "is_archived")
+    private Boolean isArchived = false;
+    
+    @Column(name = "archived_at")
+    private LocalDateTime archivedAt;
+    
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
     
     @CreatedDate
     @Column(name = "created_at")
@@ -265,5 +279,37 @@ public class Document {
     
     public String getExtractedText() {
     	return extractedText;
+    }
+    
+    public Boolean getIsArchived() {
+        return isArchived;
+    }
+    
+    public void setIsArchived(Boolean isArchived) {
+        this.isArchived = isArchived;
+    }
+    
+    public LocalDateTime getArchivedAt() {
+        return archivedAt;
+    }
+    
+    public void setArchivedAt(LocalDateTime archivedAt) {
+        this.archivedAt = archivedAt;
+    }
+    
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+    
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+    
+    public User getAssignedEmployee() {
+        return assignedEmployee;
+    }
+    
+    public void setAssignedEmployee(User assignedEmployee) {
+        this.assignedEmployee = assignedEmployee;
     }
 }

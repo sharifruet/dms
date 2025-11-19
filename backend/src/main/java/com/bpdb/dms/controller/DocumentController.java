@@ -7,8 +7,10 @@ import com.bpdb.dms.entity.User;
 import com.bpdb.dms.repository.DocumentIndexRepository;
 import com.bpdb.dms.repository.DocumentRepository;
 import com.bpdb.dms.repository.UserRepository;
+import com.bpdb.dms.service.DocumentArchiveService;
 import com.bpdb.dms.service.DocumentCategoryService;
 import com.bpdb.dms.service.FileUploadService;
+import com.bpdb.dms.service.StationeryTrackingService;
 import com.bpdb.dms.model.DocumentType;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,6 +50,12 @@ public class DocumentController {
 
     @Autowired
     private DocumentCategoryService documentCategoryService;
+
+    @Autowired
+    private DocumentArchiveService documentArchiveService;
+
+    @Autowired
+    private StationeryTrackingService stationeryTrackingService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -274,5 +282,265 @@ public class DocumentController {
             response.put("error", "Failed to start OCR re-processing: " + e.getMessage());
             return ResponseEntity.internalServerError().body(response);
         }
+    }
+
+    @PostMapping("/upload-duplicate")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_UPLOAD')")
+    public ResponseEntity<FileUploadResponse> handleDuplicateUpload(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("documentType") String documentType,
+            @RequestParam("duplicateDocumentId") Long duplicateDocumentId,
+            @RequestParam("action") String action, // "skip", "version", or "replace"
+            @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "metadata", required = false) String metadataJson,
+            @RequestParam(value = "folderId", required = false) Long folderId,
+            Authentication authentication
+    ) {
+        try {
+            String username = authentication.getName();
+            User user = userRepository.findByUsernameWithRole(username)
+                    .orElseThrow(() -> new RuntimeException("User not found: " + username));
+
+            Map<String, String> metadata = parseMetadata(metadataJson);
+
+            FileUploadResponse resp = fileUploadService.handleDuplicateUpload(
+                file, user, documentType, description, metadata, folderId, duplicateDocumentId, action
+            );
+            
+            if (!resp.isSuccess()) {
+                return ResponseEntity.badRequest().body(resp);
+            }
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(FileUploadResponse.error(e.getMessage()));
+        }
+    }
+
+    @PostMapping("/{id}/archive")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_ARCHIVE')")
+    public ResponseEntity<Document> archiveDocument(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        try {
+            String username = authentication.getName();
+            User user = userRepository.findByUsernameWithRole(username)
+                    .orElseThrow(() -> new RuntimeException("User not found: " + username));
+            
+            Document archived = documentArchiveService.archiveDocument(id, user);
+            return ResponseEntity.ok(archived);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/{id}/restore-archive")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_ARCHIVE')")
+    public ResponseEntity<Document> restoreArchivedDocument(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        try {
+            String username = authentication.getName();
+            User user = userRepository.findByUsernameWithRole(username)
+                    .orElseThrow(() -> new RuntimeException("User not found: " + username));
+            
+            Document restored = documentArchiveService.restoreArchivedDocument(id, user);
+            return ResponseEntity.ok(restored);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/{id}/delete")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_DELETE')")
+    public ResponseEntity<Document> deleteDocument(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        try {
+            String username = authentication.getName();
+            User user = userRepository.findByUsernameWithRole(username)
+                    .orElseThrow(() -> new RuntimeException("User not found: " + username));
+            
+            Document deleted = documentArchiveService.deleteDocument(id, user);
+            return ResponseEntity.ok(deleted);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/{id}/restore-delete")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_DELETE')")
+    public ResponseEntity<Document> restoreDeletedDocument(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        try {
+            String username = authentication.getName();
+            User user = userRepository.findByUsernameWithRole(username)
+                    .orElseThrow(() -> new RuntimeException("User not found: " + username));
+            
+            Document restored = documentArchiveService.restoreDeletedDocument(id, user);
+            return ResponseEntity.ok(restored);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @GetMapping("/archived")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<Page<Document>> getArchivedDocuments(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "archivedAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir
+    ) {
+        Sort sort = sortDir.equalsIgnoreCase("desc") ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
+        Pageable pageable = PageRequest.of(page, size, sort);
+        return ResponseEntity.ok(documentArchiveService.getArchivedDocuments(pageable));
+    }
+
+    @GetMapping("/deleted")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<Page<Document>> getDeletedDocuments(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "deletedAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir
+    ) {
+        Sort sort = sortDir.equalsIgnoreCase("desc") ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
+        Pageable pageable = PageRequest.of(page, size, sort);
+        return ResponseEntity.ok(documentArchiveService.getDeletedDocuments(pageable));
+    }
+
+    @GetMapping("/archive/statistics")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<DocumentArchiveService.ArchiveStatistics> getArchiveStatistics() {
+        return ResponseEntity.ok(documentArchiveService.getArchiveStatistics());
+    }
+
+    @PostMapping("/archive/batch")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_ARCHIVE')")
+    public ResponseEntity<List<Document>> archiveDocuments(
+            @RequestBody List<Long> documentIds,
+            Authentication authentication
+    ) {
+        try {
+            String username = authentication.getName();
+            User user = userRepository.findByUsernameWithRole(username)
+                    .orElseThrow(() -> new RuntimeException("User not found: " + username));
+            
+            List<Document> archived = documentArchiveService.archiveDocuments(documentIds, user);
+            return ResponseEntity.ok(archived);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/restore-archive/batch")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_ARCHIVE')")
+    public ResponseEntity<List<Document>> restoreArchivedDocuments(
+            @RequestBody List<Long> documentIds,
+            Authentication authentication
+    ) {
+        try {
+            String username = authentication.getName();
+            User user = userRepository.findByUsernameWithRole(username)
+                    .orElseThrow(() -> new RuntimeException("User not found: " + username));
+            
+            List<Document> restored = documentArchiveService.restoreArchivedDocuments(documentIds, user);
+            return ResponseEntity.ok(restored);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/restore-delete/batch")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_DELETE')")
+    public ResponseEntity<List<Document>> restoreDeletedDocuments(
+            @RequestBody List<Long> documentIds,
+            Authentication authentication
+    ) {
+        try {
+            String username = authentication.getName();
+            User user = userRepository.findByUsernameWithRole(username)
+                    .orElseThrow(() -> new RuntimeException("User not found: " + username));
+            
+            List<Document> restored = documentArchiveService.restoreDeletedDocuments(documentIds, user);
+            return ResponseEntity.ok(restored);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/{id}/assign-stationery")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_EDIT')")
+    public ResponseEntity<Document> assignStationeryToEmployee(
+            @PathVariable Long id,
+            @RequestParam("employeeId") Long employeeId,
+            Authentication authentication
+    ) {
+        try {
+            String username = authentication.getName();
+            User user = userRepository.findByUsernameWithRole(username)
+                    .orElseThrow(() -> new RuntimeException("User not found: " + username));
+            
+            Document assigned = stationeryTrackingService.assignStationeryToEmployee(id, employeeId, user);
+            return ResponseEntity.ok(assigned);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @PostMapping("/{id}/unassign-stationery")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_EDIT')")
+    public ResponseEntity<Document> unassignStationeryFromEmployee(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        try {
+            String username = authentication.getName();
+            User user = userRepository.findByUsernameWithRole(username)
+                    .orElseThrow(() -> new RuntimeException("User not found: " + username));
+            
+            Document unassigned = stationeryTrackingService.unassignStationeryFromEmployee(id, user);
+            return ResponseEntity.ok(unassigned);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().build();
+        }
+    }
+
+    @GetMapping("/stationery")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<Page<Document>> getStationeryRecords(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "createdAt") String sortBy,
+            @RequestParam(defaultValue = "desc") String sortDir
+    ) {
+        Sort sort = sortDir.equalsIgnoreCase("desc") ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
+        Pageable pageable = PageRequest.of(page, size, sort);
+        return ResponseEntity.ok(stationeryTrackingService.getAllStationeryRecords(pageable));
+    }
+
+    @GetMapping("/stationery/employee/{employeeId}")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<List<Document>> getStationeryRecordsByEmployee(
+            @PathVariable Long employeeId
+    ) {
+        return ResponseEntity.ok(stationeryTrackingService.getStationeryRecordsByEmployee(employeeId));
+    }
+
+    @GetMapping("/stationery/statistics")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<StationeryTrackingService.StationeryStatisticsSummary> getStationeryStatistics() {
+        return ResponseEntity.ok(stationeryTrackingService.getStationeryStatisticsSummary());
+    }
+
+    @GetMapping("/stationery/statistics/employee")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<List<StationeryTrackingService.EmployeeStationeryStats>> getStationeryStatisticsPerEmployee() {
+        return ResponseEntity.ok(stationeryTrackingService.getStationeryStatisticsPerEmployee());
     }
 }
