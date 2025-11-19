@@ -15,7 +15,6 @@ import org.apache.tika.Tika;
 import org.apache.tika.exception.TikaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -25,15 +24,7 @@ import jakarta.annotation.PostConstruct;
 import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
 import net.sourceforge.tess4j.TesseractException;
-import javax.imageio.ImageIO;
-import java.awt.image.BufferedImage;
 import java.io.*;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * Service for OCR processing and text extraction
@@ -60,9 +51,6 @@ public class OCRService {
     
     @Value("${app.ocr.process-images:true}")
     private boolean processImages;
-    @Autowired
-    private AuditService auditService;
-    
     private final ITesseract tesseract;
     private final Tika tika;
     private volatile boolean ocrAvailable;
@@ -518,7 +506,6 @@ public class OCRService {
         DocumentTypeClassification classification = new DocumentTypeClassification();
         
         String lowerText = text.toLowerCase();
-        String lowerFileName = fileName.toLowerCase();
         
         // Simple keyword-based classification
         if (lowerText.contains("tender") || lowerText.contains("bid") || lowerText.contains("proposal")) {
