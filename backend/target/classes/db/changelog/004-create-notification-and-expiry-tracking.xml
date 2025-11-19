@@ -180,6 +180,8 @@
     </changeSet>
 
     <changeSet id="004-007" author="dms">
+        <validCheckSum>9:57b6555c7d3e25c7bc95c068760f5ab8</validCheckSum>
+        <validCheckSum>9:1410ba0e49f2ee30c056707300dd5073</validCheckSum>
         <preConditions onFail="MARK_RAN" onError="HALT">
             <not>
                 <columnExists tableName="notification_preferences" columnName="push_enabled"/>

@@ -131,6 +131,8 @@
     </changeSet>
 
     <changeSet id="002-008" author="dms">
+        <validCheckSum>9:9f516033476514dd266bbea6586e0924</validCheckSum>
+        <validCheckSum>9:382b479bffae05e87eecd1cbb87e52f5</validCheckSum>
         <comment>Insert default admin user</comment>
         <insert tableName="users">
             <column name="username" value="admin"/>
