@@ -1,11 +1,12 @@
 package com.bpdb.dms.entity;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.elasticsearch.annotations.DateFormat;
 import org.springframework.data.elasticsearch.annotations.Document;
 import org.springframework.data.elasticsearch.annotations.Field;
 import org.springframework.data.elasticsearch.annotations.FieldType;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.Map;
 
 /**
@@ -47,11 +48,11 @@ public class DocumentIndex {
     @Field(type = FieldType.Text, analyzer = "standard")
     private String uploadedByUsername;
     
-    @Field(type = FieldType.Date, format = {}, pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime createdAt;
+    @Field(type = FieldType.Date, format = DateFormat.date_optional_time)
+    private LocalDate createdAt;
     
-    @Field(type = FieldType.Date, format = {}, pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime updatedAt;
+    @Field(type = FieldType.Date, format = DateFormat.date_optional_time)
+    private LocalDate updatedAt;
     
     @Field(type = FieldType.Object)
     private Map<String, String> metadata;
@@ -116,11 +117,11 @@ public class DocumentIndex {
     public String getUploadedByUsername() { return uploadedByUsername; }
     public void setUploadedByUsername(String uploadedByUsername) { this.uploadedByUsername = uploadedByUsername; }
     
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public LocalDate getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDate createdAt) { this.createdAt = createdAt; }
     
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public LocalDate getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDate updatedAt) { this.updatedAt = updatedAt; }
     
     public Map<String, String> getMetadata() { return metadata; }
     public void setMetadata(Map<String, String> metadata) { this.metadata = metadata; }

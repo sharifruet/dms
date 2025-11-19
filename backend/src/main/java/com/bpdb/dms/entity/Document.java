@@ -1,22 +1,25 @@
 package com.bpdb.dms.entity;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
@@ -26,6 +29,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 @Entity
 @Table(name = "documents")
 @EntityListeners(AuditingEntityListener.class)
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Document {
     
     @Id
@@ -50,15 +54,25 @@ public class Document {
     @Column(name = "file_hash")
     private String fileHash;
     
-    @Enumerated(EnumType.STRING)
     @Column(name = "document_type")
-    private DocumentType documentType;
+    private String documentType;
     
     @Column(name = "description")
     private String description;
     
     @Column(name = "tags")
     private String tags;
+    
+    @Column(name = "extracted_text", columnDefinition = "TEXT")
+    private String extractedText;
+
+    @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"document"})
+    private List<AppDocumentEntry> appDocumentEntries = new ArrayList<>();
+
+    @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"document"})
+    private List<DocumentMetadata> metadataEntries = new ArrayList<>();
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "uploaded_by", nullable = false)
@@ -149,12 +163,12 @@ public class Document {
         this.fileHash = fileHash;
     }
     
-    public DocumentType getDocumentType() {
+    public String getDocumentType() {
         return documentType;
     }
     
-    public void setDocumentType(DocumentType documentType) {
-        this.documentType = documentType;
+    public void setDocumentType(String documentType) {
+        this.documentType = documentType != null ? documentType.toUpperCase(Locale.ROOT) : null;
     }
     
     public String getDescription() {
@@ -219,5 +233,37 @@ public class Document {
     
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public List<AppDocumentEntry> getAppDocumentEntries() {
+        return appDocumentEntries;
+    }
+
+    public void setAppDocumentEntries(List<AppDocumentEntry> appDocumentEntries) {
+        this.appDocumentEntries = appDocumentEntries;
+    }
+
+    public List<DocumentMetadata> getMetadataEntries() {
+        return metadataEntries;
+    }
+
+    public void setMetadataEntries(List<DocumentMetadata> metadataEntries) {
+        this.metadataEntries = metadataEntries;
+    }
+
+    public void addMetadataEntry(DocumentMetadata metadata) {
+        if (metadata == null) {
+            return;
+        }
+        metadata.setDocument(this);
+        this.metadataEntries.add(metadata);
+    }
+    
+    public void setExtractedText(String extractedText) {
+    	this.extractedText = extractedText;
+    }
+    
+    public String getExtractedText() {
+    	return extractedText;
     }
 }

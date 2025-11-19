@@ -2,7 +2,6 @@ package com.bpdb.dms.service;
 
 import com.bpdb.dms.entity.Document;
 import com.bpdb.dms.entity.DocumentIndex;
-import com.bpdb.dms.entity.User;
 import com.bpdb.dms.repository.DocumentIndexRepository;
 import com.bpdb.dms.repository.DocumentRepository;
 import org.slf4j.Logger;
@@ -12,6 +11,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.cache.annotation.CacheEvict;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -35,7 +35,7 @@ public class DocumentIndexingService {
     private DocumentRepository documentRepository;
     
     @Autowired
-    private AuditService auditService;
+    private DocumentCategoryService documentCategoryService;
     
     /**
      * Index a document for search
@@ -48,14 +48,14 @@ public class DocumentIndexingService {
             documentIndex.setFileName(document.getFileName());
             documentIndex.setOriginalName(document.getOriginalName());
             documentIndex.setExtractedText(extractedText);
-            documentIndex.setDocumentType(document.getDocumentType() != null ? document.getDocumentType().name() : "OTHER");
+            documentIndex.setDocumentType(document.getDocumentType() != null ? document.getDocumentType() : "OTHER");
             documentIndex.setDescription(document.getDescription());
             documentIndex.setTags(document.getTags());
             documentIndex.setDepartment(document.getDepartment());
             documentIndex.setUploadedBy(document.getUploadedBy().getId().toString());
             documentIndex.setUploadedByUsername(document.getUploadedBy().getUsername());
-            documentIndex.setCreatedAt(document.getCreatedAt());
-            documentIndex.setUpdatedAt(document.getUpdatedAt());
+            documentIndex.setCreatedAt(document.getCreatedAt() != null ? document.getCreatedAt().toLocalDate() : null);
+            documentIndex.setUpdatedAt(document.getUpdatedAt() != null ? document.getUpdatedAt().toLocalDate() : null);
             documentIndex.setMetadata(metadata);
             documentIndex.setOcrConfidence(ocrConfidence);
             documentIndex.setClassificationConfidence(classificationConfidence);
@@ -64,6 +64,8 @@ public class DocumentIndexingService {
             documentIndex.setIsActive(document.getIsActive());
             
             documentIndexRepository.save(documentIndex);
+            // Invalidate Smart Folder caches on index writes
+            clearDmcCache();
             
             logger.info("Document indexed successfully: {} (ID: {})", document.getOriginalName(), document.getId());
             
@@ -83,11 +85,11 @@ public class DocumentIndexingService {
             if (existingIndex != null) {
                 existingIndex.setFileName(document.getFileName());
                 existingIndex.setOriginalName(document.getOriginalName());
-                existingIndex.setDocumentType(document.getDocumentType() != null ? document.getDocumentType().name() : "OTHER");
+                existingIndex.setDocumentType(document.getDocumentType() != null ? document.getDocumentType() : "OTHER");
                 existingIndex.setDescription(document.getDescription());
                 existingIndex.setTags(document.getTags());
                 existingIndex.setDepartment(document.getDepartment());
-                existingIndex.setUpdatedAt(document.getUpdatedAt());
+                existingIndex.setUpdatedAt(document.getUpdatedAt() != null ? document.getUpdatedAt().toLocalDate() : null);
                 existingIndex.setIsActive(document.getIsActive());
                 
                 documentIndexRepository.save(existingIndex);
@@ -105,10 +107,12 @@ public class DocumentIndexingService {
     /**
      * Remove document from index
      */
+    @CacheEvict(cacheNames = "dmcEval", allEntries = true)
     public void removeDocumentFromIndex(Long documentId) {
         try {
             documentIndexRepository.deleteById(documentId.toString());
             logger.info("Document removed from index: {}", documentId);
+            clearDmcCache();
         } catch (Exception e) {
             logger.error("Failed to remove document from index {}: {}", documentId, e.getMessage());
         }
@@ -203,8 +207,9 @@ public class DocumentIndexingService {
             
             // Count by document type
             Map<String, Long> typeCounts = new HashMap<>();
-            for (String type : List.of("TENDER", "PURCHASE_ORDER", "LETTER_OF_CREDIT", "BANK_GUARANTEE", "CONTRACT", "CORRESPONDENCE", "OTHER")) {
-                typeCounts.put(type, documentIndexRepository.countByDocumentType(type));
+            List<String> categoryNames = documentCategoryService.getActiveCategoryNames();
+            for (String category : categoryNames) {
+                typeCounts.put(category, documentIndexRepository.countByDocumentType(category));
             }
             stats.put("documentTypeCounts", typeCounts);
             
@@ -237,10 +242,23 @@ public class DocumentIndexingService {
             }
             
             logger.info("Full reindex completed. Processed {} documents", documents.size());
+            clearDmcCache();
             
         } catch (Exception e) {
             logger.error("Full reindex failed: {}", e.getMessage());
             throw new RuntimeException("Full reindex failed", e);
+        }
+    }
+
+    @Autowired(required = false)
+    private org.springframework.cache.CacheManager cacheManager;
+
+    private void clearDmcCache() {
+        if (cacheManager != null) {
+            var cache = cacheManager.getCache("dmcEval");
+            if (cache != null) {
+                cache.clear();
+            }
         }
     }
     

@@ -53,15 +53,24 @@ import {
 } from '@mui/icons-material';
 import { useAppSelector } from '../hooks/redux';
 import { documentService, Document, DocumentUploadRequest } from '../services/documentService';
+import { DocumentCategory } from '../types/document';
 import DocumentViewer from '../components/DocumentViewer';
 import FolderExplorer from '../components/FolderExplorer';
 import { Folder } from '../services/folderService';
+
+const DEFAULT_CATEGORIES: DocumentCategory[] = [
+  { id: -1, name: 'TENDER', displayName: 'Tender', description: 'Tender documents', isActive: true },
+  { id: -2, name: 'BILL', displayName: 'Bill', description: 'Bills and invoices', isActive: true },
+  { id: -3, name: 'CONTRACT', displayName: 'Contract', description: 'Contract documents', isActive: true },
+  { id: -4, name: 'GENERAL', displayName: 'General', description: 'General purpose documents', isActive: true },
+];
 
 const DocumentsEnhanced: React.FC = () => {
   const { user } = useAppSelector((state) => state.auth);
   
   // State management
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [categories, setCategories] = useState<DocumentCategory[]>(DEFAULT_CATEGORIES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -87,7 +96,7 @@ const DocumentsEnhanced: React.FC = () => {
   const [uploadForm, setUploadForm] = useState({
     title: '',
     description: '',
-    documentType: 'OTHER',
+    documentType: DEFAULT_CATEGORIES[0]?.name || 'OTHER',
     department: user?.department || '',
     tags: '',
     folderId: null as number | null,
@@ -131,6 +140,33 @@ const DocumentsEnhanced: React.FC = () => {
     fetchDocuments();
   }, [fetchDocuments]);
 
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const data = await documentService.getDocumentCategories();
+        const normalized = (data && data.length > 0) ? data : DEFAULT_CATEGORIES;
+        if (!data || data.length === 0) {
+          console.warn('[DocumentsEnhanced] No categories returned from API; using defaults');
+        }
+        setCategories(normalized);
+        setUploadForm((prev) => ({
+          ...prev,
+          documentType: prev.documentType || (normalized[0]?.name ?? ''),
+        }));
+      } catch (err: any) {
+        console.error('Error fetching document categories:', err);
+        setCategories(DEFAULT_CATEGORIES);
+        setUploadForm((prev) => ({
+          ...prev,
+          documentType: prev.documentType || DEFAULT_CATEGORIES[0].name,
+        }));
+        setError(err.response?.data?.message || 'Failed to load document categories; using defaults');
+      }
+    };
+
+    fetchCategories();
+  }, []);
+
   // Handle file selection
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -146,6 +182,11 @@ const DocumentsEnhanced: React.FC = () => {
   const handleUpload = async () => {
     if (!selectedFile || !user?.username) {
       setError('Please select a file and ensure you are logged in');
+      return;
+    }
+
+    if (!uploadForm.documentType) {
+      setError('Please choose a document type');
       return;
     }
 
@@ -186,7 +227,7 @@ const DocumentsEnhanced: React.FC = () => {
       setUploadForm({
         title: '',
         description: '',
-        documentType: 'OTHER',
+        documentType: categories[0]?.name || 'OTHER',
         department: user?.department || '',
         tags: '',
         folderId: null,
@@ -414,14 +455,11 @@ const DocumentsEnhanced: React.FC = () => {
                   sx={{ borderRadius: 2 }}
                 >
                   <MenuItem value="">All Types</MenuItem>
-                  <MenuItem value="TENDER">Tender Document</MenuItem>
-                  <MenuItem value="PURCHASE_ORDER">Purchase Order</MenuItem>
-                  <MenuItem value="LETTER_OF_CREDIT">Letter of Credit</MenuItem>
-                  <MenuItem value="BANK_GUARANTEE">Bank Guarantee</MenuItem>
-                  <MenuItem value="CONTRACT">Contract</MenuItem>
-                  <MenuItem value="CORRESPONDENCE">Correspondence</MenuItem>
-                  <MenuItem value="STATIONERY_RECORD">Stationery Record</MenuItem>
-                  <MenuItem value="OTHER">Other</MenuItem>
+                  {categories.map((category) => (
+                    <MenuItem key={category.id} value={category.name}>
+                      {category.displayName || category.name}
+                    </MenuItem>
+                  ))}
                 </Select>
               </FormControl>
             </Grid>
@@ -637,15 +675,13 @@ const DocumentsEnhanced: React.FC = () => {
                 value={uploadForm.documentType}
                 label="Document Type"
                 onChange={(e) => setUploadForm({ ...uploadForm, documentType: e.target.value })}
+                disabled={categories.length === 0}
               >
-                <MenuItem value="TENDER">Tender Document</MenuItem>
-                <MenuItem value="PURCHASE_ORDER">Purchase Order</MenuItem>
-                <MenuItem value="LETTER_OF_CREDIT">Letter of Credit</MenuItem>
-                <MenuItem value="BANK_GUARANTEE">Bank Guarantee</MenuItem>
-                <MenuItem value="CONTRACT">Contract</MenuItem>
-                <MenuItem value="CORRESPONDENCE">Correspondence</MenuItem>
-                <MenuItem value="STATIONERY_RECORD">Stationery Record</MenuItem>
-                <MenuItem value="OTHER">Other</MenuItem>
+                {categories.map((category) => (
+                  <MenuItem key={category.id} value={category.name}>
+                    {category.displayName || category.name}
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
 

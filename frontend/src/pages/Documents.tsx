@@ -41,33 +41,36 @@ import {
   FilterList as FilterIcon
 } from '@mui/icons-material';
 import { useAppSelector } from '../hooks/redux';
-import { DocumentType } from '../types/document';
-import { documentService } from '../services/documentService';
+import { documentService, Document as DmsDocument } from '../services/documentService';
+import { DocumentCategory } from '../types/document';
+
+const DEFAULT_CATEGORIES: DocumentCategory[] = [];
 
 const Documents: React.FC = () => {
   const { user } = useAppSelector((state) => state.auth);
-  const [documents, setDocuments] = useState<any[]>([]);
+  const [documents, setDocuments] = useState<DmsDocument[]>([]);
+  const [categories, setCategories] = useState<DocumentCategory[]>(DEFAULT_CATEGORIES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openDialog, setOpenDialog] = useState(false);
   const [openUploadDialog, setOpenUploadDialog] = useState(false);
-  const [editingDocument, setEditingDocument] = useState<any>(null);
+  const [editingDocument, setEditingDocument] = useState<DmsDocument | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    documentType: DocumentType.OTHER,
+    documentType: '',
     department: '',
     tags: ''
   });
+  const [tenderWorkflowInstanceId, setTenderWorkflowInstanceId] = useState<string>('');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<DocumentType | 'ALL'>('ALL');
+  const [filterType, setFilterType] = useState<string>('');
 
   const departments = ['IT', 'HR', 'Finance', 'Operations', 'Legal', 'Marketing'];
-  const documentTypes = Object.values(DocumentType);
-
   useEffect(() => {
     loadDocuments();
+    loadCategories();
   }, []);
 
   const loadDocuments = async () => {
@@ -82,6 +85,76 @@ const Documents: React.FC = () => {
     }
   };
 
+  const loadCategories = async () => {
+    try {
+      const types = await documentService.getDocumentTypes();
+      const allowed = new Set([
+        'TENDER_NOTICE',
+        'TENDER_DOCUMENT',
+        'CONTRACT_AGREEMENT',
+        'BANK_GUARANTEE_BG',
+        'PERFORMANCE_SECURITY_PS',
+        'PERFORMANCE_GUARANTEE_PG',
+        'APP',
+        'OTHER',
+      ]);
+      const filtered = types.filter((t: any) => allowed.has(t.value));
+      const order: Record<string, number> = {
+        TENDER_NOTICE: 1,
+        TENDER_DOCUMENT: 2,
+        CONTRACT_AGREEMENT: 3,
+        BANK_GUARANTEE_BG: 4,
+        PERFORMANCE_SECURITY_PS: 5,
+        PERFORMANCE_GUARANTEE_PG: 6,
+        APP: 7,
+        OTHER: 99,
+      };
+      const mapped: DocumentCategory[] = filtered.map((t, idx) => ({
+        id: -(idx + 1),
+        name: t.value,
+        displayName: t.label,
+        description: t.label,
+        isActive: true
+      })).sort((a, b) => (order[a.name] ?? 100) - (order[b.name] ?? 100));
+      setFormData((prev) => ({
+        ...prev,
+        documentType: prev.documentType || (mapped[0]?.name ?? '')
+      }));
+      setCategories(mapped);
+    } catch (err: any) {
+      console.error('Failed to load document types', err);
+      setError(err.response?.data?.message || 'Failed to load document types');
+      // Hard fallback to requirements-compliant list (no BILL)
+      const fallback: DocumentCategory[] = [
+        { id: -1, name: 'TENDER_NOTICE', displayName: 'Tender Notice', description: 'Tender Notice', isActive: true },
+        { id: -2, name: 'TENDER_DOCUMENT', displayName: 'Tender Document', description: 'Tender Document', isActive: true },
+        { id: -3, name: 'CONTRACT_AGREEMENT', displayName: 'Contract Agreement', description: 'Contract Agreement', isActive: true },
+        { id: -4, name: 'BANK_GUARANTEE_BG', displayName: 'Bank Guarantee (BG)', description: 'Bank Guarantee (BG)', isActive: true },
+        { id: -5, name: 'PERFORMANCE_SECURITY_PS', displayName: 'Performance Security (PS)', description: 'Performance Security (PS)', isActive: true },
+        { id: -6, name: 'PERFORMANCE_GUARANTEE_PG', displayName: 'Performance Guarantee (PG)', description: 'Performance Guarantee (PG)', isActive: true },
+        { id: -7, name: 'APP', displayName: 'APP', description: 'Annual Project Plan (APP)', isActive: true },
+        { id: -8, name: 'OTHER', displayName: 'Other', description: 'Other related documents', isActive: true },
+      ];
+      setCategories(fallback);
+      setFormData((prev) => ({
+        ...prev,
+        documentType: prev.documentType || fallback[0].name
+      }));
+    }
+  };
+
+  const requiresTenderWorkflow = (docType: string) => {
+    const required = new Set([
+      'TENDER_DOCUMENT',
+      'CONTRACT_AGREEMENT',
+      'BANK_GUARANTEE_BG',
+      'PERFORMANCE_SECURITY_PS',
+      'PERFORMANCE_GUARANTEE_PG',
+      'APP',
+    ]);
+    return required.has(docType);
+  };
+
   const handleUploadDocument = async () => {
     try {
       if (!uploadFile) {
@@ -89,32 +162,45 @@ const Documents: React.FC = () => {
         return;
       }
 
+      if (!formData.documentType) {
+        setError('Please select a document type');
+        return;
+      }
+
       await documentService.uploadDocument({
         file: uploadFile,
         title: formData.title || uploadFile.name,
         description: formData.description,
-        documentType: formData.documentType as unknown as string,
+        documentType: formData.documentType,
         department: formData.department,
         tags: formData.tags,
         userId: (user as any)?.id || 0,
+        tenderWorkflowInstanceId: requiresTenderWorkflow(formData.documentType) ? (tenderWorkflowInstanceId || undefined) : undefined,
       });
 
       setOpenUploadDialog(false);
       setUploadFile(null);
-      setFormData({ title: '', description: '', documentType: DocumentType.OTHER, department: '', tags: '' });
+      setFormData({
+        title: '',
+        description: '',
+        documentType: categories[0]?.name || '',
+        department: '',
+        tags: ''
+      });
+      setTenderWorkflowInstanceId('');
       await loadDocuments();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to upload document');
     }
   };
 
-  const handleEditDocument = (document: any) => {
+  const handleEditDocument = (document: DmsDocument) => {
     setEditingDocument(document);
     setFormData({
       title: document.fileName,
       description: '',
       documentType: document.documentType,
-      department: document.department,
+      department: document.department ?? '',
       tags: ''
     });
     setOpenDialog(true);
@@ -130,50 +216,44 @@ const Documents: React.FC = () => {
     }
   };
 
-  const handleDownloadDocument = (document: any) => {
+  const handleDownloadDocument = (document: DmsDocument) => {
     console.log('Downloading document:', document.fileName);
   };
 
-  const handleViewDocument = (document: any) => {
+  const handleViewDocument = (document: DmsDocument) => {
     console.log('Viewing document:', document.fileName);
   };
 
-  const getFileType = (fileName: string): DocumentType => {
-    const extension = fileName.split('.').pop()?.toLowerCase();
-    switch (extension) {
-      case 'pdf':
-      case 'docx':
-      case 'doc':
-      case 'txt':
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-      default:
-        return DocumentType.OTHER;
+  const formatFileSize = (value?: string | number): string => {
+    if (value === undefined || value === null) return '-';
+    const bytes = typeof value === 'string' ? parseInt(value, 10) : value;
+    if (!Number.isFinite(bytes) || bytes <= 0) {
+      return typeof value === 'string' ? value : `${bytes}`;
     }
-  };
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const getDocumentTypeColor = (type: DocumentType) => {
-    switch (type) {
-      case DocumentType.OTHER:
-        return 'error';
-      default:
-        return 'default';
-    }
+  const getDocumentTypeColor = (type: string) => {
+    if (!type) return 'default';
+    const normalized = type.toUpperCase();
+    if (normalized.includes('BILL')) return 'warning';
+    if (normalized.includes('TENDER')) return 'primary';
+    if (normalized.includes('CONTRACT')) return 'success';
+    return 'default';
   };
+
+  const categoryCounts = categories.reduce<Record<string, number>>((acc, category) => {
+    acc[category.name] = documents.filter((doc) => doc.documentType === category.name).length;
+    return acc;
+  }, {});
 
   const filteredDocuments = documents.filter(doc => {
     const matchesSearch = (doc.fileName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                          (doc.department || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter = filterType === 'ALL' || doc.documentType === filterType;
+    const matchesFilter = !filterType || doc.documentType === filterType;
     return matchesSearch && matchesFilter;
   });
 
@@ -220,42 +300,20 @@ const Documents: React.FC = () => {
             </CardContent>
           </Card>
         </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                PDF Documents
-              </Typography>
-              <Typography variant="h4" color="error.main">
-                {documents.filter(d => d.documentType === DocumentType.OTHER).length}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Word Documents
-              </Typography>
-              <Typography variant="h4" color="primary.main">
-                {documents.filter(d => d.documentType === DocumentType.OTHER || d.documentType === DocumentType.OTHER).length}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-        <Grid item xs={12} md={3}>
-          <Card>
-            <CardContent>
-              <Typography color="textSecondary" gutterBottom>
-                Images
-              </Typography>
-              <Typography variant="h4" color="success.main">
-                {documents.filter(d => d.documentType === DocumentType.OTHER || d.documentType === DocumentType.OTHER).length}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
+        {categories.slice(0, 3).map((category) => (
+          <Grid item xs={12} md={3} key={category.id}>
+            <Card>
+              <CardContent>
+                <Typography color="textSecondary" gutterBottom>
+                  {category.displayName || category.name}
+                </Typography>
+                <Typography variant="h4">
+                  {categoryCounts[category.name] ?? 0}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
 
         {/* Search and Filter */}
         <Grid item xs={12}>
@@ -278,12 +336,12 @@ const Documents: React.FC = () => {
                     <InputLabel>Filter by Type</InputLabel>
                     <Select
                       value={filterType}
-                      onChange={(e) => setFilterType(e.target.value as DocumentType | 'ALL')}
+                      onChange={(e) => setFilterType(e.target.value as string)}
                     >
-                      <MenuItem value="ALL">All Types</MenuItem>
-                      {documentTypes.map((type) => (
-                        <MenuItem key={type} value={type}>
-                          {type}
+                      <MenuItem value="">All Types</MenuItem>
+                      {categories.map((category) => (
+                        <MenuItem key={category.id} value={category.name}>
+                          {category.displayName || category.name}
                         </MenuItem>
                       ))}
                     </Select>
@@ -296,7 +354,7 @@ const Documents: React.FC = () => {
                     startIcon={<FilterIcon />}
                     onClick={() => {
                       setSearchTerm('');
-                      setFilterType('ALL');
+                      setFilterType('');
                     }}
                   >
                     Clear Filters
@@ -345,22 +403,26 @@ const Documents: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {document.department}
+                            {document.department || '-'}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {document.uploadedBy?.username || 'Unknown'}
+                            {typeof document.uploadedBy === 'string'
+                              ? document.uploadedBy
+                              : document.uploadedBy?.username || 'Unknown'}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {new Date(document.createdAt).toLocaleDateString()}
+                            {document.createdAt
+                              ? new Date(document.createdAt).toLocaleDateString()
+                              : '-'}
                           </Typography>
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {document.fileSize ? `${document.fileSize} B` : '-'}
+                            {formatFileSize(document.size ?? document.fileSize)}
                           </Typography>
                         </TableCell>
                         <TableCell>
@@ -396,7 +458,13 @@ const Documents: React.FC = () => {
                           <Tooltip title="Delete">
                             <IconButton
                               size="small"
-                              onClick={() => handleDeleteDocument(document.id)}
+                              onClick={() => {
+                                if (!document.id) {
+                                  setError('Unable to delete a document without an id');
+                                  return;
+                                }
+                                handleDeleteDocument(document.id);
+                              }}
                               color="error"
                             >
                               <DeleteIcon />
@@ -444,6 +512,31 @@ const Documents: React.FC = () => {
             </Grid>
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth>
+                <InputLabel>Document Type</InputLabel>
+                <Select
+                  value={formData.documentType}
+                  label="Document Type"
+                  onChange={(e) => setFormData({ ...formData, documentType: e.target.value })}
+                  disabled={categories.length === 0}
+                >
+                  {categories.map((category) => (
+                    <MenuItem key={category.id} value={category.name}>
+                      {category.displayName || category.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            {formData.documentType === 'TENDER_NOTICE' && (
+              <Grid item xs={12}>
+                <Alert severity="info">
+                  Selecting <strong>Tender Notice</strong> will initiate a workflow automatically. 
+                  Upload subsequent documents (2–7) via that workflow.
+                </Alert>
+              </Grid>
+            )}
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
                 <InputLabel>Department</InputLabel>
                 <Select
                   value={formData.department}
@@ -467,6 +560,20 @@ const Documents: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               />
             </Grid>
+            {requiresTenderWorkflow(formData.documentType) && (
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Tender Workflow Instance ID"
+                  value={tenderWorkflowInstanceId}
+                  onChange={(e) => setTenderWorkflowInstanceId(e.target.value)}
+                  placeholder="Enter the workflow instance ID created with the Tender Notice"
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Documents 2–7 (Tender Document, Contract Agreement, BG, PS, PG, APP) must be uploaded via the Tender workflow.
+                </Typography>
+              </Grid>
+            )}
             <Grid item xs={12}>
               <TextField
                 fullWidth
@@ -498,6 +605,23 @@ const Documents: React.FC = () => {
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Document Type</InputLabel>
+                <Select
+                  value={formData.documentType}
+                  label="Document Type"
+                  onChange={(e) => setFormData({ ...formData, documentType: e.target.value })}
+                  disabled={categories.length === 0}
+                >
+                  {categories.map((category) => (
+                    <MenuItem key={category.id} value={category.name}>
+                      {category.displayName || category.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
             <Grid item xs={12} sm={6}>
               <FormControl fullWidth>

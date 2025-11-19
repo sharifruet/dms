@@ -2,11 +2,15 @@ package com.bpdb.dms.service;
 
 import com.bpdb.dms.dto.FileUploadResponse;
 import com.bpdb.dms.entity.Document;
-import com.bpdb.dms.entity.DocumentType;
 import com.bpdb.dms.entity.Folder;
 import com.bpdb.dms.entity.User;
+import com.bpdb.dms.model.DocumentType;
 import com.bpdb.dms.repository.DocumentRepository;
 import com.bpdb.dms.repository.FolderRepository;
+import com.bpdb.dms.entity.WorkflowInstance;
+import com.bpdb.dms.entity.WorkflowInstanceStatus;
+import com.bpdb.dms.entity.WorkflowType;
+import com.bpdb.dms.repository.WorkflowInstanceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.HashMap;
 
 /**
  * Service for handling file upload operations
@@ -71,17 +76,64 @@ public class FileUploadService {
     private DocumentIndexingService documentIndexingService;
     
     @Autowired
-    private AuditService auditService;
-    
+    private AppDocumentService appDocumentService;
+
+    @Autowired
+    private DocumentMetadataService documentMetadataService;
+
+    @Autowired
+    private WorkflowService workflowService;
+
+    @Autowired
+    private WorkflowInstanceRepository workflowInstanceRepository;
+
     /**
      * Upload a single file
      */
-    public FileUploadResponse uploadFile(MultipartFile file, User user, DocumentType documentType, String description, Long folderId) {
+    public FileUploadResponse uploadFile(MultipartFile file, User user, String documentType, String description,
+                                         Map<String, String> manualMetadata, Long folderId) {
         try {
             // Validate file
             String validationError = validateFile(file);
             if (validationError != null) {
                 return FileUploadResponse.error(validationError);
+            }
+
+            // Validate and normalize document type
+            DocumentType resolvedType = DocumentType.resolve(documentType).orElse(null);
+            if (resolvedType == null) {
+                String message = "Invalid document type. Allowed types are: " + DocumentType.allowedTypesList();
+                logger.warn("Document type validation failed for value '{}': {}", documentType, message);
+                return FileUploadResponse.error(message);
+            }
+
+            // Enforce workflow for follow-up documents (types 2–7)
+            boolean requiresTenderWorkflow = requiresTenderWorkflow(resolvedType);
+            Long providedWorkflowInstanceId = null;
+            if (requiresTenderWorkflow) {
+                if (manualMetadata == null || !manualMetadata.containsKey("tenderWorkflowInstanceId")) {
+                    return FileUploadResponse.error("This document type must be uploaded via a Tender workflow. Please provide 'tenderWorkflowInstanceId'.");
+                }
+                try {
+                    providedWorkflowInstanceId = Long.parseLong(manualMetadata.get("tenderWorkflowInstanceId"));
+                } catch (NumberFormatException nfe) {
+                    return FileUploadResponse.error("Invalid 'tenderWorkflowInstanceId'. It must be a numeric ID.");
+                }
+                WorkflowInstance instance = workflowInstanceRepository.findById(providedWorkflowInstanceId)
+                    .orElse(null);
+                if (instance == null) {
+                    return FileUploadResponse.error("Workflow instance not found for ID: " + providedWorkflowInstanceId);
+                }
+                if (instance.getStatus() == WorkflowInstanceStatus.COMPLETED ||
+                    instance.getStatus() == WorkflowInstanceStatus.CANCELLED ||
+                    instance.getStatus() == WorkflowInstanceStatus.REJECTED) {
+                    return FileUploadResponse.error("The referenced workflow instance is not active. Please start a new Tender workflow.");
+                }
+                // Ensure the workflow is tied to a Tender Notice
+                if (instance.getDocument() == null || instance.getDocument().getDocumentType() == null ||
+                    !DocumentType.TENDER_NOTICE.name().equals(instance.getDocument().getDocumentType())) {
+                    return FileUploadResponse.error("Provided 'tenderWorkflowInstanceId' is not associated with a Tender Notice.");
+                }
             }
             
             // Generate unique filename
@@ -106,7 +158,7 @@ public class FileUploadService {
             document.setFilePath(filePath.toString());
             document.setFileSize(file.getSize());
             document.setMimeType(file.getContentType());
-            document.setDocumentType(documentType);
+            document.setDocumentType(resolvedType.name());
             document.setDescription(description);
             document.setUploadedBy(user);
             document.setDepartment(user.getDepartment());
@@ -119,9 +171,44 @@ public class FileUploadService {
             
             // Save to database
             Document savedDocument = documentRepository.save(document);
+
+            Map<String, String> combinedMetadata = new HashMap<>();
+            if (manualMetadata != null && !manualMetadata.isEmpty()) {
+                combinedMetadata.putAll(documentMetadataService.applyManualMetadata(savedDocument, manualMetadata));
+            }
+
+            // If Tender Notice, auto-create and start a workflow; store its ID in metadata
+            if (resolvedType == DocumentType.TENDER_NOTICE) {
+                String definition = "{\"steps\":[{\"order\":1,\"name\":\"Collect Tender Documents (2–7)\",\"type\":\"SEQUENTIAL\"},{\"order\":2,\"name\":\"Review & Finalize\",\"type\":\"APPROVAL\"}]}";
+                var workflow = workflowService.createWorkflow(
+                    "Tender Package - " + (originalFilename != null ? originalFilename : savedDocument.getId()),
+                    "Workflow to collect documents 2–7 for the tender package",
+                    WorkflowType.CUSTOM_WORKFLOW,
+                    definition,
+                    user
+                );
+                WorkflowInstance instance = workflowService.startWorkflow(workflow.getId(), savedDocument.getId(), user);
+                String instanceIdStr = String.valueOf(instance.getId());
+                combinedMetadata.put("tenderWorkflowInstanceId", instanceIdStr);
+                documentMetadataService.applyManualMetadata(savedDocument, Map.of("tenderWorkflowInstanceId", instanceIdStr));
+            }
+
+            // For follow-ups, persist and index the workflow reference if provided
+            if (requiresTenderWorkflow && providedWorkflowInstanceId != null) {
+                String instanceIdStr = String.valueOf(providedWorkflowInstanceId);
+                combinedMetadata.put("tenderWorkflowInstanceId", instanceIdStr);
+                // ensure persisted in metadata entries
+                documentMetadataService.applyManualMetadata(savedDocument, Map.of("tenderWorkflowInstanceId", instanceIdStr));
+            }
+
+            Map<String, String> additionalMetadata = Map.of();
+            if (isExcelFile(file.getContentType(), originalFilename)) {
+                additionalMetadata = appDocumentService.processAndStoreEntries(savedDocument, file);
+                combinedMetadata.putAll(additionalMetadata);
+            }
             
             // Process OCR and indexing asynchronously
-            processDocumentAsync(savedDocument, file);
+            processDocumentAsync(savedDocument, file, combinedMetadata);
             
             logger.info("File uploaded successfully: {} by user: {}", originalFilename, user.getUsername());
             
@@ -222,82 +309,111 @@ public class FileUploadService {
      * Process document with OCR and indexing asynchronously
      */
     @Async
-    public void processDocumentAsync(Document document, MultipartFile file) {
-        OCRService.OCRResult ocrResult = null;
+    public void processDocumentAsync(Document document, MultipartFile file, Map<String, String> additionalMetadata) {
         final Long documentId = document.getId();
         
         try {
             logger.info("Starting async processing for document: {}", documentId);
+
+            Document managedDocument = documentRepository.findById(documentId)
+                .orElseThrow(() -> new RuntimeException("Document not found for OCR processing: " + documentId));
             
-            // Refetch document in async context to ensure user is loaded
-            final Document doc = documentRepository.findById(documentId)
-                .orElseThrow(() -> new RuntimeException("Document not found: " + documentId));
             // Ensure user is loaded
-            if (doc.getUploadedBy() != null) {
-                doc.getUploadedBy().getId();
+            if (managedDocument.getUploadedBy() != null) {
+                managedDocument.getUploadedBy().getId();
             }
             
-            // Perform OCR processing with error handling for native crashes
+            // Perform OCR processing
+            Map<String, String> combinedMetadata = new HashMap<>(documentMetadataService.getMetadataMap(managedDocument));
+            if (additionalMetadata != null) {
+                combinedMetadata.putAll(additionalMetadata);
+            }
+            
+            if (!ocrService.isOcrAvailable()) {
+                logger.warn("Skipping OCR processing for document {} because OCR service is unavailable", documentId);
+                combinedMetadata.put("ocrStatus", "unavailable");
+                documentIndexingService.indexDocument(
+                    managedDocument,
+                    "",
+                    combinedMetadata,
+                    0.0,
+                    0.0
+                );
+                return;
+            }
+            
+            OCRService.OCRResult ocrResult;
             try {
                 ocrResult = ocrService.extractText(file);
-            } catch (Throwable t) {
-                // Catch all errors including native crashes (Error, Exception, etc.)
-                logger.error("OCR processing failed for document: {} - Error type: {}, Message: {}", 
-                           doc.getId(), t.getClass().getName(), t.getMessage());
-                // Create a failed result to continue processing
-                ocrResult = new OCRService.OCRResult();
-                ocrResult.setSuccess(false);
-                String errorMsg = t.getMessage();
+                managedDocument.setExtractedText(ocrResult.getExtractedText());
+                documentRepository.save(managedDocument);
+            } catch (Throwable ocrError) {
+                logger.error("OCR extraction threw an error for document {}: {}", documentId, ocrError.getMessage());
+                combinedMetadata.put("ocrStatus", "failed");
+                String errorMsg = ocrError.getMessage();
                 if (errorMsg != null && (errorMsg.contains("TessAPI") || errorMsg.contains("Could not initialize"))) {
                     errorMsg = "Tesseract native library not available. Please install Tesseract on the system. " +
                               "On macOS: brew install tesseract. " +
                               "On Linux: apt-get install tesseract-ocr. " +
                               "Error: " + errorMsg;
                 }
-                ocrResult.setErrorMessage(errorMsg != null ? errorMsg : "OCR processing failed");
+                combinedMetadata.put("error", errorMsg != null ? errorMsg : "unknown");
+                documentIndexingService.indexDocument(
+                    managedDocument,
+                    "",
+                    combinedMetadata,
+                    0.0,
+                    0.0
+                );
+                return;
             }
             
             if (ocrResult != null && ocrResult.isSuccess()) {
                 // Update document with OCR results if needed
-                if (ocrResult.getDocumentType() != null && doc.getDocumentType() == null) {
+                if (ocrResult.getDocumentType() != null && managedDocument.getDocumentType() == null) {
                     try {
-                        doc.setDocumentType(DocumentType.valueOf(ocrResult.getDocumentType()));
-                        documentRepository.save(doc);
+                        managedDocument.setDocumentType(ocrResult.getDocumentType());
+                        documentRepository.save(managedDocument);
                     } catch (IllegalArgumentException e) {
                         logger.warn("Invalid document type from OCR: {}", ocrResult.getDocumentType());
                     }
                 }
+
+                if (ocrResult.getMetadata() != null) {
+                    combinedMetadata.putAll(ocrResult.getMetadata());
+                }
+
+                combinedMetadata.putAll(documentMetadataService.extractMetadataFromText(managedDocument, ocrResult.getExtractedText()));
                 
                 // Index document for search
                 documentIndexingService.indexDocument(
-                    doc,
+                    managedDocument,
                     ocrResult.getExtractedText(),
-                    ocrResult.getMetadata(),
+                    combinedMetadata,
                     ocrResult.getConfidence(),
                     ocrResult.getClassificationConfidence()
                 );
                 
                 logger.info("Async processing completed for document: {} - OCR confidence: {}", 
-                           doc.getId(), ocrResult.getConfidence());
+                           documentId, ocrResult.getConfidence());
                 
             } else {
                 String errorMsg = ocrResult != null ? ocrResult.getErrorMessage() : "Unknown error";
                 logger.error("OCR processing failed for document: {} - Error: {}", 
-                           doc.getId(), errorMsg);
+                           documentId, errorMsg);
                 
                 // Still index the document without OCR text
-                // Store error message in metadata for debugging
-                Map<String, String> metadata = ocrResult != null && ocrResult.getMetadata() != null 
-                    ? new HashMap<>(ocrResult.getMetadata()) 
-                    : new HashMap<>();
-                if (errorMsg != null && !errorMsg.isEmpty()) {
-                    metadata.put("ocrError", errorMsg);
+                if (ocrResult != null && ocrResult.getMetadata() != null) {
+                    combinedMetadata.putAll(ocrResult.getMetadata());
                 }
-                
+                combinedMetadata.put("ocrStatus", "failed");
+                if (errorMsg != null && !errorMsg.isEmpty()) {
+                    combinedMetadata.put("ocrError", errorMsg);
+                }
                 documentIndexingService.indexDocument(
-                    doc,
+                    managedDocument,
                     "",
-                    metadata,
+                    combinedMetadata,
                     0.0,
                     0.0
                 );
@@ -319,7 +435,7 @@ public class FileUploadService {
                 documentIndexingService.indexDocument(
                     docForIndex,
                     "",
-                    null,
+                    new HashMap<>(),
                     0.0,
                     0.0
                 );
@@ -397,7 +513,7 @@ public class FileUploadService {
             };
             
             // Process with OCR
-            processDocumentAsync(document, multipartFile);
+            processDocumentAsync(document, multipartFile, new HashMap<>());
             
             logger.info("OCR re-processing triggered for document: {}", documentId);
             
@@ -437,5 +553,25 @@ public class FileUploadService {
         } catch (Exception e) {
             logger.error("Error re-processing OCR for all documents: {}", e.getMessage(), e);
         }
+    }
+    
+    private boolean requiresTenderWorkflow(DocumentType type) {
+        return type == DocumentType.TENDER_DOCUMENT
+            || type == DocumentType.CONTRACT_AGREEMENT
+            || type == DocumentType.BANK_GUARANTEE_BG
+            || type == DocumentType.PERFORMANCE_SECURITY_PS
+            || type == DocumentType.PERFORMANCE_GUARANTEE_PG
+            || type == DocumentType.APP;
+    }
+
+    private boolean isExcelFile(String contentType, String originalFilename) {
+        if (contentType != null && contentType.contains("excel")) {
+            return true;
+        }
+        if (originalFilename == null) {
+            return false;
+        }
+        String lowerName = originalFilename.toLowerCase();
+        return lowerName.endsWith(".xls") || lowerName.endsWith(".xlsx");
     }
 }

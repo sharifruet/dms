@@ -1,8 +1,16 @@
 package com.bpdb.dms.service;
 
-import net.sourceforge.tess4j.ITesseract;
-import net.sourceforge.tess4j.Tesseract;
-import net.sourceforge.tess4j.TesseractException;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+
+import javax.imageio.ImageIO;
+
 import org.apache.tika.Tika;
 import org.apache.tika.exception.TikaException;
 import org.slf4j.Logger;
@@ -13,8 +21,11 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import javax.imageio.ImageIO;
 import jakarta.annotation.PostConstruct;
+import net.sourceforge.tess4j.ITesseract;
+import net.sourceforge.tess4j.Tesseract;
+import net.sourceforge.tess4j.TesseractException;
+import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.nio.file.Files;
@@ -49,20 +60,21 @@ public class OCRService {
     
     @Value("${app.ocr.process-images:true}")
     private boolean processImages;
-    
     @Autowired
     private AuditService auditService;
     
     private final ITesseract tesseract;
     private final Tika tika;
+    private volatile boolean ocrAvailable;
     
     public OCRService() {
         this.tesseract = new Tesseract();
         this.tika = new Tika();
+        this.ocrAvailable = false;
     }
-
+    
     @PostConstruct
-    private void postConstructInit() {
+    public void setUp() {
         initializeTesseract();
     }
     
@@ -70,6 +82,12 @@ public class OCRService {
      * Initialize Tesseract OCR engine
      */
     private void initializeTesseract() {
+        if (!ocrEnabled) {
+            ocrAvailable = false;
+            logger.info("OCR processing disabled via configuration");
+            return;
+        }
+        
         try {
             // Resolve tessdata path if the configured one doesn't exist (common on macOS/Homebrew)
             Path configuredPath = Paths.get(tesseractDataPath);
@@ -87,9 +105,11 @@ public class OCRService {
                     tesseractDataPath = resolvedPath;
                 } else {
                     logger.warn("Configured tessdata path not found and no fallback found: {}", tesseractDataPath);
+                    ocrAvailable = false;
+                    return;
                 }
             }
-
+            
             tesseract.setDatapath(tesseractDataPath);
             tesseract.setLanguage(tesseractLanguage);
             // Page segmentation mode: default to 6 (Assume a single uniform block of text)
@@ -103,8 +123,13 @@ public class OCRService {
             } catch (Exception ig) {
                 logger.info("Tesseract OCR initialized (datapath: {}, lang: {})", tesseractDataPath, tesseractLanguage);
             }
+            ocrAvailable = true;
         } catch (Exception e) {
-            logger.error("Failed to initialize Tesseract OCR", e);
+            logger.error("Failed to initialize Tesseract OCR: {}", e.getMessage());
+            ocrAvailable = false;
+        } catch (Error err) {
+            logger.error("Critical error while initializing Tesseract OCR: {}", err.getMessage());
+            ocrAvailable = false;
         }
     }
 
@@ -165,10 +190,10 @@ public class OCRService {
             
             OCRResult result = extractText(file);
             result.setDocumentId(documentId);
-            result.setSuccess(true);
             
+            int textLength = result.getExtractedText() != null ? result.getExtractedText().length() : 0;
             logger.info("OCR processing completed for document: {} - Text length: {}", 
-                       documentId, result.getExtractedText().length());
+                       documentId, textLength);
             
             return CompletableFuture.completedFuture(result);
             
@@ -187,6 +212,12 @@ public class OCRService {
      */
     public OCRResult extractText(MultipartFile file) throws IOException, TesseractException {
         OCRResult result = new OCRResult();
+        
+        if (!ocrAvailable) {
+            result.setSuccess(false);
+            result.setErrorMessage("OCR is currently unavailable");
+            return result;
+        }
         
         // Detect file type
         String contentType = file.getContentType();
@@ -262,6 +293,10 @@ public class OCRService {
         }
         
         return result;
+    }
+    
+    public boolean isOcrAvailable() {
+        return ocrAvailable;
     }
     
     /**

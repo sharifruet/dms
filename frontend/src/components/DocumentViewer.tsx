@@ -165,14 +165,15 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
             }
           } catch (ocrErr) {
             // OCR endpoint might not exist or document not indexed yet
-            setOcrText(null);
+            // Fallback to extractedText if available
+            setOcrText(doc.extractedText || null);
             setOcrProcessing(true);
             setOcrError(null);
           }
         }
       } catch (fetchErr) {
-        // If fetching fails, set OCR text to null
-        setOcrText(null);
+        // If fetching fails, fallback to extractedText if available
+        setOcrText(doc.extractedText || null);
         setOcrProcessing(true);
       }
       

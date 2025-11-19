@@ -6,6 +6,11 @@
     http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
 
     <changeSet id="009-001" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="analytics"/>
+            </not>
+        </preConditions>
         <comment>Create analytics table</comment>
         <createTable tableName="analytics">
             <column name="id" type="BIGINT" autoIncrement="true">
@@ -30,15 +35,38 @@
         </createTable>
     </changeSet>
 
-    <changeSet id="009-002" author="dms">
-        <comment>Create indexes for analytics table</comment>
+    <changeSet id="009-002a" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <indexExists indexName="idx_analytics_metric_type"/>
+            </not>
+        </preConditions>
+        <comment>Create index idx_analytics_metric_type</comment>
         <createIndex tableName="analytics" indexName="idx_analytics_metric_type">
             <column name="metric_type"/>
         </createIndex>
+    </changeSet>
+
+    <changeSet id="009-002b" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <indexExists indexName="idx_analytics_dimension"/>
+            </not>
+        </preConditions>
+        <comment>Create index idx_analytics_dimension</comment>
         <createIndex tableName="analytics" indexName="idx_analytics_dimension">
             <column name="dimension_key"/>
             <column name="dimension_value"/>
         </createIndex>
+    </changeSet>
+
+    <changeSet id="009-002c" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <indexExists indexName="idx_analytics_created"/>
+            </not>
+        </preConditions>
+        <comment>Create index idx_analytics_created</comment>
         <createIndex tableName="analytics" indexName="idx_analytics_created">
             <column name="created_at"/>
         </createIndex>
@@ -90,6 +118,11 @@
     </changeSet>
 
     <changeSet id="009-005" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="dashboards"/>
+            </not>
+        </preConditions>
         <comment>Create dashboards table</comment>
         <createTable tableName="dashboards">
             <column name="id" type="BIGINT" autoIncrement="true">

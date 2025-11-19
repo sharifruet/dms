@@ -1,14 +1,3 @@
-export enum DocumentType {
-  TENDER = 'TENDER',
-  PURCHASE_ORDER = 'PURCHASE_ORDER',
-  LETTER_OF_CREDIT = 'LETTER_OF_CREDIT',
-  BANK_GUARANTEE = 'BANK_GUARANTEE',
-  CONTRACT = 'CONTRACT',
-  CORRESPONDENCE = 'CORRESPONDENCE',
-  STATIONERY_RECORD = 'STATIONERY_RECORD',
-  OTHER = 'OTHER'
-}
-
 export interface Document {
   id: number;
   fileName: string;
@@ -16,7 +5,7 @@ export interface Document {
   filePath: string;
   fileSize: number;
   mimeType: string;
-  documentType: DocumentType;
+  documentType: string;
   description?: string;
   tags?: string;
   uploadedBy: {
@@ -37,5 +26,15 @@ export interface FileUploadResponse {
   originalName?: string;
   fileSize?: number;
   mimeType?: string;
-  documentType?: DocumentType;
+  documentType?: string;
+}
+
+export interface DocumentCategory {
+  id: number;
+  name: string;
+  displayName: string;
+  description?: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="014-001" author="dms" runAlways="true">
+        <comment>Ensure default admin user exists with expected credentials</comment>
+        <sql>
+            INSERT INTO users (username, email, password, first_name, last_name, department, is_active, role_id)
+            VALUES (
+                'admin',
+                'admin@dms.local',
+                '$2a$10$5fDg3/ZPUwMOzHpkTwarCeSk3ZdbFecLpiPiQ4IqUyayNlDgW70mW',
+                'Admin',
+                'User',
+                'IT',
+                TRUE,
+                (SELECT id FROM roles WHERE name = 'ADMIN')
+            )
+            ON CONFLICT (username) DO UPDATE
+            SET email = EXCLUDED.email,
+                password = EXCLUDED.password,
+                first_name = EXCLUDED.first_name,
+                last_name = EXCLUDED.last_name,
+                department = EXCLUDED.department,
+                is_active = TRUE,
+                role_id = EXCLUDED.role_id,
+                updated_at = CURRENT_TIMESTAMP;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
+

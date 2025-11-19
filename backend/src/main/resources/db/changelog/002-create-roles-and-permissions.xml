@@ -135,12 +135,23 @@
         <insert tableName="users">
             <column name="username" value="admin"/>
             <column name="email" value="admin@dms.local"/>
-            <column name="password" value="$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"/>
+            <column name="password" value="$2a$10$5fDg3/ZPUwMOzHpkTwarCeSk3ZdbFecLpiPiQ4IqUyayNlDgW70mW"/>
             <column name="first_name" value="Admin"/>
             <column name="last_name" value="User"/>
             <column name="department" value="IT"/>
             <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'ADMIN')"/>
         </insert>
+    </changeSet>
+
+    <changeSet id="002-011" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="users"/>
+        </preConditions>
+        <comment>Ensure default admin uses the updated bcrypt password hash</comment>
+        <update tableName="users">
+            <column name="password" value="$2a$10$5fDg3/ZPUwMOzHpkTwarCeSk3ZdbFecLpiPiQ4IqUyayNlDgW70mW"/>
+            <where>username = 'admin'</where>
+        </update>
     </changeSet>
 
     <changeSet id="002-009" author="dms">

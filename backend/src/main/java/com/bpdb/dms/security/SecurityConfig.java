@@ -1,8 +1,11 @@
 package com.bpdb.dms.security;
 
+import java.util.Arrays;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -18,13 +21,11 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.util.Arrays;
 
 /**
  * Security configuration for the DMS application
@@ -53,26 +54,36 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/api/users/register").permitAll()
                 // WebSocket endpoints
                 .requestMatchers("/ws/**").permitAll()
-                // TEMP: Allow GET list of documents and related GET subpaths
-                .requestMatchers(HttpMethod.GET, "/api/documents", "/api/documents/**").permitAll()
-                // Allow upload for admins, officers, and DD1-DD4 roles
+                // Document endpoints
+                .requestMatchers(HttpMethod.GET, "/api/documents/**").hasAuthority(PermissionConstants.DOCUMENT_VIEW)
+                .requestMatchers(HttpMethod.GET, "/api/document-categories/**").hasAuthority(PermissionConstants.DOCUMENT_VIEW)
                 .requestMatchers(HttpMethod.POST, "/api/documents/upload").hasAnyRole("ADMIN", "OFFICER", "DD1", "DD2", "DD3", "DD4")
-                // Allow OCR reprocessing for admins, officers, and DD1-DD4 roles
                 .requestMatchers(HttpMethod.POST, "/api/documents/{id}/reprocess-ocr", "/api/documents/reprocess-ocr/**").hasAnyRole("ADMIN", "OFFICER", "DD1", "DD2", "DD3", "DD4")
+                .requestMatchers(HttpMethod.DELETE, "/api/documents/**").hasAuthority(PermissionConstants.DOCUMENT_DELETE)
+                // Smart Folder (DMC) endpoints
+                .requestMatchers(HttpMethod.POST, "/api/dmc/folders/**").hasAnyRole("ADMIN", "OFFICER")
+                .requestMatchers(HttpMethod.PUT, "/api/dmc/folders/**").hasAnyRole("ADMIN", "OFFICER")
+                .requestMatchers(HttpMethod.DELETE, "/api/dmc/folders/**").hasAnyRole("ADMIN", "OFFICER")
+                .requestMatchers(HttpMethod.GET, "/api/dmc/folders/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
+                // Finance endpoints
+                .requestMatchers(HttpMethod.POST, "/api/finance/app/import").hasAnyRole("ADMIN", "OFFICER")
+                .requestMatchers(HttpMethod.POST, "/api/finance/bills").hasAnyRole("ADMIN", "OFFICER")
+                .requestMatchers(HttpMethod.GET, "/api/finance/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
+                // Search endpoints
+                .requestMatchers("/api/search/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
                 // User management endpoints
-                .requestMatchers("/api/users/**").hasAnyRole("ADMIN", "OFFICER")
-                .requestMatchers("/api/users").hasRole("ADMIN")
-                .requestMatchers("/api/users/{userId}/reset-password").hasRole("ADMIN")
-                .requestMatchers("/api/users/{userId}/toggle-status").hasRole("ADMIN")
-                .requestMatchers("/api/users/statistics").hasRole("ADMIN")
+                .requestMatchers("/api/users/**").hasAuthority(PermissionConstants.USER_MANAGEMENT)
+                .requestMatchers("/api/roles/**").hasAuthority(PermissionConstants.USER_MANAGEMENT)
+                .requestMatchers("/api/permissions/**").hasAuthority(PermissionConstants.USER_MANAGEMENT)
                 // Audit log endpoints
-                .requestMatchers("/api/audit/**").hasAnyRole("ADMIN", "AUDITOR")
+                .requestMatchers("/api/audit/**").hasAuthority(PermissionConstants.AUDIT_VIEW)
                 // Workflow endpoints
                 .requestMatchers("/api/workflows/**").hasAnyRole("ADMIN", "OFFICER")
                 // Document versioning endpoints

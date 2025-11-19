@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+	
+	<changeSet id="add-extracted-text-to-documents" author="hb">
+	    <addColumn tableName="documents">
+	        <column name="extracted_text" type="TEXT"/>
+	    </addColumn>
+	
+	    <rollback>
+	        <dropColumn tableName="documents" columnName="extracted_text"/>
+	    </rollback>
+	</changeSet>
+
+
+</databaseChangeLog>
+

@@ -3,7 +3,9 @@ package com.bpdb.dms.controller;
 import com.bpdb.dms.dto.LoginRequest;
 import com.bpdb.dms.dto.RegisterRequest;
 import com.bpdb.dms.entity.Role;
+import com.bpdb.dms.entity.Role.RoleType;
 import com.bpdb.dms.entity.User;
+import com.bpdb.dms.repository.RoleRepository;
 import com.bpdb.dms.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +36,9 @@ class AuthControllerTest {
 
     @Autowired
     private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private RoleRepository roleRepository;
 
     private MockMvc mockMvc;
     private ObjectMapper objectMapper;
@@ -70,8 +75,8 @@ class AuthControllerTest {
         user.setPassword(passwordEncoder.encode("password123"));
         user.setFirstName("Test");
         user.setLastName("User");
-        Role officerRole = new Role();
-        officerRole.setName(Role.RoleType.OFFICER);
+        Role officerRole = roleRepository.findByName(RoleType.OFFICER)
+                .orElseThrow(() -> new IllegalStateException("Officer role missing in test database"));
         user.setRole(officerRole);
         user.setIsActive(true);
         userRepository.save(user);

@@ -1,6 +1,7 @@
 package com.bpdb.dms.controller;
 
 import com.bpdb.dms.entity.*;
+import com.bpdb.dms.repository.UserRepository;
 import com.bpdb.dms.service.WebhookService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -23,6 +24,9 @@ public class WebhookController {
     
     @Autowired
     private WebhookService webhookService;
+
+    @Autowired
+    private UserRepository userRepository;
     
     /**
      * Create a new webhook
@@ -31,7 +35,7 @@ public class WebhookController {
     public ResponseEntity<Webhook> createWebhook(@RequestBody CreateWebhookRequest request,
                                                 Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = resolveCurrentUser(authentication);
             
             Webhook webhook = webhookService.createWebhook(
                 request.getName(),
@@ -140,7 +144,7 @@ public class WebhookController {
             @RequestParam(defaultValue = "10") int size,
             Authentication authentication) {
         try {
-            User user = (User) authentication.getPrincipal();
+            User user = resolveCurrentUser(authentication);
             Pageable pageable = PageRequest.of(page, size);
             
             Page<Webhook> webhooks = webhookService.getWebhooksForUser(user, pageable);
@@ -195,5 +199,13 @@ public class WebhookController {
         
         public Boolean getIsEnabled() { return isEnabled; }
         public void setIsEnabled(Boolean isEnabled) { this.isEnabled = isEnabled; }
+    }
+
+    private User resolveCurrentUser(Authentication authentication) {
+        if (authentication == null) {
+            throw new IllegalStateException("Missing authentication context");
+        }
+        return userRepository.findByUsername(authentication.getName())
+                .orElseThrow(() -> new IllegalStateException("Authenticated user not found: " + authentication.getName()));
     }
 }

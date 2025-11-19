@@ -1,6 +1,5 @@
 package com.bpdb.dms.dto;
 
-import com.bpdb.dms.entity.DocumentType;
 
 /**
  * Response DTO for file upload operations
@@ -12,15 +11,15 @@ public class FileUploadResponse {
     private String originalName;
     private Long fileSize;
     private String mimeType;
-    private DocumentType documentType;
+    private String documentType;
     private String message;
     private boolean success;
     
     // Constructors
     public FileUploadResponse() {}
     
-    public FileUploadResponse(Long documentId, String fileName, String originalName, 
-                            Long fileSize, String mimeType, DocumentType documentType, 
+    public FileUploadResponse(Long documentId, String fileName, String originalName,
+                            Long fileSize, String mimeType, String documentType,
                             String message, boolean success) {
         this.documentId = documentId;
         this.fileName = fileName;
@@ -33,8 +32,8 @@ public class FileUploadResponse {
     }
     
     // Static factory methods
-    public static FileUploadResponse success(Long documentId, String fileName, String originalName, 
-                                           Long fileSize, String mimeType, DocumentType documentType) {
+    public static FileUploadResponse success(Long documentId, String fileName, String originalName,
+                                           Long fileSize, String mimeType, String documentType) {
         return new FileUploadResponse(documentId, fileName, originalName, fileSize, 
                                     mimeType, documentType, "File uploaded successfully", true);
     }
@@ -87,11 +86,11 @@ public class FileUploadResponse {
         this.mimeType = mimeType;
     }
     
-    public DocumentType getDocumentType() {
+    public String getDocumentType() {
         return documentType;
     }
     
-    public void setDocumentType(DocumentType documentType) {
+    public void setDocumentType(String documentType) {
         this.documentType = documentType;
     }
     

@@ -1,14 +1,16 @@
 import api from './api';
+import { DocumentCategory } from '../types/document';
 
 export interface Document {
   id?: number;
   fileName: string;
   filePath?: string;
   documentType: string;
-  uploadedBy?: string;
+  uploadedBy?: string | { username: string };
   uploadedAt?: string;
   department?: string;
-  size?: string;
+  size?: string | number;
+  fileSize?: string | number;
   status?: string;
   description?: string;
   tags?: string;
@@ -16,6 +18,7 @@ export interface Document {
   isActive?: boolean;
   createdAt?: string;
   updatedAt?: string;
+  extractedText?: string;
 }
 
 export interface DocumentUploadRequest {
@@ -50,8 +53,13 @@ export interface DocumentStatistics {
 }
 
 export const documentService = {
+  // Fetch canonical document types from backend
+  getDocumentTypes: async (): Promise<Array<{ value: string; label: string }>> => {
+    const response = await api.get('/documents/types');
+    return response.data;
+  },
   // Upload a new document
-  uploadDocument: async (uploadRequest: DocumentUploadRequest): Promise<Document> => {
+  uploadDocument: async (uploadRequest: DocumentUploadRequest & { tenderWorkflowInstanceId?: string }): Promise<Document> => {
     const formData = new FormData();
     formData.append('file', uploadRequest.file);
     // Backend expects: file, documentType, description (optional), folderId (optional)
@@ -62,6 +70,15 @@ export const documentService = {
     }
     if (uploadRequest.folderId) {
       formData.append('folderId', uploadRequest.folderId.toString());
+    }
+
+    // Optional metadata payload (JSON string), include tenderWorkflowInstanceId if provided
+    const metadata: Record<string, string> = {};
+    if (uploadRequest.tenderWorkflowInstanceId) {
+      metadata['tenderWorkflowInstanceId'] = uploadRequest.tenderWorkflowInstanceId;
+    }
+    if (Object.keys(metadata).length > 0) {
+      formData.append('metadata', JSON.stringify(metadata));
     }
 
     // Don't set Content-Type manually - axios will set it with proper boundary for multipart/form-data
@@ -258,6 +275,11 @@ export const documentService = {
         'Content-Type': 'multipart/form-data',
       },
     });
+    return response.data;
+  },
+
+  getDocumentCategories: async (): Promise<DocumentCategory[]> => {
+    const response = await api.get('/document-categories');
     return response.data;
   }
 };

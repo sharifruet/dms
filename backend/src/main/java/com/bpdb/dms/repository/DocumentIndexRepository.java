@@ -7,7 +7,7 @@ import org.springframework.data.elasticsearch.annotations.Query;
 import org.springframework.data.elasticsearch.repository.ElasticsearchRepository;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -46,7 +46,16 @@ public interface DocumentIndexRepository extends ElasticsearchRepository<Documen
     /**
      * Search documents by date range
      */
-    Page<DocumentIndex> findByCreatedAtBetween(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable);
+    Page<DocumentIndex> findByCreatedAtBetween(LocalDate startDate, LocalDate endDate, Pageable pageable);
+    
+    /**
+     * Suggestions by file name or original name prefix (simple wildcard)
+     */
+    @Query("{\"wildcard\": {\"fileName\": \"?0*\"}}")
+    List<DocumentIndex> suggestByFileNamePrefix(String prefix);
+    
+    @Query("{\"wildcard\": {\"originalName\": \"?0*\"}}")
+    List<DocumentIndex> suggestByOriginalNamePrefix(String prefix);
     
     /**
      * Search documents by OCR confidence

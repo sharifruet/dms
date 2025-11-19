@@ -15,8 +15,13 @@
     <include file="db/changelog/010-create-asset-management.xml"/>
     <include file="db/changelog/011-fix-documents-columns.xml"/>
     <include file="db/changelog/012-add-dd-roles.xml"/>
+    <include file="db/changelog/012-create-document-categories.xml"/>
     <include file="db/changelog/013-create-dd-users.xml"/>
+    <include file="db/changelog/013-add-document-metadata.xml"/>
     <include file="db/changelog/014-create-document-relationships.xml"/>
+    <include file="db/changelog/014-ensure-admin-user.xml"/>
     <include file="db/changelog/015-create-folders.xml"/>
+    <include file="db/changelog/015-add-document-extracted-text.xml"/>
     <include file="db/changelog/016-fix-admin-password.xml"/>
+    <include file="db/changelog/016-create-system-health-checks-table.xml"/>
 </databaseChangeLog>

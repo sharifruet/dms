@@ -48,6 +48,9 @@ public class ReportingService {
     
     @Autowired
     private AuditService auditService;
+
+    @Autowired
+    private DocumentCategoryService documentCategoryService;
     
     @Autowired
     public PdfReportService pdfReportService;
@@ -173,10 +176,11 @@ public class ReportingService {
             
             // Documents by type
             Map<String, Long> documentsByType = new HashMap<>();
-            for (DocumentType type : DocumentType.values()) {
-                long count = documentRepository.countByDocumentType(type);
-                documentsByType.put(type.name(), count);
-            }
+            documentCategoryService.getActiveCategories()
+                .forEach(category -> documentsByType.put(
+                    category.getName(),
+                    documentRepository.countByDocumentType(category.getName())
+                ));
             data.put("documentsByType", documentsByType);
             
             // Documents by department

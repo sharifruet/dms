@@ -179,4 +179,189 @@
         </sql>
     </changeSet>
 
+    <changeSet id="004-007" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="notification_preferences" columnName="push_enabled"/>
+            </not>
+        </preConditions>
+        <comment>Add extended notification preference settings</comment>
+        <addColumn tableName="notification_preferences">
+            <column name="push_enabled" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="minimum_priority" type="VARCHAR(50)" defaultValue="MEDIUM">
+                <constraints nullable="false"/>
+            </column>
+            <column name="quiet_hours_start" type="VARCHAR(10)"/>
+            <column name="quiet_hours_end" type="VARCHAR(10)"/>
+            <column name="timezone" type="VARCHAR(50)" defaultValue="UTC">
+                <constraints nullable="false"/>
+            </column>
+            <column name="language" type="VARCHAR(10)" defaultValue="en">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <update tableName="notification_preferences">
+            <column name="push_enabled" valueBoolean="false"/>
+            <where>push_enabled IS NULL</where>
+        </update>
+        <update tableName="notification_preferences">
+            <column name="minimum_priority" value="MEDIUM"/>
+            <where>minimum_priority IS NULL</where>
+        </update>
+        <update tableName="notification_preferences">
+            <column name="timezone" value="UTC"/>
+            <where>timezone IS NULL</where>
+        </update>
+        <update tableName="notification_preferences">
+            <column name="language" value="en"/>
+            <where>language IS NULL</where>
+        </update>
+    </changeSet>
+
+    <changeSet id="004-008" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="notifications" columnName="channel"/>
+            </not>
+        </preConditions>
+        <comment>Add channel column to notifications</comment>
+        <addColumn tableName="notifications">
+            <column name="channel" type="VARCHAR(50)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="004-009" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="notifications" columnName="metadata"/>
+            </not>
+        </preConditions>
+        <comment>Add metadata column to notifications</comment>
+        <addColumn tableName="notifications">
+            <column name="metadata" type="TEXT"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="004-010" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="notifications" columnName="related_document_id"/>
+            </not>
+        </preConditions>
+        <comment>Add related_document_id column to notifications</comment>
+        <addColumn tableName="notifications">
+            <column name="related_document_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="004-011" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="notifications" columnName="related_entity_type"/>
+            </not>
+        </preConditions>
+        <comment>Add related_entity_type column to notifications</comment>
+        <addColumn tableName="notifications">
+            <column name="related_entity_type" type="VARCHAR(100)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="004-012" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="notifications" columnName="scheduled_at"/>
+            </not>
+        </preConditions>
+        <comment>Add scheduled_at column to notifications</comment>
+        <addColumn tableName="notifications">
+            <column name="scheduled_at" type="TIMESTAMP"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="004-013" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="notifications" columnName="sent_at"/>
+            </not>
+        </preConditions>
+        <comment>Add sent_at column to notifications</comment>
+        <addColumn tableName="notifications">
+            <column name="sent_at" type="TIMESTAMP"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="004-014" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <tableExists tableName="notifications"/>
+        </preConditions>
+        <comment>Align notification status default with application enum</comment>
+        <sql>
+            ALTER TABLE notifications ALTER COLUMN status SET DEFAULT 'PENDING';
+        </sql>
+        <sql>
+            UPDATE notifications SET status = 'PENDING'
+            WHERE status NOT IN ('PENDING','SENT','DELIVERED','READ','FAILED','CANCELLED','EXPIRED');
+        </sql>
+    </changeSet>
+
+    <changeSet id="004-015" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="expiry_tracking" columnName="alert_15_days"/>
+            </not>
+        </preConditions>
+        <comment>Add alert columns to expiry_tracking</comment>
+        <addColumn tableName="expiry_tracking">
+            <column name="alert_7_days" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="alert_15_days" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="alert_30_days" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="alert_expired" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="004-016" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="expiry_tracking" columnName="assigned_to"/>
+            </not>
+        </preConditions>
+        <comment>Extend expiry tracking metadata</comment>
+        <addColumn tableName="expiry_tracking">
+            <column name="renewal_date" type="TIMESTAMP"/>
+            <column name="renewal_document_id" type="BIGINT"/>
+            <column name="notes" type="TEXT"/>
+            <column name="assigned_to" type="BIGINT"/>
+            <column name="department" type="VARCHAR(255)"/>
+            <column name="vendor_name" type="VARCHAR(255)"/>
+            <column name="contract_value" type="NUMERIC(15,2)"/>
+            <column name="currency" type="VARCHAR(10)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="004-017" author="dms">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <columnExists tableName="expiry_tracking" columnName="assigned_to"/>
+                <tableExists tableName="users"/>
+            </and>
+        </preConditions>
+        <comment>Add foreign key for expiry tracking assignee</comment>
+        <addForeignKeyConstraint baseTableName="expiry_tracking"
+                                 baseColumnNames="assigned_to"
+                                 constraintName="fk_expiry_tracking_assigned_to"
+                                 referencedTableName="users"
+                                 referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+    </changeSet>
+
 </databaseChangeLog>

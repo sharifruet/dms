@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="012-001" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="document_categories"/>
+            </not>
+        </preConditions>
+        <createTable tableName="document_categories">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_document_categories"/>
+            </column>
+            <column name="name" type="VARCHAR(100)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_document_categories_name"/>
+            </column>
+            <column name="display_name" type="VARCHAR(150)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="VARCHAR(500)"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="012-002" author="dms">
+        <insert tableName="document_categories">
+            <column name="name" value="TENDER"/>
+            <column name="display_name" value="Tender"/>
+            <column name="description" value="Tender and bid related documents"/>
+        </insert>
+        <insert tableName="document_categories">
+            <column name="name" value="BILL"/>
+            <column name="display_name" value="Bill"/>
+            <column name="description" value="Billing and invoicing documents"/>
+        </insert>
+        <insert tableName="document_categories">
+            <column name="name" value="CONTRACT"/>
+            <column name="display_name" value="Contract"/>
+            <column name="description" value="Contractual agreements"/>
+        </insert>
+        <insert tableName="document_categories">
+            <column name="name" value="GENERAL"/>
+            <column name="display_name" value="General"/>
+            <column name="description" value="General purpose documents"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="012-003" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="app_document_entries"/>
+            </not>
+        </preConditions>
+        <createTable tableName="app_document_entries">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_app_document_entries"/>
+            </column>
+            <column name="document_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entry_date" type="DATE"/>
+            <column name="title" type="VARCHAR(255)"/>
+            <column name="amount" type="DECIMAL(19,2)"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="app_document_entries"
+                                 baseColumnNames="document_id"
+                                 referencedTableName="documents"
+                                 referencedColumnNames="id"
+                                 onDelete="CASCADE"
+                                 constraintName="fk_app_document_entries_document"/>
+        <createIndex tableName="app_document_entries" indexName="idx_app_document_entries_document">
+            <column name="document_id"/>
+        </createIndex>
+        <createIndex tableName="app_document_entries" indexName="idx_app_document_entries_date">
+            <column name="entry_date"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
+
