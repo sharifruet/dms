@@ -403,6 +403,12 @@ export const documentService = {
     const response = await api.get('/documents/stationery/statistics/employee');
     return response.data;
   },
+
+  // Get APP entries for a document
+  getAppEntries: async (documentId: number): Promise<Array<{ id: number; entryDate: string; title: string; amount: number }>> => {
+    const response = await api.get(`/documents/${documentId}/app-entries`);
+    return response.data;
+  },
 };
 
 export default documentService;

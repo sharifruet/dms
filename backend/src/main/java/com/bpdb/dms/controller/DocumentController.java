@@ -11,6 +11,8 @@ import com.bpdb.dms.service.DocumentArchiveService;
 import com.bpdb.dms.service.DocumentCategoryService;
 import com.bpdb.dms.service.FileUploadService;
 import com.bpdb.dms.service.StationeryTrackingService;
+import com.bpdb.dms.entity.AppDocumentEntry;
+import com.bpdb.dms.repository.AppDocumentEntryRepository;
 import com.bpdb.dms.model.DocumentType;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,6 +58,9 @@ public class DocumentController {
 
     @Autowired
     private StationeryTrackingService stationeryTrackingService;
+
+    @Autowired
+    private AppDocumentEntryRepository appDocumentEntryRepository;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -542,5 +547,26 @@ public class DocumentController {
     @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
     public ResponseEntity<List<StationeryTrackingService.EmployeeStationeryStats>> getStationeryStatisticsPerEmployee() {
         return ResponseEntity.ok(stationeryTrackingService.getStationeryStatisticsPerEmployee());
+    }
+
+    @GetMapping("/{id}/app-entries")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<List<AppDocumentEntry>> getAppEntries(@PathVariable Long id) {
+        try {
+            Optional<Document> documentOpt = documentRepository.findById(id);
+            if (documentOpt.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+
+            Document document = documentOpt.get();
+            if (!"APP".equals(document.getDocumentType())) {
+                return ResponseEntity.badRequest().build();
+            }
+
+            List<AppDocumentEntry> entries = appDocumentEntryRepository.findByDocument(document);
+            return ResponseEntity.ok(entries);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
     }
 }

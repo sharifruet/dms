@@ -25,6 +25,8 @@ import AssetAssignments from './pages/AssetAssignments';
 import DocumentTypeFields from './pages/DocumentTypeFields';
 import Archive from './pages/Archive';
 import StationeryTracking from './pages/StationeryTracking';
+import AppEntries from './pages/AppEntries';
+import BillEntries from './pages/BillEntries';
 import { useAppSelector } from './hooks/redux';
 
 function App() {
@@ -126,6 +128,14 @@ function App() {
           <Route 
             path="/stationery" 
             element={isAuthenticated ? <StationeryTracking /> : <Navigate to="/login" />} 
+          />
+          <Route 
+            path="/app-entries" 
+            element={isAuthenticated ? <AppEntries /> : <Navigate to="/login" />} 
+          />
+          <Route 
+            path="/bill-entries" 
+            element={isAuthenticated ? <BillEntries /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/" 

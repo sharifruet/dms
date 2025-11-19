@@ -2,7 +2,9 @@ package com.bpdb.dms.controller;
 
 import com.bpdb.dms.dto.CreateBillRequest;
 import com.bpdb.dms.entity.AppHeader;
+import com.bpdb.dms.entity.BillHeader;
 import com.bpdb.dms.entity.User;
+import com.bpdb.dms.repository.BillHeaderRepository;
 import com.bpdb.dms.repository.UserRepository;
 import com.bpdb.dms.service.AppExcelImportService;
 import com.bpdb.dms.service.BillService;
@@ -15,6 +17,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/finance")
@@ -35,6 +39,35 @@ public class FinanceController {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private BillHeaderRepository billHeaderRepository;
+
+    @GetMapping(path = "/bills")
+    public ResponseEntity<?> getBills(@RequestParam(required = false) Integer fiscalYear,
+                                      @RequestParam(required = false) String vendor) {
+        List<BillHeader> bills;
+        if (fiscalYear != null) {
+            bills = billHeaderRepository.findAll().stream()
+                .filter(b -> b.getFiscalYear().equals(fiscalYear))
+                .filter(b -> vendor == null || (b.getVendor() != null && b.getVendor().contains(vendor)))
+                .collect(java.util.stream.Collectors.toList());
+        } else {
+            bills = billHeaderRepository.findAll();
+        }
+        return ResponseEntity.ok(bills);
+    }
+
+    @GetMapping(path = "/bills/{id}")
+    public ResponseEntity<?> getBill(@PathVariable Long id) {
+        return billHeaderRepository.findById(id)
+            .map(bill -> {
+                // Eagerly load lines to ensure they're serialized
+                bill.getLines().size(); // Trigger lazy loading
+                return ResponseEntity.ok(bill);
+            })
+            .orElse(ResponseEntity.notFound().build());
+    }
 
     @PostMapping(path = "/app/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> importApp(@AuthenticationPrincipal UserDetails principal,

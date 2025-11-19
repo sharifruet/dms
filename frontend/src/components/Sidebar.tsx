@@ -31,6 +31,8 @@ import {
   EditNote as FieldsIcon,
   Archive as ArchiveIcon,
   Inventory as StationeryIcon,
+  TableChart as AppIcon,
+  Receipt as BillIcon,
 } from '@mui/icons-material';
 import { useAppSelector, useAppDispatch } from '../hooks/redux';
 import { logout } from '../store/slices/authSlice';
@@ -54,6 +56,8 @@ const Sidebar: React.FC = () => {
     { label: 'Documents', path: '/documents', icon: <DocumentsIcon /> },
     { label: 'Archive', path: '/archive', icon: <ArchiveIcon /> },
     { label: 'Stationery', path: '/stationery', icon: <StationeryIcon /> },
+    { label: 'APP Entries', path: '/app-entries', icon: <AppIcon /> },
+    { label: 'Bill Entries', path: '/bill-entries', icon: <BillIcon /> },
     { label: 'Search', path: '/search', icon: <SearchIcon /> },
     { label: 'Notifications', path: '/notifications', icon: <NotificationsIcon /> },
     { label: 'Expiry Tracking', path: '/expiry-tracking', icon: <ExpiryIcon /> },
