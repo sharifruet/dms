@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="012-001" author="dms">
+        <comment>Add DD1-DD4 roles for role-based upload permissions</comment>
+        <insert tableName="roles">
+            <column name="name" value="DD1"/>
+            <column name="display_name" value="Deputy Director Level 1"/>
+            <column name="description" value="Deputy Director Level 1 - Document upload access"/>
+        </insert>
+        <insert tableName="roles">
+            <column name="name" value="DD2"/>
+            <column name="display_name" value="Deputy Director Level 2"/>
+            <column name="description" value="Deputy Director Level 2 - Document upload access"/>
+        </insert>
+        <insert tableName="roles">
+            <column name="name" value="DD3"/>
+            <column name="display_name" value="Deputy Director Level 3"/>
+            <column name="description" value="Deputy Director Level 3 - Document upload access"/>
+        </insert>
+        <insert tableName="roles">
+            <column name="name" value="DD4"/>
+            <column name="display_name" value="Deputy Director Level 4"/>
+            <column name="description" value="Deputy Director Level 4 - Document upload access"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="012-002" author="dms">
+        <comment>Assign document upload permissions to DD1-DD4 roles</comment>
+        <sql>
+            -- DD1 gets document upload and view permissions
+            INSERT INTO role_permissions (role_id, permission_id)
+            SELECT r.id, p.id
+            FROM roles r, permissions p
+            WHERE r.name IN ('DD1', 'DD2', 'DD3', 'DD4')
+            AND p.name IN ('DOCUMENT_UPLOAD', 'DOCUMENT_VIEW');
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
+

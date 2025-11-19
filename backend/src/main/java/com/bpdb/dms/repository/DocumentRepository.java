@@ -34,6 +34,11 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     Page<Document> findByDepartment(String department, Pageable pageable);
     
     /**
+     * Find documents by folder
+     */
+    Page<Document> findByFolderId(Long folderId, Pageable pageable);
+    
+    /**
      * Search documents by filename
      */
     @Query("SELECT d FROM Document d WHERE d.fileName LIKE %:filename% OR d.originalName LIKE %:filename%")

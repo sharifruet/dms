@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="014-001" author="dms">
+        <comment>Create document_relationships table for linking documents</comment>
+        <createTable tableName="document_relationships">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="source_document_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_document_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="relationship_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="TEXT"/>
+            <column name="created_by" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="014-002" author="dms">
+        <comment>Add foreign key constraints for document_relationships</comment>
+        <addForeignKeyConstraint
+                baseTableName="document_relationships"
+                baseColumnNames="source_document_id"
+                constraintName="fk_doc_rel_source_document"
+                referencedTableName="documents"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+        <addForeignKeyConstraint
+                baseTableName="document_relationships"
+                baseColumnNames="target_document_id"
+                constraintName="fk_doc_rel_target_document"
+                referencedTableName="documents"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+        <addForeignKeyConstraint
+                baseTableName="document_relationships"
+                baseColumnNames="created_by"
+                constraintName="fk_doc_rel_created_by"
+                referencedTableName="users"
+                referencedColumnNames="id"
+                onDelete="RESTRICT"/>
+    </changeSet>
+
+    <changeSet id="014-003" author="dms">
+        <comment>Add unique constraint to prevent duplicate relationships</comment>
+        <addUniqueConstraint
+                tableName="document_relationships"
+                columnNames="source_document_id, target_document_id, relationship_type"
+                constraintName="uk_doc_rel_unique"/>
+    </changeSet>
+
+    <changeSet id="014-004" author="dms">
+        <comment>Create indexes for document_relationships</comment>
+        <createIndex tableName="document_relationships" indexName="idx_doc_rel_source">
+            <column name="source_document_id"/>
+        </createIndex>
+        <createIndex tableName="document_relationships" indexName="idx_doc_rel_target">
+            <column name="target_document_id"/>
+        </createIndex>
+        <createIndex tableName="document_relationships" indexName="idx_doc_rel_type">
+            <column name="relationship_type"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

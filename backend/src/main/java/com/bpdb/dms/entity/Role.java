@@ -135,7 +135,11 @@ public class Role {
         ADMIN("Administrator"),
         OFFICER("Officer"),
         VIEWER("Viewer"),
-        AUDITOR("Auditor");
+        AUDITOR("Auditor"),
+        DD1("Deputy Director Level 1"),
+        DD2("Deputy Director Level 2"),
+        DD3("Deputy Director Level 3"),
+        DD4("Deputy Director Level 4");
         
         private final String displayName;
         

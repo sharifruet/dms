@@ -18,6 +18,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
  * Document entity representing uploaded documents
@@ -62,6 +63,11 @@ public class Document {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "uploaded_by", nullable = false)
     private User uploadedBy;
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "folder_id")
+    @JsonIgnoreProperties({"parentFolder", "subFolders", "documents", "hibernateLazyInitializer", "handler"})
+    private Folder folder;
     
     @Column(name = "department")
     private String department;
@@ -181,6 +187,14 @@ public class Document {
     
     public void setDepartment(String department) {
         this.department = department;
+    }
+    
+    public Folder getFolder() {
+        return folder;
+    }
+    
+    public void setFolder(Folder folder) {
+        this.folder = folder;
     }
     
     public Boolean getIsActive() {

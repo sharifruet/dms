@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="013-001" author="dms">
+        <comment>Create test users with DD1-DD4 roles. All users have password: admin123 (same as admin user for testing)</comment>
+        
+        <!-- DD1 User -->
+        <insert tableName="users">
+            <column name="username" value="dd1_user"/>
+            <column name="email" value="dd1@dms.local"/>
+            <column name="password" value="$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"/>
+            <column name="first_name" value="Deputy Director"/>
+            <column name="last_name" value="Level 1"/>
+            <column name="department" value="Management"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'DD1')"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <!-- DD2 User -->
+        <insert tableName="users">
+            <column name="username" value="dd2_user"/>
+            <column name="email" value="dd2@dms.local"/>
+            <column name="password" value="$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"/>
+            <column name="first_name" value="Deputy Director"/>
+            <column name="last_name" value="Level 2"/>
+            <column name="department" value="Management"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'DD2')"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <!-- DD3 User -->
+        <insert tableName="users">
+            <column name="username" value="dd3_user"/>
+            <column name="email" value="dd3@dms.local"/>
+            <column name="password" value="$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"/>
+            <column name="first_name" value="Deputy Director"/>
+            <column name="last_name" value="Level 3"/>
+            <column name="department" value="Management"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'DD3')"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+        
+        <!-- DD4 User -->
+        <insert tableName="users">
+            <column name="username" value="dd4_user"/>
+            <column name="email" value="dd4@dms.local"/>
+            <column name="password" value="$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy"/>
+            <column name="first_name" value="Deputy Director"/>
+            <column name="last_name" value="Level 4"/>
+            <column name="department" value="Management"/>
+            <column name="role_id" valueComputed="(SELECT id FROM roles WHERE name = 'DD4')"/>
+            <column name="is_active" valueBoolean="true"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>
+

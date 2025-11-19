@@ -54,6 +54,8 @@ import {
 import { useAppSelector } from '../hooks/redux';
 import { documentService, Document, DocumentUploadRequest } from '../services/documentService';
 import DocumentViewer from '../components/DocumentViewer';
+import FolderExplorer from '../components/FolderExplorer';
+import { Folder } from '../services/folderService';
 
 const DocumentsEnhanced: React.FC = () => {
   const { user } = useAppSelector((state) => state.auth);
@@ -74,6 +76,8 @@ const DocumentsEnhanced: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('');
   const [filterDepartment, setFilterDepartment] = useState('');
+  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
+  const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null);
   
   // Upload dialog
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -86,6 +90,7 @@ const DocumentsEnhanced: React.FC = () => {
     documentType: 'OTHER',
     department: user?.department || '',
     tags: '',
+    folderId: null as number | null,
   });
   
   // Document viewer
@@ -106,6 +111,7 @@ const DocumentsEnhanced: React.FC = () => {
         searchTerm: searchTerm || undefined,
         documentType: filterType || undefined,
         department: filterDepartment || undefined,
+        folderId: selectedFolderId || undefined,
         page,
         size: pageSize,
       });
@@ -119,7 +125,7 @@ const DocumentsEnhanced: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, searchTerm, filterType, filterDepartment]);
+  }, [page, pageSize, searchTerm, filterType, filterDepartment, selectedFolderId]);
 
   useEffect(() => {
     fetchDocuments();
@@ -166,6 +172,7 @@ const DocumentsEnhanced: React.FC = () => {
         documentType: uploadForm.documentType,
         department: uploadForm.department,
         tags: uploadForm.tags,
+        folderId: uploadForm.folderId || selectedFolderId,
         userId: 1, // Should be actual user ID
       };
 
@@ -182,6 +189,7 @@ const DocumentsEnhanced: React.FC = () => {
         documentType: 'OTHER',
         department: user?.department || '',
         tags: '',
+        folderId: null,
       });
       
       // Refresh documents list
@@ -340,6 +348,37 @@ const DocumentsEnhanced: React.FC = () => {
           {success}
         </Alert>
       )}
+
+      {/* Folder Explorer */}
+      <Card sx={{ mb: 3, borderRadius: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              Folders
+            </Typography>
+            {selectedFolder && (
+              <Button
+                size="small"
+                onClick={() => {
+                  setSelectedFolderId(null);
+                  setSelectedFolder(null);
+                }}
+                sx={{ textTransform: 'none' }}
+              >
+                Clear Folder Filter
+              </Button>
+            )}
+          </Box>
+          <FolderExplorer
+            selectedFolderId={selectedFolderId}
+            onFolderSelect={(folder) => {
+              setSelectedFolder(folder);
+              setSelectedFolderId(folder?.id || null);
+              setPage(0);
+            }}
+          />
+        </CardContent>
+      </Card>
 
       {/* Filters */}
       <Card sx={{ mb: 3, borderRadius: 3, boxShadow: '0 1px 3px rgba(0,0,0,0.08)' }}>
@@ -624,6 +663,23 @@ const DocumentsEnhanced: React.FC = () => {
               onChange={(e) => setUploadForm({ ...uploadForm, tags: e.target.value })}
               placeholder="contract, legal, important"
             />
+
+            <FormControl fullWidth>
+              <InputLabel>Folder (Optional)</InputLabel>
+              <Select
+                value={uploadForm.folderId || ''}
+                label="Folder (Optional)"
+                onChange={(e) => setUploadForm({ ...uploadForm, folderId: e.target.value ? Number(e.target.value) : null })}
+              >
+                <MenuItem value="">No Folder</MenuItem>
+                {selectedFolder && (
+                  <MenuItem value={selectedFolder.id}>{selectedFolder.name}</MenuItem>
+                )}
+              </Select>
+              <Typography variant="caption" sx={{ mt: 1, color: 'text.secondary' }}>
+                {selectedFolder ? `Current folder: ${selectedFolder.name}` : 'Select a folder from the explorer above'}
+              </Typography>
+            </FormControl>
           </Box>
         </DialogContent>
         <DialogActions>

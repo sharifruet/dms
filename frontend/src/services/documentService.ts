@@ -25,6 +25,7 @@ export interface DocumentUploadRequest {
   documentType: string;
   department: string;
   tags?: string;
+  folderId?: number | null;
   userId: number;
 }
 
@@ -33,6 +34,7 @@ export interface DocumentSearchParams {
   documentType?: string;
   department?: string;
   uploadedBy?: string;
+  folderId?: number;
   startDate?: string;
   endDate?: string;
   page?: number;
@@ -52,11 +54,14 @@ export const documentService = {
   uploadDocument: async (uploadRequest: DocumentUploadRequest): Promise<Document> => {
     const formData = new FormData();
     formData.append('file', uploadRequest.file);
-    // Backend expects: file, documentType, description (optional)
+    // Backend expects: file, documentType, description (optional), folderId (optional)
     // Backend gets user from Authentication, not from form data
     formData.append('documentType', uploadRequest.documentType);
     if (uploadRequest.description) {
       formData.append('description', uploadRequest.description);
+    }
+    if (uploadRequest.folderId) {
+      formData.append('folderId', uploadRequest.folderId.toString());
     }
 
     // Don't set Content-Type manually - axios will set it with proper boundary for multipart/form-data

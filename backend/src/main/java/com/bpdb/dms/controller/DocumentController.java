@@ -45,11 +45,17 @@ public class DocumentController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
-            @RequestParam(defaultValue = "desc") String sortDir
+            @RequestParam(defaultValue = "desc") String sortDir,
+            @RequestParam(required = false) Long folderId
     ) {
         Sort sort = sortDir.equalsIgnoreCase("desc") ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
         Pageable pageable = PageRequest.of(page, size, sort);
-        Page<Document> result = documentRepository.findAll(pageable);
+        Page<Document> result;
+        if (folderId != null) {
+            result = documentRepository.findByFolderId(folderId, pageable);
+        } else {
+            result = documentRepository.findAll(pageable);
+        }
         return ResponseEntity.ok(result);
     }
 
@@ -161,12 +167,13 @@ public class DocumentController {
             @RequestParam("file") MultipartFile file,
             @RequestParam("documentType") DocumentType documentType,
             @RequestParam(value = "description", required = false) String description,
+            @RequestParam(value = "folderId", required = false) Long folderId,
             Authentication authentication
     ) {
         String username = authentication.getName();
         User user = userRepository.findByUsernameWithRole(username)
                 .orElseThrow(() -> new RuntimeException("User not found: " + username));
-        FileUploadResponse resp = fileUploadService.uploadFile(file, user, documentType, description);
+        FileUploadResponse resp = fileUploadService.uploadFile(file, user, documentType, description, folderId);
         if (!resp.isSuccess()) {
             return ResponseEntity.badRequest().body(resp);
         }

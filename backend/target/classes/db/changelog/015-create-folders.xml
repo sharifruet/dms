@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="015-001" author="dms">
+        <comment>Create folders table for folder hierarchy</comment>
+        <createTable tableName="folders">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="TEXT"/>
+            <column name="parent_folder_id" type="BIGINT"/>
+            <column name="folder_path" type="VARCHAR(1000)"/>
+            <column name="department" type="VARCHAR(100)"/>
+            <column name="created_by" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_system_folder" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="015-002" author="dms">
+        <comment>Add foreign key constraints for folders</comment>
+        <addForeignKeyConstraint
+                baseTableName="folders"
+                baseColumnNames="parent_folder_id"
+                constraintName="fk_folders_parent"
+                referencedTableName="folders"
+                referencedColumnNames="id"
+                onDelete="SET NULL"/>
+        <addForeignKeyConstraint
+                baseTableName="folders"
+                baseColumnNames="created_by"
+                constraintName="fk_folders_created_by"
+                referencedTableName="users"
+                referencedColumnNames="id"
+                onDelete="RESTRICT"/>
+    </changeSet>
+
+    <changeSet id="015-003" author="dms">
+        <comment>Add folder_id column to documents table</comment>
+        <addColumn tableName="documents">
+            <column name="folder_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="015-004" author="dms">
+        <comment>Add foreign key constraint for documents.folder_id</comment>
+        <addForeignKeyConstraint
+                baseTableName="documents"
+                baseColumnNames="folder_id"
+                constraintName="fk_documents_folder"
+                referencedTableName="folders"
+                referencedColumnNames="id"
+                onDelete="SET NULL"/>
+    </changeSet>
+
+    <changeSet id="015-005" author="dms">
+        <comment>Create indexes for folders</comment>
+        <createIndex tableName="folders" indexName="idx_folders_parent">
+            <column name="parent_folder_id"/>
+        </createIndex>
+        <createIndex tableName="folders" indexName="idx_folders_path">
+            <column name="folder_path"/>
+        </createIndex>
+        <createIndex tableName="folders" indexName="idx_folders_department">
+            <column name="department"/>
+        </createIndex>
+        <createIndex tableName="folders" indexName="idx_folders_active">
+            <column name="is_active"/>
+        </createIndex>
+        <createIndex tableName="documents" indexName="idx_documents_folder">
+            <column name="folder_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="015-006" author="dms">
+        <comment>Create default root folder</comment>
+        <insert tableName="folders">
+            <column name="name" value="Root"/>
+            <column name="description" value="Root folder for all documents"/>
+            <column name="folder_path" value="/Root"/>
+            <column name="is_system_folder" valueBoolean="true"/>
+            <column name="created_by" valueComputed="(SELECT id FROM users WHERE username = 'admin' LIMIT 1)"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>
+

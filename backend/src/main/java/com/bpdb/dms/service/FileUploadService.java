@@ -3,8 +3,10 @@ package com.bpdb.dms.service;
 import com.bpdb.dms.dto.FileUploadResponse;
 import com.bpdb.dms.entity.Document;
 import com.bpdb.dms.entity.DocumentType;
+import com.bpdb.dms.entity.Folder;
 import com.bpdb.dms.entity.User;
 import com.bpdb.dms.repository.DocumentRepository;
+import com.bpdb.dms.repository.FolderRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,7 +24,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -61,6 +62,9 @@ public class FileUploadService {
     private DocumentRepository documentRepository;
     
     @Autowired
+    private FolderRepository folderRepository;
+    
+    @Autowired
     private OCRService ocrService;
     
     @Autowired
@@ -72,7 +76,7 @@ public class FileUploadService {
     /**
      * Upload a single file
      */
-    public FileUploadResponse uploadFile(MultipartFile file, User user, DocumentType documentType, String description) {
+    public FileUploadResponse uploadFile(MultipartFile file, User user, DocumentType documentType, String description, Long folderId) {
         try {
             // Validate file
             String validationError = validateFile(file);
@@ -107,6 +111,11 @@ public class FileUploadService {
             document.setUploadedBy(user);
             document.setDepartment(user.getDepartment());
             document.setIsActive(true);
+            
+            // Set folder if provided
+            if (folderId != null) {
+                folderRepository.findById(folderId).ifPresent(document::setFolder);
+            }
             
             // Save to database
             Document savedDocument = documentRepository.save(document);

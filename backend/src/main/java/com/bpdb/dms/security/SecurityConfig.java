@@ -24,7 +24,6 @@ import org.springframework.http.MediaType;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
 import java.util.Arrays;
 
 /**
@@ -62,10 +61,10 @@ public class SecurityConfig {
                 .requestMatchers("/ws/**").permitAll()
                 // TEMP: Allow GET list of documents and related GET subpaths
                 .requestMatchers(HttpMethod.GET, "/api/documents", "/api/documents/**").permitAll()
-                // Allow upload for admins and officers
-                .requestMatchers(HttpMethod.POST, "/api/documents/upload").hasAnyRole("ADMIN", "OFFICER")
-                // Allow OCR reprocessing for admins and officers
-                .requestMatchers(HttpMethod.POST, "/api/documents/{id}/reprocess-ocr", "/api/documents/reprocess-ocr/**").hasAnyRole("ADMIN", "OFFICER")
+                // Allow upload for admins, officers, and DD1-DD4 roles
+                .requestMatchers(HttpMethod.POST, "/api/documents/upload").hasAnyRole("ADMIN", "OFFICER", "DD1", "DD2", "DD3", "DD4")
+                // Allow OCR reprocessing for admins, officers, and DD1-DD4 roles
+                .requestMatchers(HttpMethod.POST, "/api/documents/{id}/reprocess-ocr", "/api/documents/reprocess-ocr/**").hasAnyRole("ADMIN", "OFFICER", "DD1", "DD2", "DD3", "DD4")
                 // User management endpoints
                 .requestMatchers("/api/users/**").hasAnyRole("ADMIN", "OFFICER")
                 .requestMatchers("/api/users").hasRole("ADMIN")
