@@ -43,6 +43,7 @@ import {
 import { useAppSelector } from '../hooks/redux';
 import { documentService, Document as DmsDocument } from '../services/documentService';
 import { DocumentCategory } from '../types/document';
+import { DocumentType, getDocumentTypeLabel, requiresTenderWorkflow, getDocumentTypeColor, ALL_DOCUMENT_TYPES } from '../constants/documentTypes';
 
 const DEFAULT_CATEGORIES: DocumentCategory[] = [];
 
@@ -88,26 +89,17 @@ const Documents: React.FC = () => {
   const loadCategories = async () => {
     try {
       const types = await documentService.getDocumentTypes();
-      const allowed = new Set([
-        'TENDER_NOTICE',
-        'TENDER_DOCUMENT',
-        'CONTRACT_AGREEMENT',
-        'BANK_GUARANTEE_BG',
-        'PERFORMANCE_SECURITY_PS',
-        'PERFORMANCE_GUARANTEE_PG',
-        'APP',
-        'OTHER',
-      ]);
+      const allowed = new Set(ALL_DOCUMENT_TYPES);
       const filtered = types.filter((t: any) => allowed.has(t.value));
       const order: Record<string, number> = {
-        TENDER_NOTICE: 1,
-        TENDER_DOCUMENT: 2,
-        CONTRACT_AGREEMENT: 3,
-        BANK_GUARANTEE_BG: 4,
-        PERFORMANCE_SECURITY_PS: 5,
-        PERFORMANCE_GUARANTEE_PG: 6,
-        APP: 7,
-        OTHER: 99,
+        [DocumentType.TENDER_NOTICE]: 1,
+        [DocumentType.TENDER_DOCUMENT]: 2,
+        [DocumentType.CONTRACT_AGREEMENT]: 3,
+        [DocumentType.BANK_GUARANTEE_BG]: 4,
+        [DocumentType.PERFORMANCE_SECURITY_PS]: 5,
+        [DocumentType.PERFORMANCE_GUARANTEE_PG]: 6,
+        [DocumentType.APP]: 7,
+        [DocumentType.OTHER]: 99,
       };
       const mapped: DocumentCategory[] = filtered.map((t, idx) => ({
         id: -(idx + 1),
@@ -124,35 +116,20 @@ const Documents: React.FC = () => {
     } catch (err: any) {
       console.error('Failed to load document types', err);
       setError(err.response?.data?.message || 'Failed to load document types');
-      // Hard fallback to requirements-compliant list (no BILL)
-      const fallback: DocumentCategory[] = [
-        { id: -1, name: 'TENDER_NOTICE', displayName: 'Tender Notice', description: 'Tender Notice', isActive: true },
-        { id: -2, name: 'TENDER_DOCUMENT', displayName: 'Tender Document', description: 'Tender Document', isActive: true },
-        { id: -3, name: 'CONTRACT_AGREEMENT', displayName: 'Contract Agreement', description: 'Contract Agreement', isActive: true },
-        { id: -4, name: 'BANK_GUARANTEE_BG', displayName: 'Bank Guarantee (BG)', description: 'Bank Guarantee (BG)', isActive: true },
-        { id: -5, name: 'PERFORMANCE_SECURITY_PS', displayName: 'Performance Security (PS)', description: 'Performance Security (PS)', isActive: true },
-        { id: -6, name: 'PERFORMANCE_GUARANTEE_PG', displayName: 'Performance Guarantee (PG)', description: 'Performance Guarantee (PG)', isActive: true },
-        { id: -7, name: 'APP', displayName: 'APP', description: 'Annual Project Plan (APP)', isActive: true },
-        { id: -8, name: 'OTHER', displayName: 'Other', description: 'Other related documents', isActive: true },
-      ];
+      // Hard fallback using constants
+      const fallback: DocumentCategory[] = ALL_DOCUMENT_TYPES.map((type, idx) => ({
+        id: -(idx + 1),
+        name: type,
+        displayName: getDocumentTypeLabel(type),
+        description: getDocumentTypeLabel(type),
+        isActive: true
+      }));
       setCategories(fallback);
       setFormData((prev) => ({
         ...prev,
         documentType: prev.documentType || fallback[0].name
       }));
     }
-  };
-
-  const requiresTenderWorkflow = (docType: string) => {
-    const required = new Set([
-      'TENDER_DOCUMENT',
-      'CONTRACT_AGREEMENT',
-      'BANK_GUARANTEE_BG',
-      'PERFORMANCE_SECURITY_PS',
-      'PERFORMANCE_GUARANTEE_PG',
-      'APP',
-    ]);
-    return required.has(docType);
   };
 
   const handleUploadDocument = async () => {
@@ -236,14 +213,6 @@ const Documents: React.FC = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const getDocumentTypeColor = (type: string) => {
-    if (!type) return 'default';
-    const normalized = type.toUpperCase();
-    if (normalized.includes('BILL')) return 'warning';
-    if (normalized.includes('TENDER')) return 'primary';
-    if (normalized.includes('CONTRACT')) return 'success';
-    return 'default';
-  };
 
   const categoryCounts = categories.reduce<Record<string, number>>((acc, category) => {
     acc[category.name] = documents.filter((doc) => doc.documentType === category.name).length;
@@ -397,7 +366,7 @@ const Documents: React.FC = () => {
                         <TableCell>
                           <Chip
                             label={document.documentType}
-                            color={getDocumentTypeColor(document.documentType) as any}
+                            color={getDocumentTypeColor(document.documentType)}
                             size="small"
                           />
                         </TableCell>
@@ -527,7 +496,7 @@ const Documents: React.FC = () => {
                 </Select>
               </FormControl>
             </Grid>
-            {formData.documentType === 'TENDER_NOTICE' && (
+            {formData.documentType === DocumentType.TENDER_NOTICE && (
               <Grid item xs={12}>
                 <Alert severity="info">
                   Selecting <strong>Tender Notice</strong> will initiate a workflow automatically. 

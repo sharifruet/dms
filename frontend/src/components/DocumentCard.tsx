@@ -15,6 +15,7 @@ import {
   Delete as DeleteIcon,
   Share as ShareIcon
 } from '@mui/icons-material';
+import { getDocumentTypeColor } from '../constants/documentTypes';
 
 interface DocumentCardProps {
   document: {
@@ -42,23 +43,6 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
   onDelete,
   onShare
 }) => {
-  const getDocumentTypeColor = (type: string) => {
-    switch (type) {
-      case 'PDF':
-        return 'error';
-      case 'DOCX':
-      case 'DOC':
-        return 'primary';
-      case 'TXT':
-        return 'default';
-      case 'JPG':
-      case 'PNG':
-        return 'success';
-      default:
-        return 'default';
-    }
-  };
-
   const uploadedByName = typeof document.uploadedBy === 'string' ? document.uploadedBy : document.uploadedBy?.username;
 
   return (
@@ -70,7 +54,7 @@ const DocumentCard: React.FC<DocumentCardProps> = ({
           </Typography>
           <Chip
             label={document.documentType}
-            color={getDocumentTypeColor(document.documentType) as any}
+            color={getDocumentTypeColor(document.documentType)}
             size="small"
           />
         </Box>

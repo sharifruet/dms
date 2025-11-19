@@ -57,13 +57,15 @@ import { DocumentCategory } from '../types/document';
 import DocumentViewer from '../components/DocumentViewer';
 import FolderExplorer from '../components/FolderExplorer';
 import { Folder } from '../services/folderService';
+import { ALL_DOCUMENT_TYPES, getDocumentTypeLabel, DocumentType } from '../constants/documentTypes';
 
-const DEFAULT_CATEGORIES: DocumentCategory[] = [
-  { id: -1, name: 'TENDER', displayName: 'Tender', description: 'Tender documents', isActive: true },
-  { id: -2, name: 'BILL', displayName: 'Bill', description: 'Bills and invoices', isActive: true },
-  { id: -3, name: 'CONTRACT', displayName: 'Contract', description: 'Contract documents', isActive: true },
-  { id: -4, name: 'GENERAL', displayName: 'General', description: 'General purpose documents', isActive: true },
-];
+const DEFAULT_CATEGORIES: DocumentCategory[] = ALL_DOCUMENT_TYPES.map((type, idx) => ({
+  id: -(idx + 1),
+  name: type,
+  displayName: getDocumentTypeLabel(type),
+  description: getDocumentTypeLabel(type),
+  isActive: true,
+}));
 
 const DocumentsEnhanced: React.FC = () => {
   const { user } = useAppSelector((state) => state.auth);
@@ -96,7 +98,7 @@ const DocumentsEnhanced: React.FC = () => {
   const [uploadForm, setUploadForm] = useState({
     title: '',
     description: '',
-    documentType: DEFAULT_CATEGORIES[0]?.name || 'OTHER',
+    documentType: DEFAULT_CATEGORIES[0]?.name || DocumentType.OTHER,
     department: user?.department || '',
     tags: '',
     folderId: null as number | null,
@@ -227,7 +229,7 @@ const DocumentsEnhanced: React.FC = () => {
       setUploadForm({
         title: '',
         description: '',
-        documentType: categories[0]?.name || 'OTHER',
+        documentType: categories[0]?.name || DocumentType.OTHER,
         department: user?.department || '',
         tags: '',
         folderId: null,

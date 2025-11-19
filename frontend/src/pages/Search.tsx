@@ -41,15 +41,17 @@ import {
 import { searchService, SearchFilters, SearchResult, SearchResultItem, SearchStatistics } from '../services/searchService';
 import { documentService } from '../services/documentService';
 import { DocumentCategory } from '../types/document';
+import { ALL_DOCUMENT_TYPES, getDocumentTypeLabel, getDocumentTypeColor } from '../constants/documentTypes';
 
 interface SearchPageProps {}
 
-const DEFAULT_CATEGORIES: DocumentCategory[] = [
-  { id: -1, name: 'TENDER', displayName: 'Tender', description: 'Tender documents', isActive: true },
-  { id: -2, name: 'BILL', displayName: 'Bill', description: 'Bills and invoices', isActive: true },
-  { id: -3, name: 'CONTRACT', displayName: 'Contract', description: 'Contract documents', isActive: true },
-  { id: -4, name: 'GENERAL', displayName: 'General', description: 'General purpose documents', isActive: true },
-];
+const DEFAULT_CATEGORIES: DocumentCategory[] = ALL_DOCUMENT_TYPES.map((type, idx) => ({
+  id: -(idx + 1),
+  name: type,
+  displayName: getDocumentTypeLabel(type),
+  description: getDocumentTypeLabel(type),
+  isActive: true,
+}));
 
 const SearchPage: React.FC<SearchPageProps> = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -188,14 +190,6 @@ const SearchPage: React.FC<SearchPageProps> = () => {
     return category ? category.displayName || category.name : name;
   };
 
-  const getDocumentTypeColor = (type?: string) => {
-    if (!type) return 'default';
-    const normalized = type.toUpperCase();
-    if (normalized.includes('BILL')) return 'warning';
-    if (normalized.includes('TENDER')) return 'primary';
-    if (normalized.includes('CONTRACT')) return 'success';
-    return 'default';
-  };
 
   const handleReindex = async () => {
     try {
@@ -228,7 +222,7 @@ const SearchPage: React.FC<SearchPageProps> = () => {
             <Chip
               label={getCategoryDisplayName(item.documentType)}
               size="small"
-              color={getDocumentTypeColor(item.documentType) as any}
+              color={getDocumentTypeColor(item.documentType)}
               variant="outlined"
             />
             <Chip 

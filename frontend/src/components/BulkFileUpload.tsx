@@ -23,6 +23,7 @@ import {
   Error as ErrorIcon,
 } from '@mui/icons-material';
 import api from '../services/api';
+import { DocumentType } from '../constants/documentTypes';
 
 interface FileWithProgress {
   file: File;
@@ -95,7 +96,7 @@ const BulkFileUpload: React.FC<BulkFileUploadProps> = ({
 
         const formData = new FormData();
         formData.append('file', fileItem.file);
-        formData.append('documentType', 'OTHER');
+        formData.append('documentType', DocumentType.OTHER);
         formData.append('description', '');
 
         await api.post('/documents/upload', formData, {
