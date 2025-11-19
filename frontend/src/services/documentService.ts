@@ -4,6 +4,7 @@ import { DocumentCategory } from '../types/document';
 export interface Document {
   id?: number;
   fileName: string;
+  originalName?: string;
   filePath?: string;
   documentType: string;
   uploadedBy?: string | { username: string; id?: number };

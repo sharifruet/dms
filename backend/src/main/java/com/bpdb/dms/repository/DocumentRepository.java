@@ -1,6 +1,7 @@
 package com.bpdb.dms.repository;
 
 import com.bpdb.dms.entity.Document;
+import com.bpdb.dms.entity.Folder;
 import com.bpdb.dms.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -83,6 +84,16 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
      * Count documents by department and active
      */
     long countByDepartmentAndIsActiveTrue(String department);
+    
+    /**
+     * Count documents by folder
+     */
+    long countByFolder(Folder folder);
+    
+    /**
+     * Count documents by folder and active
+     */
+    long countByFolderAndIsActiveTrue(Folder folder);
     
     /**
      * Count documents created after date
