@@ -8,9 +8,13 @@ import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
 
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.rendering.PDFRenderer;
 import org.apache.tika.Tika;
 import org.apache.tika.exception.TikaException;
 import org.slf4j.Logger;
@@ -267,6 +271,11 @@ public class OCRService {
             
             // Extract metadata
             Map<String, String> metadata = extractMetadata(file);
+            
+            // add contract number extraction
+            Map<String, String> contractData = getContractNumber(extractedText);
+            metadata.putAll(contractData);
+            
             result.setMetadata(metadata);
             
             // Classify document type
@@ -392,22 +401,39 @@ public class OCRService {
     /**
      * Process PDF files with OCR
      */
-    private String processPDFWithOCR(MultipartFile file) throws IOException, TesseractException {
-        // For PDF files, we'll use Tika to extract text first
-        // If no text is found, we'll convert PDF to images and use OCR
-        try {
-            String text = tika.parseToString(file.getInputStream());
-            if (text != null && !text.trim().isEmpty()) {
-                return text;
-            }
-        } catch (TikaException e) {
-            logger.warn("Tika failed to extract text from PDF, falling back to OCR: {}", e.getMessage());
-        }
-        
-        // Fallback to OCR processing
-        // This would require PDF to image conversion
-        return "PDF OCR processing not fully implemented yet";
-    }
+	private String processPDFWithOCR(MultipartFile file) throws IOException, TesseractException {
+
+		// 1. Try Tika extraction first
+		try {
+			String text = tika.parseToString(file.getInputStream());
+			if (text != null && !text.trim().isEmpty()) {
+				return text;
+			}
+		} catch (Exception e) {
+			logger.warn("Tika failed, falling back to OCR", e);
+		}
+		try {
+			// 2. Load PDF properly (PDFBox 3.x)
+			byte[] pdfBytes = file.getBytes();
+			PDDocument document = PDDocument.load(pdfBytes);
+
+			PDFRenderer renderer = new PDFRenderer(document);
+			StringBuilder sb = new StringBuilder();
+
+			// 3. OCR each page
+			for (int i = 0; i < document.getNumberOfPages(); i++) {
+				BufferedImage image = renderer.renderImageWithDPI(i, 300);
+				sb.append(tesseract.doOCR(image)).append("\n");
+			}
+
+			document.close();
+			return sb.toString();
+		} catch (Error err) {
+			logger.error("Native OCR error: {}", err.getMessage());
+			throw new TesseractException("Native OCR error: " + err.getMessage());
+		}
+	}
+
     
     /**
      * Process Office documents
@@ -640,4 +666,34 @@ public class OCRService {
         public double getConfidence() { return confidence; }
         public void setConfidence(double confidence) { this.confidence = confidence; }
     }
+    
+	private Map<String, String> getContractNumber(String extractedText) {
+
+		String[] contractPatterns = { "Contract N[o0]\\.:?\\s*([A-Za-z0-9\\/\\.-]+)" };
+		
+		String[] datePatterns = { "Date\\s*:?\\s*(\\d{2}/\\d{2}/\\d{4})", "Dated\\s*:?\\s*(\\d{2}/\\d{2}/\\d{4})",
+				"Date\\s*:?\\s*(\\d{4}-\\d{2}-\\d{2})", "Dated\\s*:?\\s*(\\d{4}-\\d{2}-\\d{2})" };
+		
+		Map<String, String> contractData = new HashMap<>();
+		
+		for (String patternStr : contractPatterns) {
+			Pattern pattern = Pattern.compile(patternStr);
+			Matcher matcher = pattern.matcher(extractedText);
+			if (matcher.find()) {
+				contractData.put("contractNumber", matcher.group(1));
+				break;
+			}
+		}
+		
+		for (String patternStr : datePatterns) {
+			Pattern pattern = Pattern.compile(patternStr, Pattern.CASE_INSENSITIVE);
+			Matcher matcher = pattern.matcher(extractedText);
+			if (matcher.find()) {
+				contractData.put("contractDate", matcher.group(1));
+				break;
+			}
+		}
+
+		return contractData;
+	}
 }
