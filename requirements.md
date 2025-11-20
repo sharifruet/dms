@@ -5,9 +5,21 @@
 2. [System Architecture](#system-architecture)
 3. [Technical Requirements](#technical-requirements)
 4. [Functional Requirements](#functional-requirements)
+   - [4.1 Document Upload & Classification](#41-document-upload--classification)
+   - [4.2 OCR Extraction & Metadata Management](#42-ocr-extraction--metadata-management)
+   - [4.3 Document Repository & Storage](#43-document-repository--storage)
+   - [4.4 Search, Filter & Retrieval](#44-search-filter--retrieval)
+   - [4.5 Access Control & Role Management](#45-access-control--role-management)
+   - [4.6 Notification & Alert System](#46-notification--alert-system)
+   - [4.7 Dashboard & Reporting](#47-dashboard--reporting)
+   - [4.8 Audit Trail & Compliance](#48-audit-trail--compliance)
+   - [4.9 Document Linkage & Lifecycle Management](#49-document-linkage--lifecycle-management)
+   - [4.10 Security & Backup](#410-security--backup)
+   - [4.11 System Administration](#411-system-administration)
    - [4.12 Advanced AI and Automation Features](#412-advanced-ai-and-automation-features)
-   - [4.13 Mobile and Offline Capabilities](#413-mobile-and-offline-capabilities)
-   - [4.14 Advanced Collaboration Features](#414-advanced-collaboration-features)
+   - [4.13 Finance & Billing](#413-finance--billing)
+   - [4.14 Mobile and Offline Capabilities](#414-mobile-and-offline-capabilities)
+   - [4.15 Advanced Collaboration Features](#415-advanced-collaboration-features)
 5. [Non-Functional Requirements](#non-functional-requirements)
 6. [User Roles and Permissions](#user-roles-and-permissions)
 7. [Security Requirements](#security-requirements)
@@ -34,6 +46,24 @@ The system will handle various document types including tenders, purchase orders
 - Ensure compliance with organizational policies
 - Enable efficient document lifecycle management
 - Maintain comprehensive audit trails
+
+### 1.4 Document Structure
+This requirements specification is organized into the following major sections:
+- **Sections 1-3**: Project overview, system architecture, and technical requirements
+- **Section 4**: Functional requirements covering all system features (4.1-4.15)
+- **Sections 5-10**: Non-functional requirements, roles, security, integration, performance, and compliance
+- **Section 11**: Implementation phases and timeline
+- **Section 12**: Future enhancements
+
+**Key Features Covered**:
+- Document upload, classification, and OCR processing
+- Smart Folders (DMC) for dynamic document organization
+- Finance & Billing (APP vs Bills tracking)
+- Advanced search, filtering, and retrieval
+- Notification and alert systems
+- Dashboard and reporting capabilities
+- Audit trail and compliance management
+- Document linkage and lifecycle management
 
 ---
 
@@ -253,10 +283,10 @@ The system will handle various document types including tenders, purchase orders
 
 #### 3.5.2 Software Performance Targets
 - **Response Time**: < 2 seconds for most operations
-- **Throughput**: 1000+ concurrent users
+- **Throughput**: 100+ concurrent users (minimum), scalable to 1000+ with proper infrastructure
 - **Database Performance**: < 100ms for simple queries
-- **Search Performance**: < 500ms for complex searches
-- **File Upload**: Support up to 100MB files
+- **Search Performance**: < 500ms for complex searches, < 3 seconds for very complex searches
+- **File Upload**: Support up to 100MB files (upload time varies by file size: < 30 seconds for files up to 10MB)
 
 ### 3.6 Security Technology Stack
 
@@ -321,23 +351,28 @@ The system will handle various document types including tenders, purchase orders
   - DD2 (Deputy Director Level 2)
   - DD3 (Deputy Director Level 3)
   - DD4 (Deputy Director Level 4)
+  - Note: These roles are in addition to the standard system roles (Administrator, Officer, Viewer, Auditor) defined in Section 4.5.1 and Section 6. The DD roles represent hierarchical organizational levels with specific upload permissions.
 - **FR-006**: System shall restrict upload capabilities based on user roles
 
 #### 4.1.3 Document Classification
 - **FR-007**: System shall automatically detect document types:
   - 1. Tender Notice
   - 2. Tender Document
-  - 3. Contract Agreement
-  - 4. Bank Guarantee (BG)
-  - 5. Performance Security (PS)
-  - 6. Performance Guarantee (PG)
-  - 7. APP
-  - 8. Other related documents
+  - 3. Purchase Order (PO)
+  - 4. Letter of Credit (LC)
+  - 5. Bank Guarantee (BG)
+  - 6. Performance Security (PS)
+  - 7. Performance Guarantee (PG)
+  - 8. Contract Agreement
+  - 9. Correspondence
+  - 10. Stationery Record
+  - 11. APP (Annual Project Plan)
+  - 12. Other related documents
 - **FR-008**: System shall allow manual override of auto-detected document types
 - **FR-009**: System shall support custom document type definitions
   - Note: APP is an Excel file; the system shall parse APP contents and persist them into a dedicated database table for structured reporting and retrieval.
-  - Workflow Rule: When a Tender Notice is created, the system shall automatically create a workflow. Documents 2 through 7 listed above shall be uploaded via this workflow to ensure traceability and process compliance.
-  - Smart Folder Rule Templates: Provide out-of-the-box Smart Folder (DMC) templates for these document types (e.g., “All Active BG”, “PS expiring in 30 days”, “Tenders awaiting documents 2–7”, “Contracts with missing PS/PG”).
+  - Workflow Rule: When a Tender Notice is created, the system shall automatically create a workflow. Related documents (Tender Document, Purchase Order, Letter of Credit, Bank Guarantee, Performance Security, Performance Guarantee, Contract Agreement) shall be uploaded via this workflow to ensure traceability and process compliance.
+  - Smart Folder Rule Templates: Provide out-of-the-box Smart Folder (DMC) templates for these document types (e.g., "All Active BG", "PS expiring in 30 days", "Tenders awaiting related documents", "Contracts with missing PS/PG").
 
 #### 4.1.4 OCR-Based Metadata Extraction
 - **FR-010**: System shall extract metadata using OCR technology:
@@ -361,18 +396,18 @@ The system will handle various document types including tenders, purchase orders
 - **FR-010h**: System shall allow mapping OCR extracted data to specific fields based on field names and patterns
 - **FR-010i**: System shall display field values in document details and search results
 
-#### 4.1.5 Document Indexing and Naming
+#### 4.1.6 Document Indexing and Naming
 - **FR-013**: System shall implement automatic indexing based on document content
 - **FR-014**: System shall follow predefined naming conventions
 - **FR-015**: System shall detect and handle duplicate documents
 - **FR-016**: System shall support document attachment linking
 
-#### 4.1.6 Specialized Tracking
+#### 4.1.7 Specialized Tracking
 - **FR-017**: System shall track stationery and asset records per employee
 - **FR-018**: System shall track tender items via OCR or manual entry
 - **FR-019**: System shall provide universal search across all document types
 
-#### 4.1.7 Document Versioning
+#### 4.1.8 Document Versioning
 - **FR-020**: System shall support editing and re-uploading of Word/Excel documents
 - **FR-021**: System shall maintain complete version history
 - **FR-022**: System shall track version changes and modifications
@@ -381,7 +416,17 @@ The system will handle various document types including tenders, purchase orders
 
 #### 4.2.1 OCR Processing
 - **FR-023**: System shall integrate OCR engine for all uploaded documents
-- **FR-024**: System shall auto-populate metadata fields from OCR results
+- **FR-024**: System shall auto-populate metadata fields from OCR results, including but not limited to:
+  - Tender Number
+  - Vendor Information
+  - Document Date
+  - Amount/Value
+  - Contract Terms
+  - Expiry Dates
+  - Purchase Order Number
+  - Letter of Credit Number
+  - Bank Guarantee Number
+  - Other document-specific metadata fields
 - **FR-025**: System shall provide accuracy validation interface
 - **FR-026**: System shall detect missing or inconsistent data
 
@@ -413,11 +458,12 @@ The system will handle various document types including tenders, purchase orders
 - **FR-033h**: Smart Folders shall be searchable, exportable, and embeddable in dashboards.
 
 #### 4.3.2 Document Relationships
-- **FR-034**: System shall support linked document views:
-  - Contract ↔ Letter of Credit
-  - Letter of Credit ↔ Bank Guarantee
-  - Bank Guarantee ↔ Purchase Order
-  - Purchase Order ↔ Correspondence
+- **FR-034**: System shall support linked document views showing the complete relationship chain:
+  - Contract ↔ Letter of Credit (LC)
+  - Letter of Credit (LC) ↔ Bank Guarantee (BG)
+  - Bank Guarantee (BG) ↔ Purchase Order (PO)
+  - Purchase Order (PO) ↔ Correspondence
+  - Contract ↔ LC ↔ BG ↔ PO ↔ Correspondence (full chain navigation)
 - **FR-035**: System shall maintain relationship integrity
 
 #### 4.3.3 Archive Management
@@ -430,7 +476,11 @@ The system will handle various document types including tenders, purchase orders
   - Total files count
   - Uploaded files count
   - Remaining uploads
-- **FR-040**: System shall provide explorer-style folder interface
+- **FR-040**: System shall provide explorer-style folder interface for easy navigation with:
+  - Hierarchical folder tree structure
+  - Breadcrumb navigation
+  - Quick folder access and switching
+  - Visual folder representation
 - **FR-041**: System shall support easy navigation between folders
 
 ### 4.4 Search, Filter & Retrieval
@@ -448,40 +498,90 @@ The system will handle various document types including tenders, purchase orders
 - **FR-045a**: System shall support saved searches that can be reused as Smart Folder (DMC) definitions.
 
 #### 4.4.2 Filtering and Sorting
-- **FR-046**: System shall provide multiple filter options
-- **FR-047**: System shall support sorting by various criteria
+- **FR-046**: System shall provide multiple filter options including:
+  - Document type filters
+  - Date range filters
+  - Vendor filters
+  - Department filters
+  - Status filters
+  - Custom metadata filters
+- **FR-047**: System shall support sorting by various criteria including:
+  - Document date (ascending/descending)
+  - Document name (alphabetical)
+  - Document type
+  - Upload date
+  - File size
+  - Relevance (for search results)
 - **FR-048**: System shall save and reuse search filters
 
 #### 4.4.3 Document Access
-- **FR-049**: System shall provide document preview functionality
-- **FR-050**: System shall support secure document download
+- **FR-049**: System shall provide document preview functionality for:
+  - PDF documents
+  - Image files
+  - Office documents (Word, Excel)
+  - In-browser preview without requiring download
+- **FR-050**: System shall support secure document download with:
+  - Access control verification
+  - Download tracking and logging
+  - Secure file transfer
+  - Optional watermarking for sensitive documents
 - **FR-051**: System shall track document access logs
-- **FR-052**: System shall export search results in PDF/Excel formats
+- **FR-052**: System shall export search results in multiple formats:
+  - PDF format
+  - Excel format (.xlsx)
+  - Export shall include search criteria, metadata, and document references
 
 ### 4.5 Access Control & Role Management
 
 #### 4.5.1 Role-Based Access
-- **FR-053**: System shall implement role-based access control:
-  - Administrator: Full system access
-  - Officer: Upload, edit, and manage documents
-  - Viewer: Read-only access
-  - Auditor: Read access with audit capabilities
-- **FR-054**: System shall define permission matrix for each role:
-  - Upload permissions
-  - View permissions
-  - Edit permissions
-  - Delete permissions
+- **FR-053**: System shall implement role-based access control with the following roles:
+  - **Administrator (Admin)**: Full system access including user management, system configuration, backup/restore, and all document operations
+  - **Officer**: Upload, edit, and manage documents within assigned permissions
+  - **Viewer**: Read-only access to documents and reports
+  - **Auditor**: Read access with audit capabilities and compliance reporting
+- **FR-054**: System shall define a comprehensive permission matrix for each role specifying:
+  - **Upload permissions**: Ability to upload documents
+  - **View permissions**: Ability to view and preview documents
+  - **Edit permissions**: Ability to edit document metadata and content
+  - **Delete permissions**: Ability to delete documents (subject to retention policies)
 
 #### 4.5.2 Department-Level Access
-- **FR-055**: System shall support department-level access restrictions
-- **FR-056**: System shall allow cross-department document sharing
-- **FR-057**: System shall maintain department hierarchy
+- **FR-055**: System shall support department-level access restrictions:
+  - Users can only access documents within their assigned department by default
+  - Department-based document visibility and access control
+  - Configurable department boundaries and access rules
+- **FR-056**: System shall allow cross-department document sharing:
+  - Controlled sharing mechanisms between departments
+  - Approval workflows for cross-department access
+  - Audit trail for cross-department document access
+- **FR-057**: System shall maintain department hierarchy:
+  - Support for organizational structure
+  - Parent-child department relationships
+  - Hierarchical permission inheritance
 
 #### 4.5.3 Authentication
-- **FR-058**: System shall implement secure user authentication
-- **FR-059**: System shall support optional Two-Factor Authentication (2FA)
-- **FR-060**: System shall maintain user authorization logs
-- **FR-061**: System shall support secure file sharing among users
+- **FR-058**: System shall implement secure user authentication:
+  - Username and password authentication
+  - Secure password policies and encryption
+  - Session management and timeout controls
+  - Account lockout mechanisms for failed login attempts
+- **FR-059**: System shall support optional Two-Factor Authentication (2FA):
+  - Configurable 2FA for enhanced security
+  - Support for TOTP (Time-based One-Time Password) authenticators
+  - SMS or email-based 2FA options
+  - User-configurable 2FA settings
+- **FR-060**: System shall maintain comprehensive user authorization and access logs:
+  - User login and logout events
+  - Authentication attempts (successful and failed)
+  - Authorization decisions and access grants/denials
+  - User activity tracking and audit trail
+  - Access log export and reporting capabilities
+- **FR-061**: System shall support secure file sharing among users:
+  - User-to-user document sharing with access control
+  - Time-limited sharing links
+  - Permission-based sharing (view-only, download, edit)
+  - Sharing notification and approval workflows
+  - Audit trail for all sharing activities
 
 ### 4.6 Notification & Alert System
 
@@ -490,107 +590,267 @@ The system will handle various document types including tenders, purchase orders
   - 30 days before expiry
   - 15 days before expiry
   - 7 days before expiry
-- **FR-063**: System shall send alerts for contract expiry
-- **FR-064**: System shall send alerts for Bank Guarantee (BG) expiry
-- **FR-065**: System shall send alerts for Letter of Credit (LC) expiry
+  - User-configurable custom intervals
+  - Multiple alerts at different intervals for the same document
+- **FR-063**: System shall send alerts for contract expiry:
+  - Alerts at configured intervals (30/15/7 days) before contract expiry
+  - Notifications via Email, SMS, and In-App channels
+  - Escalation for expired contracts
+- **FR-064**: System shall send alerts for Bank Guarantee (BG) expiry:
+  - Alerts at configured intervals (30/15/7 days) before BG expiry
+  - Notifications via Email, SMS, and In-App channels
+  - Post-expiry alerts until renewal
+- **FR-065**: System shall send alerts for Letter of Credit (LC) expiry:
+  - Alerts at configured intervals (30/15/7 days) before LC expiry
+  - Notifications via Email, SMS, and In-App channels
+  - Post-expiry alerts until renewal
 
 #### 4.6.2 Bank Guarantee/PG Expiry Management
-- **FR-066**: System shall auto-check BG/PG expiry dates
-- **FR-067**: System shall send notifications before expiry
-- **FR-068**: System shall send notifications after expiry until renewal
+- **FR-066**: System shall auto-check Bank Guarantee (BG) and Performance Guarantee (PG) expiry dates on a scheduled basis
+- **FR-067**: System shall send notifications before expiry at configured intervals (30/15/7 days)
+- **FR-068**: System shall send notifications after expiry until renewal:
+  - Continuous alerts until renewal is recorded
+  - Escalation of alerts based on time since expiry
+  - Reminder notifications at regular intervals
 - **FR-069**: System shall support multiple notification channels:
-  - Email notifications
-  - SMS notifications
-  - In-app notifications
+  - **Email notifications**: Automated email alerts to designated recipients
+  - **SMS notifications**: Text message alerts for critical expiries
+  - **In-app notifications**: Real-time notifications within the application interface
+  - User-configurable notification preferences per channel
 
 #### 4.6.3 Performance Security Tracking
-- **FR-070**: System shall track warranty/coverage period of each Performance Security (PS)
-- **FR-071**: System shall auto-alert if warranty period is about to expire
-- **FR-072**: System shall alert if PS is not covered
-- **FR-073**: System shall generate renewal alerts if PS renewal not recorded within grace period
-- **FR-074**: System shall provide renewal update form for authorized users
-- **FR-075**: System shall allow extending PS coverage and uploading new documents
+- **FR-070**: System shall track the warranty/coverage period of each Performance Security (PS):
+  - Start date and end date of warranty/coverage period
+  - Coverage status (Active, Expired, Renewed)
+  - Historical coverage periods and renewals
+- **FR-071**: System shall auto-alert if warranty period is about to expire:
+  - Alerts at configured intervals before expiry (30/15/7 days)
+  - Alert escalation as expiry date approaches
+  - Notification to authorized personnel
+- **FR-072**: System shall alert if PS is not covered:
+  - Detection of gaps in coverage periods
+  - Alerts for uncovered periods
+  - Compliance violation notifications
+- **FR-073**: System shall generate renewal alerts if PS renewal not recorded within grace period:
+  - Configurable grace period after expiry
+  - Automatic renewal reminder generation
+  - Escalation if renewal not recorded within grace period
+- **FR-074**: System shall provide renewal update form for authorized users:
+  - Form to record PS renewal information
+  - Date range selection for new coverage period
+  - Renewal approval workflow
+  - Audit trail for all renewal updates
+- **FR-075**: System shall allow extending PS coverage and uploading new documents:
+  - Ability to extend existing coverage periods
+  - Upload new PS documents during renewal
+  - Link new documents to existing PS records
+  - Version tracking for PS documents
 
 #### 4.6.4 Compliance Alerts
-- **FR-076**: System shall alert for missing mandatory documents
-- **FR-077**: System shall alert for delayed uploads
-- **FR-078**: System shall provide reminder dashboard showing:
-  - Pending renewals
-  - Upcoming expiries
-  - Compliance status
+- **FR-076**: System shall alert for missing mandatory documents:
+  - Detection of required documents based on document type and workflow rules
+  - Alerts for missing documents in workflows (e.g., Tender workflows requiring documents 2-7)
+  - Compliance violation notifications
+  - Escalation for critical missing documents
+- **FR-077**: System shall alert for delayed uploads:
+  - Detection of overdue document uploads
+  - Alerts based on expected upload deadlines
+  - Reminder notifications for pending uploads
+  - Escalation for significantly delayed uploads
+- **FR-078**: System shall provide reminder dashboard summarizing:
+  - **Pending renewals**: List of documents requiring renewal action
+  - **Upcoming expiries**: Documents expiring within configured timeframes (30/15/7 days)
+  - **Compliance status**: Overall compliance metrics and status indicators
+  - **Missing documents**: List of required documents not yet uploaded
+  - **Delayed uploads**: Documents with overdue upload deadlines
+  - **Alert summary**: Count of active alerts by category and priority
+  - **Quick actions**: Direct links to address pending items
 
 ### 4.7 Dashboard & Reporting
 
 #### 4.7.1 Real-Time Dashboard
 - **FR-079**: System shall provide real-time dashboard with:
-  - Document count statistics
-  - Document status overview
-  - Expiry alerts summary
+  - **Document count statistics**: Total documents, documents by type, documents by status, recent uploads
+  - **Document status overview**: Active, archived, pending review, expired documents
+  - **Expiry alerts summary**: Count of documents expiring at 30/15/7 days, expired documents, pending renewals
+  - Real-time data updates without page refresh
+  - Interactive widgets and drill-down capabilities
 - **FR-079a**: Dashboard shall support embedding Smart Folder (DMC) widgets and quick links
 - **FR-079b**: Dashboard shall display APP vs Bills summary cards (Budget, Actuals, Remaining, Utilization%) for selected fiscal year
 - **FR-079c**: Dashboard shall display interactive charts for APP vs Bills and Remaining Budget with drill-through to detailed reports
-- **FR-080**: System shall display vendor-wise summaries
-- **FR-081**: System shall display department-wise summaries
-- **FR-082**: System shall provide graphical charts for management overview
+- **FR-080**: System shall display vendor-wise summaries including:
+  - Total documents per vendor
+  - Active contracts per vendor
+  - Expiring documents per vendor
+  - Vendor performance metrics
+  - Vendor-wise financial summaries
+- **FR-081**: System shall display department-wise summaries including:
+  - Total documents per department
+  - Document upload statistics per department
+  - Department-wise compliance status
+  - Department-wise expiry alerts
+  - Department performance metrics
+- **FR-082**: System shall provide graphical charts for management overview including:
+  - Bar charts for document counts by type, status, department, vendor
+  - Line charts for trends over time (uploads, expiries, renewals)
+  - Pie charts for document distribution
+  - Gauge charts for compliance and utilization metrics
+  - Interactive charts with drill-down capabilities
+  - Exportable chart images
 
 #### 4.7.2 Report Generation
 - **FR-083**: System shall generate exportable reports in multiple formats:
-  - PDF reports
-  - Excel spreadsheets
-  - Word documents
-- **FR-084**: System shall provide monthly summaries
-- **FR-085**: System shall provide quarterly summaries
-- **FR-086**: System shall support custom report generation
- - **FR-086a**: System shall include standard “APP vs Bills (Yearly)” and “Remaining Budget (Year/Department/Project)” report templates
+  - **PDF reports**: Formatted reports with charts, tables, and summaries suitable for printing and sharing
+  - **Excel spreadsheets**: Data exports with formulas, charts, and pivot tables for analysis
+  - **Word documents**: Formatted document reports with embedded tables and charts
+  - Reports shall include metadata, timestamps, and filtering criteria
+  - Scheduled report generation and email delivery
+- **FR-084**: System shall provide monthly summaries including:
+  - Monthly document upload statistics
+  - Monthly expiry and renewal summaries
+  - Monthly compliance status reports
+  - Monthly vendor and department activity summaries
+  - Monthly financial summaries (if applicable)
+  - Automated monthly report generation and distribution
+- **FR-085**: System shall provide quarterly summaries including:
+  - Quarterly document trends and statistics
+  - Quarterly expiry and renewal analysis
+  - Quarterly compliance status reports
+  - Quarterly vendor and department performance summaries
+  - Quarterly financial summaries and budget analysis
+  - Automated quarterly report generation and distribution
+- **FR-086**: System shall support custom report generation:
+  - User-defined report templates
+  - Custom date ranges and filters
+  - Custom field selection and grouping
+  - Custom chart and visualization options
+ - **FR-086a**: System shall include standard "APP vs Bills (Yearly)" and "Remaining Budget (Year/Department/Project)" report templates
 
 ### 4.8 Audit Trail & Compliance
 
 #### 4.8.1 Activity Logging
-- **FR-087**: System shall log all user activities:
-  - Document uploads
-  - Document views
-  - Document modifications
-  - Document deletions
-- **FR-088**: System shall generate user-wise activity reports
-- **FR-089**: System shall maintain version history tracking
+- **FR-087**: System shall log all user activities with complete audit trail:
+  - **Document uploads**: Timestamp, user, file details, metadata, document type
+  - **Document views**: Timestamp, user, document accessed, duration of access
+  - **Document modifications**: Timestamp, user, changes made, previous and new values
+  - **Document deletions**: Timestamp, user, document deleted, reason (if provided)
+  - All activities logged with user identification, IP address, and session information
+  - Immutable audit logs that cannot be modified or deleted
+- **FR-088**: System shall generate user-wise activity reports including:
+  - Activity summary per user (daily, weekly, monthly)
+  - Detailed activity logs per user with filtering options
+  - User activity trends and patterns
+  - Exportable user activity reports
+- **FR-089**: System shall maintain comprehensive version history tracking:
+  - Complete version history for all document modifications
+  - Version comparison and diff capabilities
+  - Version metadata (creator, timestamp, change description)
+  - Ability to view and restore previous versions
 
 #### 4.8.2 Document Recovery
-- **FR-090**: System shall support recovery of deleted documents
-- **FR-091**: System shall support recovery of replaced documents
-- **FR-092**: System shall maintain document restoration logs
+- **FR-090**: System shall support recovery of deleted documents:
+  - Soft delete mechanism with retention period
+  - Recovery interface to restore deleted documents
+  - Recovery with all metadata and relationships intact
+  - Access control for document recovery operations
+- **FR-091**: System shall support recovery of replaced documents:
+  - Version history preservation for replaced documents
+  - Ability to restore previous versions of replaced documents
+  - Recovery of original document before replacement
+  - Comparison view of original vs replaced document
+- **FR-092**: System shall maintain document restoration logs:
+  - Log all document recovery operations
+  - Track who restored what document and when
+  - Maintain audit trail of restoration activities
+  - Export restoration logs for compliance reporting
 
 #### 4.8.3 Audit Reports
-- **FR-093**: System shall generate comprehensive audit reports
-- **FR-094**: System shall export audit reports in PDF/Excel formats
-- **FR-095**: System shall support audit report scheduling
+- **FR-093**: System shall generate comprehensive audit reports including:
+  - Complete activity logs with filtering and search capabilities
+  - User activity summaries and trends
+  - Document access and modification reports
+  - Compliance status reports
+  - Security event reports
+  - Customizable report templates
+- **FR-094**: System shall export audit reports in multiple formats:
+  - **PDF format**: Formatted audit reports suitable for printing and official documentation
+  - **Excel format**: Data exports with filtering and analysis capabilities
+  - Reports include timestamps, user information, and activity details
+  - Reports are tamper-proof and include digital signatures
+- **FR-095**: System shall support audit report scheduling:
+  - Automated report generation at scheduled intervals
+  - Email delivery of scheduled reports
+  - Customizable report schedules (daily, weekly, monthly)
+  - Report retention and archival policies
 
 ### 4.9 Document Linkage & Lifecycle Management
 
 #### 4.9.1 Document Relationships
-- **FR-096**: System shall maintain internal linkage between related documents:
-  - Contract ↔ Letter of Credit
-  - Letter of Credit ↔ Bank Guarantee
-  - Bank Guarantee ↔ Purchase Order
-  - Purchase Order ↔ Correspondence
-- **FR-097**: System shall support dual start logic:
-  - Sign Date activation
-  - LC Opening Date activation
+- **FR-096**: System shall maintain internal linkage between related documents showing the complete relationship chain:
+  - Contract ↔ Letter of Credit (LC)
+  - Letter of Credit (LC) ↔ Bank Guarantee (BG)
+  - Bank Guarantee (BG) ↔ Purchase Order (PO)
+  - Purchase Order (PO) ↔ Correspondence
+  - Full chain navigation: Contract ↔ LC ↔ BG ↔ PO ↔ Correspondence
+  - Bidirectional relationship navigation
+  - Visual relationship mapping and diagram views
+- **FR-097**: System shall support dual start logic for contract timeline activation:
+  - **Sign Date activation**: Contract timeline starts from contract signing date
+  - **LC Opening Date activation**: Contract timeline starts from Letter of Credit opening date
+  - User-selectable activation method per contract
+  - Automatic calculation of validity periods based on selected start date
+  - Support for different validity periods based on activation method
 - **FR-098**: System shall auto-track validity periods for:
-  - Bank Guarantees
-  - Performance Guarantees
-  - Warranty periods
+  - **Bank Guarantees (BG)**: Automatic tracking of BG validity from start to expiry
+  - **Performance Guarantees (PG)**: Automatic tracking of PG validity from start to expiry
+  - **Warranty periods**: Automatic tracking of warranty coverage periods
+  - Real-time validity status updates (Active, Expiring, Expired)
+  - Automatic calculation of remaining validity periods
 
 #### 4.9.2 Automated Notifications
-- **FR-099**: System shall auto-notify on expiry of BG/PG/Warranty periods
-- **FR-100**: System shall provide renewal options
+- **FR-099**: System shall auto-notify on expiry of BG/PG/Warranty periods:
+  - Automatic expiry detection and notification generation
+  - Notifications at configured intervals (30/15/7 days before expiry)
+  - Post-expiry notifications until renewal
+  - Multi-channel notifications (Email, SMS, In-App)
+  - Escalation for overdue renewals
+- **FR-100**: System shall provide renewal options:
+  - Renewal workflow initiation from notifications
+  - Renewal form with document upload capability
+  - Renewal approval process
+  - Automatic status update upon renewal completion
+  - Renewal history tracking
 - **FR-101**: System shall provide unified alert dashboard showing:
-  - Linked documents
-  - Status flags (Active, Expired, Renewed)
+  - **Linked documents**: Visual representation of document relationships and chains
+  - **Status flags**: Clear status indicators for each document (Active, Expired, Renewed, Pending)
+  - **Expiry alerts**: Consolidated view of all expiring documents
+  - **Renewal status**: Pending renewals and renewal history
+  - **Compliance status**: Overall compliance metrics for linked document sets
+  - **Quick actions**: Direct links to renew, update, or manage linked documents
 
 #### 4.9.3 Integration Readiness
-- **FR-102**: System shall provide future-ready API structure
-- **FR-103**: System shall support integration with BPDB ERP systems
-- **FR-104**: System shall support integration with Audit systems
+- **FR-102**: System shall provide future-ready API structure:
+  - RESTful API design following industry standards
+  - OpenAPI/Swagger documentation for all endpoints
+  - API versioning support (v1, v2, etc.)
+  - Authentication and authorization mechanisms (OAuth2, API keys)
+  - Rate limiting and throttling capabilities
+  - Webhook support for event-driven integrations
+  - Comprehensive error handling and status codes
+- **FR-103**: System shall support integration with BPDB ERP systems:
+  - Document data synchronization with ERP
+  - Financial data exchange (APP, Bills, Budgets)
+  - Vendor and department data synchronization
+  - Bidirectional data flow capabilities
+  - Real-time and batch integration modes
+  - Data mapping and transformation support
+- **FR-104**: System shall support integration with Audit systems:
+  - Audit log export and synchronization
+  - Compliance data sharing
+  - Activity report generation for audit systems
+  - Secure data transfer protocols
+  - Audit trail preservation and integrity
+  - Standard audit data formats (XML, JSON, CSV)
 
 ### 4.10 Security & Backup
 
@@ -744,41 +1004,41 @@ The system will handle various document types including tenders, purchase orders
 - **FR-198**: System shall support time-based and category-based organization
 - **FR-199**: System shall provide personalized folder views per user role
 
-### 4.15 Finance & Billing
+### 4.13 Finance & Billing
 
-#### 4.15.1 APP (Annual Project Plan) Budgets
+#### 4.13.1 APP (Annual Project Plan) Budgets
 - **FR-241**: System shall parse APP Excel files to load annual project plans with per-line budgets into dedicated APP tables (header and line).
 - **FR-242**: Each APP line shall include at minimum: fiscal year, project identifier/name, department, cost center, category, budget amount, and optional vendor/contract references.
 - **FR-243**: System shall validate APP uploads for duplicate years and structural integrity; partial failures shall produce detailed row-level error feedback.
 
-#### 4.15.2 Bill Entry and Management
+#### 4.13.2 Bill Entry and Management
 - **FR-244**: System shall provide bill entry (manual and file-import) with header and line items.
 - **FR-245**: Bills shall be linked to fiscal year and optionally mapped to an APP line (project/cost center/category).
 - **FR-246**: System shall validate that bill year matches the target APP year when linkage is provided.
 - **FR-247**: System shall support vendor, invoice number, invoice date, tax, and amount fields; totals shall be auto-calculated from line items.
 - **FR-248**: Bills may optionally attach supporting documents; attachments shall be stored and indexed for search.
 
-#### 4.15.3 APP vs Bills Reporting
+#### 4.13.3 APP vs Bills Reporting
 - **FR-249**: System shall provide year-wise reports comparing APP budgets vs Bills actuals with the following metrics per year and per APP line: budget amount, bill amount (actuals), remaining budget = budget − actuals, utilization percentage.
 - **FR-250**: Reports shall support filters: year, department, project, vendor, category, cost center, and date ranges.
 - **FR-251**: Reports shall support drill-down from yearly aggregates to APP line, then to underlying bills and attachments.
 - **FR-252**: Reports shall be exportable to PDF and Excel.
 
-#### 4.15.4 Dashboards and Visualizations
+#### 4.13.4 Dashboards and Visualizations
 - **FR-253**: Dashboard shall include graphical widgets for APP vs Bills by year: bar/column charts for budget vs actual, and stacked/line charts for cumulative utilization.
 - **FR-254**: Dashboard shall include a Remaining Budget visualization showing budget, actuals, and remaining for the selected year, department, or project.
 - **FR-255**: Widgets shall support interactive filters (year, department, project) and quick links to underlying reports and Smart Folders (DMC) for the filtered data.
 
-### 4.13 Mobile and Offline Capabilities
+### 4.14 Mobile and Offline Capabilities
 
-#### 4.13.1 Mobile Application Support
+#### 4.14.1 Mobile Application Support
 - **FR-200**: System shall provide native mobile applications for iOS and Android
 - **FR-201**: System shall support mobile document scanning and upload
 - **FR-202**: System shall provide mobile-optimized user interface
 - **FR-203**: System shall support touch gestures and mobile navigation
 - **FR-204**: System shall provide mobile-specific features (camera integration, GPS tagging)
 
-#### 4.13.2 Offline Access and Synchronization
+#### 4.14.2 Offline Access and Synchronization
 - **FR-205**: System shall support offline document access and viewing
 - **FR-206**: System shall provide offline document editing capabilities
 - **FR-207**: System shall automatically synchronize changes when connectivity is restored
@@ -786,44 +1046,44 @@ The system will handle various document types including tenders, purchase orders
 - **FR-209**: System shall provide offline search functionality
 - **FR-210**: System shall support selective offline document caching
 
-#### 4.13.3 Mobile Notifications and Alerts
+#### 4.14.3 Mobile Notifications and Alerts
 - **FR-211**: System shall provide push notifications for mobile devices
 - **FR-212**: System shall support mobile-specific alert configurations
 - **FR-213**: System shall provide location-based notifications
 - **FR-214**: System shall support mobile biometric authentication
 - **FR-215**: System shall provide mobile device management and security
 
-### 4.14 Advanced Collaboration Features
+### 4.15 Advanced Collaboration Features
 
-#### 4.14.1 Real-Time Document Collaboration
+#### 4.15.1 Real-Time Document Collaboration
 - **FR-216**: System shall support real-time collaborative document editing
 - **FR-217**: System shall provide live cursor tracking and user presence indicators
 - **FR-218**: System shall support simultaneous multi-user editing
 - **FR-219**: System shall provide real-time change synchronization
 - **FR-220**: System shall support collaborative commenting and discussions
 
-#### 4.14.2 Document Annotation and Review System
+#### 4.15.2 Document Annotation and Review System
 - **FR-221**: System shall provide comprehensive document annotation tools
 - **FR-222**: System shall support threaded comments and discussions
 - **FR-223**: System shall provide review workflows with approval tracking
 - **FR-224**: System shall support markup tools (highlighting, drawing, text boxes)
 - **FR-225**: System shall provide annotation versioning and history
 
-#### 4.14.3 Advanced Version Control
+#### 4.15.3 Advanced Version Control
 - **FR-226**: System shall provide detailed change tracking and diff visualization
 - **FR-227**: System shall support branch-based document versioning
 - **FR-228**: System shall provide merge conflict resolution tools
 - **FR-229**: System shall support document branching and merging workflows
 - **FR-230**: System shall provide comprehensive version comparison tools
 
-#### 4.14.4 Secure External Sharing
+#### 4.15.4 Secure External Sharing
 - **FR-231**: System shall provide secure document sharing with external parties
 - **FR-232**: System shall support time-limited and access-controlled sharing links
 - **FR-233**: System shall provide watermarking for shared documents
 - **FR-234**: System shall support external user authentication and access control
 - **FR-235**: System shall provide audit trails for external document access
 
-#### 4.14.5 Collaboration Workspaces
+#### 4.15.5 Collaboration Workspaces
 - **FR-236**: System shall provide team-based collaboration workspaces
 - **FR-237**: System shall support project-based document organization
 - **FR-238**: System shall provide workspace-specific permissions and access control
@@ -835,34 +1095,36 @@ The system will handle various document types including tenders, purchase orders
 ## Non-Functional Requirements
 
 ### 5.1 Performance Requirements
-- **NFR-001**: System shall support concurrent access by at least 100 users
-- **NFR-002**: Document upload shall complete within 30 seconds for files up to 10MB
+- **NFR-001**: System shall support concurrent access by at least 100 users (minimum requirement), scalable to 1000+ concurrent users with proper infrastructure
+- **NFR-002**: Document upload shall complete within 30 seconds for files up to 10MB; larger files (up to 100MB) may take proportionally longer
 - **NFR-003**: OCR processing shall complete within 60 seconds for standard documents
-- **NFR-004**: Search results shall be returned within 3 seconds
+- **NFR-004**: Search results shall be returned within 3 seconds for standard searches; complex searches with multiple filters may take up to 3 seconds; optimized complex searches should return within 500ms
 - **NFR-005**: System shall maintain 99.5% uptime
- - **NFR-006**: Smart Folder (DMC) evaluations shall resolve within 1 second for cached rule results and within 3 seconds for uncached complex rules on datasets up to 1 million documents
- - **NFR-007**: APP vs Bills aggregations shall return within 2 seconds for cached views and within 5 seconds for uncached computations on up to 1 million bills
+- **NFR-006**: Smart Folder (DMC) evaluations shall resolve within 1 second for cached rule results and within 3 seconds for uncached complex rules on datasets up to 1 million documents
+- **NFR-007**: APP vs Bills aggregations shall return within 2 seconds for cached views and within 5 seconds for uncached computations on up to 1 million bills
 
 ### 5.2 Scalability Requirements
-- **NFR-006**: System shall support storage of at least 1 million documents
-- **NFR-007**: System shall support file sizes up to 100MB
-- **NFR-008**: System shall scale horizontally to support increased load
+- **NFR-008**: System shall support storage of at least 1 million documents
+- **NFR-009**: System shall support file sizes up to 100MB
+- **NFR-010**: System shall scale horizontally to support increased load
 
 ### 5.3 Usability Requirements
-- **NFR-009**: System shall provide intuitive user interface
-- **NFR-010**: System shall support responsive design for mobile devices
-- **NFR-011**: System shall provide comprehensive help documentation
-- **NFR-012**: System shall support multiple languages
+- **NFR-011**: System shall provide intuitive user interface
+- **NFR-012**: System shall support responsive design for mobile devices
+- **NFR-013**: System shall provide comprehensive help documentation
+- **NFR-014**: System shall support multiple languages
 
 ### 5.4 Reliability Requirements
-- **NFR-013**: System shall implement data redundancy
-- **NFR-014**: System shall provide automatic failover capabilities
-- **NFR-015**: System shall maintain data integrity
-- **NFR-016**: System shall provide error handling and recovery
+- **NFR-015**: System shall implement data redundancy
+- **NFR-016**: System shall provide automatic failover capabilities
+- **NFR-017**: System shall maintain data integrity
+- **NFR-018**: System shall provide error handling and recovery
 
 ---
 
 ## User Roles and Permissions
+
+**Note**: The system supports both organizational hierarchy roles (DD1, DD2, DD3, DD4) for upload permissions (see Section 4.1.2) and functional system roles (Administrator, Officer, Viewer, Auditor) for general system access (see Section 4.5.1). Users may be assigned both types of roles.
 
 ### 6.1 Administrator Role
 - **Full system access**
@@ -926,12 +1188,12 @@ The system will handle various document types including tenders, purchase orders
 
 ### 9.1 Response Time
 - **Page load time: < 3 seconds**
-- **Search response time: < 3 seconds**
-- **Document upload time: < 30 seconds**
+- **Search response time: < 3 seconds** (standard searches), **< 500ms** (optimized complex searches)
+- **Document upload time: < 30 seconds** (for files up to 10MB; larger files may take proportionally longer)
 - **OCR processing time: < 60 seconds**
 
 ### 9.2 Throughput
-- **Concurrent users: 100+**
+- **Concurrent users: 100+** (minimum), **1000+** (with proper infrastructure scaling)
 - **Document processing: 1000+ documents per hour**
 - **Search queries: 500+ per minute**
 
@@ -1127,11 +1389,11 @@ The system will handle various document types including tenders, purchase orders
 
 #### 11.3.4 Success Criteria
 - Elasticsearch integration fully operational
-- Complex searches return results within 500ms
+- Complex searches return results within 500ms (optimized) or within 3 seconds (very complex searches)
 - Document relationships properly maintained
 - Repository navigation intuitive and efficient
 - Search accuracy >95% for relevant documents
- - Smart Folders (DMC) provide accurate, permission-aware dynamic groupings
+- Smart Folders (DMC) provide accurate, permission-aware dynamic groupings
 
 ### 11.4 Phase 4: Notification and Alert System (Months 10-12)
 
@@ -1302,7 +1564,7 @@ The system will handle various document types including tenders, purchase orders
 - Add compliance monitoring
 - Build backup and recovery systems
 
-#### 11.9.2 Deliverables
+#### 11.7.2 Deliverables
 - **Security Implementation**:
   - AES-256 data encryption
   - TLS 1.3 secure communication
@@ -1324,7 +1586,7 @@ The system will handle various document types including tenders, purchase orders
   - Data restoration capabilities
   - Backup verification and testing
 
-#### 11.6.3 Key Features
+#### 11.7.3 Key Features
 - End-to-end data encryption
 - Comprehensive audit logging
 - Compliance monitoring and reporting
@@ -1332,7 +1594,7 @@ The system will handle various document types including tenders, purchase orders
 - Security incident response
 - Data privacy protection
 
-#### 11.6.4 Success Criteria
+#### 11.7.4 Success Criteria
 - All data encrypted at rest and in transit
 - Complete audit trail maintained for all activities
 - Compliance reports generated automatically
@@ -1342,13 +1604,13 @@ The system will handle various document types including tenders, purchase orders
 
 ### 11.8 Phase 8: Integration and API Development (Months 22-24)
 
-#### 11.9.1 Objectives
+#### 11.8.1 Objectives
 - Develop comprehensive API suite
 - Create integration capabilities
 - Build external system connectors
 - Implement webhook system
 
-#### 11.9.2 Deliverables
+#### 11.8.2 Deliverables
 - **API Development**:
   - RESTful API with OpenAPI 3.0 documentation
   - GraphQL API for flexible queries
@@ -1370,7 +1632,7 @@ The system will handle various document types including tenders, purchase orders
   - Documentation and examples
   - Testing frameworks
 
-#### 11.9.3 Key Features
+#### 11.8.3 Key Features
 - Comprehensive API documentation
 - Real-time integration capabilities
 - Webhook-based event notifications
@@ -1378,7 +1640,7 @@ The system will handle various document types including tenders, purchase orders
 - API monitoring and analytics
 - External system synchronization
 
-#### 11.9.4 Success Criteria
+#### 11.8.4 Success Criteria
 - APIs documented and tested
 - Integration with external systems working
 - Webhook delivery reliable
@@ -1426,22 +1688,22 @@ The system will handle various document types including tenders, purchase orders
 - User training program
 
 #### 11.9.4 Success Criteria
-- System handles 1000+ concurrent users
-- Response times meet all requirements
+- System handles 100+ concurrent users (minimum requirement), scalable to 1000+ with proper infrastructure
+- Response times meet all requirements (as specified in NFR-001 through NFR-007)
 - All tests pass successfully
 - Production deployment stable
 - Monitoring systems operational
 - Users trained and productive
 
-### 11.9 Phase 9: Post-Launch Support and Enhancement (Months 25+)
+### 11.10 Phase 10: Post-Launch Support and Enhancement (Months 25+)
 
-#### 11.9.1 Objectives
+#### 11.10.1 Objectives
 - Provide ongoing support and maintenance
 - Monitor system performance
 - Gather user feedback
 - Plan future enhancements
 
-#### 11.9.2 Deliverables
+#### 11.10.2 Deliverables
 - **Support Framework**:
   - Help desk system
   - User support documentation
@@ -1458,7 +1720,7 @@ The system will handle various document types including tenders, purchase orders
   - Future roadmap development
   - Technology upgrade planning
 
-#### 11.9.3 Key Features
+#### 11.10.3 Key Features
 - 24/7 system monitoring
 - Responsive user support
 - Regular maintenance and updates
@@ -1466,14 +1728,14 @@ The system will handle various document types including tenders, purchase orders
 - User feedback integration
 - Future enhancement planning
 
-#### 11.9.4 Success Criteria
+#### 11.10.4 Success Criteria
 - System uptime >99.5%
 - User issues resolved within SLA
 - Regular updates deployed successfully
 - User satisfaction >90%
 - Future roadmap defined and approved
 
-### 11.10 Implementation Timeline Summary
+### 11.11 Implementation Timeline Summary
 
 | Phase | Duration | Key Focus | Major Deliverables |
 |-------|----------|-----------|-------------------|
@@ -1487,21 +1749,21 @@ The system will handle various document types including tenders, purchase orders
 | Phase 8 | Months 22-24 | Integration | APIs, external connectors, webhooks |
 | Phase 9 | Months 25-27 | Production | Performance optimization, testing, deployment |
 
-### 11.11 Risk Mitigation Strategies
+### 11.12 Risk Mitigation Strategies
 
-#### 11.11.1 Technical Risks
+#### 11.12.1 Technical Risks
 - **OCR Accuracy**: Implement multiple OCR engines and manual verification
 - **Performance Issues**: Early performance testing and optimization
 - **Integration Complexity**: Phased integration approach with fallback options
 - **Data Migration**: Comprehensive data validation and rollback procedures
 
-#### 11.11.2 Project Risks
+#### 11.12.2 Project Risks
 - **Scope Creep**: Clear phase boundaries and change management process
 - **Resource Availability**: Cross-training and backup resource planning
 - **Timeline Delays**: Buffer time in each phase and parallel development
 - **User Adoption**: Early user involvement and comprehensive training
 
-#### 11.11.3 Business Risks
+#### 11.12.3 Business Risks
 - **Compliance Issues**: Early compliance review and legal consultation
 - **Security Vulnerabilities**: Regular security audits and penetration testing
 - **Data Loss**: Multiple backup strategies and disaster recovery testing
@@ -1511,14 +1773,14 @@ The system will handle various document types including tenders, purchase orders
 
 ## Future Enhancements
 
-### 11.1 Planned Features
+### 12.1 Planned Features
 - **Advanced AI-powered document classification**
 - **Machine learning-based metadata extraction**
 - **Mobile application development**
 - **Advanced analytics and reporting**
 - **Integration with external systems**
 
-### 11.2 Scalability Considerations
+### 12.2 Scalability Considerations
 - **Cloud deployment options**
 - **Microservices architecture**
 - **API-first design**
@@ -1534,6 +1796,17 @@ The requirements are structured to support phased implementation, allowing for i
 
 ---
 
-*Document Version: 1.0*  
+---
+
+## Document Revision History
+
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 1.0 | [Current Date] | System Requirements Team | Initial comprehensive requirements specification |
+| 1.1 | [Current Date] | System Requirements Team | Fixed section numbering, NFR duplications, implementation phase numbering, enhanced cross-references, updated Table of Contents |
+
+---
+
+*Document Version: 1.1*  
 *Last Updated: [Current Date]*  
 *Prepared by: System Requirements Team*
