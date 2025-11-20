@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="022-001-add-workflow-definition" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="workflows" columnName="definition"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="workflows">
+            <column name="definition" type="TEXT"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="022-002-add-workflow-trigger-conditions" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="workflows" columnName="trigger_conditions"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="workflows">
+            <column name="trigger_conditions" type="TEXT"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="022-003-add-workflow-is-automatic" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="workflows" columnName="is_automatic"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="workflows">
+            <column name="is_automatic" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="022-004-add-workflow-is-public" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="workflows" columnName="is_public"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="workflows">
+            <column name="is_public" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="022-005-add-workflow-execution-count" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="workflows" columnName="execution_count"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="workflows">
+            <column name="execution_count" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="022-006-add-workflow-last-executed-at" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="workflows" columnName="last_executed_at"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="workflows">
+            <column name="last_executed_at" type="TIMESTAMP"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="022-007-add-workflow-next-execution-at" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="workflows" columnName="next_execution_at"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="workflows">
+            <column name="next_execution_at" type="TIMESTAMP"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>
+
