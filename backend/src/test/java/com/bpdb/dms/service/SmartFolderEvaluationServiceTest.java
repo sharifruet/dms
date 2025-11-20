@@ -11,6 +11,7 @@ import org.mockito.Mockito;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
@@ -27,7 +28,7 @@ class SmartFolderEvaluationServiceTest {
         DocumentIndex d2 = new DocumentIndex();
         setField(d2, "department", "B");
         Page<DocumentIndex> page = new PageImpl<>(List.of(d1, d2), PageRequest.of(0, 10), 2);
-        Mockito.when(repo.findAll(Mockito.any())).thenReturn(page);
+        Mockito.when(repo.findAll(Mockito.any(Pageable.class))).thenReturn(page);
 
         SmartFolderDefinition def = new SmartFolderDefinition();
         def.setIsActive(true);

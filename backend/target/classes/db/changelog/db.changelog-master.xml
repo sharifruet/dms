@@ -28,4 +28,5 @@
     <include file="db/changelog/018-create-document-type-fields.xml"/>
     <include file="db/changelog/019-add-document-archive-fields.xml"/>
     <include file="db/changelog/020-add-stationery-tracking.xml"/>
+    <include file="db/changelog/021-create-finance-billing-tables.xml"/>
 </databaseChangeLog>

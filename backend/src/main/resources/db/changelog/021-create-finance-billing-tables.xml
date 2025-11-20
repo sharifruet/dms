@@ -1,0 +1,208 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="021-create-app-headers" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="app_headers"/>
+            </not>
+        </preConditions>
+        <comment>Create APP (Annual Project Plan) headers table</comment>
+        
+        <createTable tableName="app_headers">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="fiscal_year" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="department" type="VARCHAR(255)"/>
+            <column name="created_by" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_app_headers_created_by" 
+                             referencedTableName="users" referencedColumnNames="id"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <createIndex indexName="idx_app_headers_fiscal_year" tableName="app_headers">
+            <column name="fiscal_year"/>
+        </createIndex>
+        
+        <createIndex indexName="idx_app_headers_department" tableName="app_headers">
+            <column name="department"/>
+        </createIndex>
+        
+    </changeSet>
+
+    <changeSet id="021-create-app-lines" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="app_lines"/>
+            </not>
+        </preConditions>
+        <comment>Create APP (Annual Project Plan) lines table</comment>
+        
+        <createTable tableName="app_lines">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="header_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="project_identifier" type="VARCHAR(255)"/>
+            <column name="project_name" type="VARCHAR(500)"/>
+            <column name="department" type="VARCHAR(255)"/>
+            <column name="cost_center" type="VARCHAR(255)"/>
+            <column name="category" type="VARCHAR(255)"/>
+            <column name="vendor" type="VARCHAR(255)"/>
+            <column name="contract_ref" type="VARCHAR(255)"/>
+            <column name="budget_amount" type="NUMERIC(18,2)"/>
+            <column name="row_number" type="INTEGER"/>
+            <column name="validation_errors" type="VARCHAR(1000)"/>
+        </createTable>
+        
+        <createIndex indexName="idx_app_lines_header" tableName="app_lines">
+            <column name="header_id"/>
+        </createIndex>
+        
+        <createIndex indexName="idx_app_lines_project" tableName="app_lines">
+            <column name="project_identifier"/>
+        </createIndex>
+        
+        <createIndex indexName="idx_app_lines_department" tableName="app_lines">
+            <column name="department"/>
+        </createIndex>
+        
+    </changeSet>
+
+    <changeSet id="021-create-bill-headers" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="bill_headers"/>
+            </not>
+        </preConditions>
+        <comment>Create Bill headers table</comment>
+        
+        <createTable tableName="bill_headers">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="fiscal_year" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="vendor" type="VARCHAR(255)"/>
+            <column name="invoice_number" type="VARCHAR(255)"/>
+            <column name="invoice_date" type="DATE"/>
+            <column name="created_by" type="BIGINT">
+                <constraints nullable="false" foreignKeyName="fk_bill_headers_created_by" 
+                             referencedTableName="users" referencedColumnNames="id"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        
+        <createIndex indexName="idx_bill_headers_fiscal_year" tableName="bill_headers">
+            <column name="fiscal_year"/>
+        </createIndex>
+        
+        <createIndex indexName="idx_bill_headers_vendor" tableName="bill_headers">
+            <column name="vendor"/>
+        </createIndex>
+        
+        <createIndex indexName="idx_bill_headers_invoice_number" tableName="bill_headers">
+            <column name="invoice_number"/>
+        </createIndex>
+        
+    </changeSet>
+
+    <changeSet id="021-create-bill-lines" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <tableExists tableName="bill_lines"/>
+            </not>
+        </preConditions>
+        <comment>Create Bill lines table</comment>
+        
+        <createTable tableName="bill_lines">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="header_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="app_line_id" type="BIGINT">
+                <constraints nullable="true" foreignKeyName="fk_bill_lines_app_line" 
+                             referencedTableName="app_lines" referencedColumnNames="id"/>
+            </column>
+            <column name="project_identifier" type="VARCHAR(255)"/>
+            <column name="department" type="VARCHAR(255)"/>
+            <column name="cost_center" type="VARCHAR(255)"/>
+            <column name="category" type="VARCHAR(255)"/>
+            <column name="amount" type="NUMERIC(18,2)"/>
+            <column name="tax_amount" type="NUMERIC(18,2)"/>
+        </createTable>
+        
+        <createIndex indexName="idx_bill_lines_header" tableName="bill_lines">
+            <column name="header_id"/>
+        </createIndex>
+        
+        <createIndex indexName="idx_bill_lines_app_line" tableName="bill_lines">
+            <column name="app_line_id"/>
+        </createIndex>
+        
+        <createIndex indexName="idx_bill_lines_project" tableName="bill_lines">
+            <column name="project_identifier"/>
+        </createIndex>
+        
+    </changeSet>
+
+    <changeSet id="021-add-foreign-keys-with-cascade" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <and>
+                <not>
+                    <foreignKeyConstraintExists foreignKeyName="fk_app_lines_header"/>
+                </not>
+                <not>
+                    <foreignKeyConstraintExists foreignKeyName="fk_bill_lines_header"/>
+                </not>
+            </and>
+        </preConditions>
+        <comment>Add foreign key constraints with CASCADE delete behavior</comment>
+        
+        <addForeignKeyConstraint baseTableName="app_lines"
+                                 baseColumnNames="header_id"
+                                 constraintName="fk_app_lines_header"
+                                 referencedTableName="app_headers"
+                                 referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        
+        <addForeignKeyConstraint baseTableName="bill_lines"
+                                 baseColumnNames="header_id"
+                                 constraintName="fk_bill_lines_header"
+                                 referencedTableName="bill_headers"
+                                 referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+    </changeSet>
+
+    <changeSet id="021-add-unique-constraint-app-fiscal-year" author="system">
+        <comment>Add unique constraint to prevent duplicate APP entries for same fiscal year</comment>
+        
+        <addUniqueConstraint tableName="app_headers" 
+                             columnNames="fiscal_year, department" 
+                             constraintName="uk_app_headers_fiscal_year_dept"/>
+    </changeSet>
+
+</databaseChangeLog>
+
