@@ -16,6 +16,12 @@ export interface Document {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  uploadedAt?: string;
+  folder?: {
+    id: number;
+    name: string;
+    folderPath?: string;
+  } | null;
 }
 
 export interface FileUploadResponse {
@@ -46,4 +52,17 @@ export interface DocumentCategory {
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface DocumentTypeField {
+  id: number;
+  fieldKey: string;
+  fieldLabel: string;
+  fieldType: string; // text, number, date, select, multiselect
+  isRequired: boolean;
+  defaultValue?: string;
+  fieldOptions?: string; // JSON string for select/multiselect options
+  displayOrder: number;
+  description?: string;
+  value?: string; // Current value for this document
 }

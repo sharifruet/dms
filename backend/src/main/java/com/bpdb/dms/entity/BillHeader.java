@@ -1,5 +1,6 @@
 package com.bpdb.dms.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -13,6 +14,7 @@ import java.util.List;
 @Entity
 @Table(name = "bill_headers")
 @EntityListeners(AuditingEntityListener.class)
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class BillHeader {
 
     @Id
@@ -33,6 +35,7 @@ public class BillHeader {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "password", "email", "roles"})
     private User createdBy;
 
     @CreatedDate
@@ -44,6 +47,7 @@ public class BillHeader {
     private LocalDateTime updatedAt;
 
     @OneToMany(mappedBy = "header", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnoreProperties({"header", "hibernateLazyInitializer", "handler"})
     private List<BillLine> lines = new ArrayList<>();
 
     public Long getId() { return id; }

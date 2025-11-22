@@ -45,6 +45,30 @@ public class AppLine {
     @Column(name = "validation_errors", length = 1000)
     private String validationErrors;
 
+    @Column(name = "package_no", length = 100)
+    private String packageNo;
+
+    @Column(name = "item_description", length = 1000)
+    private String itemDescription;
+
+    @Column(name = "unit_label", length = 100)
+    private String unit;
+
+    @Column(name = "quantity", precision = 18, scale = 2)
+    private BigDecimal quantity;
+
+    @Column(name = "procurement_method", length = 255)
+    private String procurementMethod;
+
+    @Column(name = "approving_authority", length = 255)
+    private String approvingAuthority;
+
+    @Column(name = "source_of_fund", length = 255)
+    private String sourceOfFund;
+
+    @Column(name = "estimated_cost_lakh", precision = 18, scale = 2)
+    private BigDecimal estimatedCostLakh;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public AppHeader getHeader() { return header; }
@@ -69,6 +93,30 @@ public class AppLine {
     public void setRowNumber(Integer rowNumber) { this.rowNumber = rowNumber; }
     public String getValidationErrors() { return validationErrors; }
     public void setValidationErrors(String validationErrors) { this.validationErrors = validationErrors; }
+
+    public String getPackageNo() { return packageNo; }
+    public void setPackageNo(String packageNo) { this.packageNo = packageNo; }
+
+    public String getItemDescription() { return itemDescription; }
+    public void setItemDescription(String itemDescription) { this.itemDescription = itemDescription; }
+
+    public String getUnit() { return unit; }
+    public void setUnit(String unit) { this.unit = unit; }
+
+    public BigDecimal getQuantity() { return quantity; }
+    public void setQuantity(BigDecimal quantity) { this.quantity = quantity; }
+
+    public String getProcurementMethod() { return procurementMethod; }
+    public void setProcurementMethod(String procurementMethod) { this.procurementMethod = procurementMethod; }
+
+    public String getApprovingAuthority() { return approvingAuthority; }
+    public void setApprovingAuthority(String approvingAuthority) { this.approvingAuthority = approvingAuthority; }
+
+    public String getSourceOfFund() { return sourceOfFund; }
+    public void setSourceOfFund(String sourceOfFund) { this.sourceOfFund = sourceOfFund; }
+
+    public BigDecimal getEstimatedCostLakh() { return estimatedCostLakh; }
+    public void setEstimatedCostLakh(BigDecimal estimatedCostLakh) { this.estimatedCostLakh = estimatedCostLakh; }
 }
 
 

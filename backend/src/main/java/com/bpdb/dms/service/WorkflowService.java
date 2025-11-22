@@ -237,6 +237,13 @@ public class WorkflowService {
     }
     
     /**
+     * Get active tender workflow instances (for document upload)
+     */
+    public List<WorkflowInstance> getActiveTenderWorkflowInstances() {
+        return workflowInstanceRepository.findActiveTenderWorkflowInstances();
+    }
+    
+    /**
      * Create workflow steps from definition
      */
     private void createWorkflowSteps(WorkflowInstance instance, String definition) {

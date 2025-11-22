@@ -34,7 +34,11 @@ public interface WorkflowInstanceRepository extends JpaRepository<WorkflowInstan
     /**
      * Find workflow instances by initiator
      */
-    Page<WorkflowInstance> findByInitiatedBy(User initiatedBy, Pageable pageable);
+    @Query("SELECT wi FROM WorkflowInstance wi " +
+           "LEFT JOIN FETCH wi.workflow " +
+           "LEFT JOIN FETCH wi.document " +
+           "WHERE wi.initiatedBy = :initiatedBy")
+    Page<WorkflowInstance> findByInitiatedBy(@Param("initiatedBy") User initiatedBy, Pageable pageable);
     
     /**
      * Find workflow instances by status
@@ -49,7 +53,10 @@ public interface WorkflowInstanceRepository extends JpaRepository<WorkflowInstan
     /**
      * Find overdue workflow instances
      */
-    @Query("SELECT wi FROM WorkflowInstance wi WHERE wi.dueDate < :currentTime AND wi.status IN ('PENDING', 'IN_PROGRESS')")
+    @Query("SELECT wi FROM WorkflowInstance wi " +
+           "LEFT JOIN FETCH wi.workflow " +
+           "LEFT JOIN FETCH wi.document " +
+           "WHERE wi.dueDate < :currentTime AND wi.status IN ('PENDING', 'IN_PROGRESS')")
     List<WorkflowInstance> findOverdueInstances(@Param("currentTime") LocalDateTime currentTime);
     
     /**
@@ -77,4 +84,16 @@ public interface WorkflowInstanceRepository extends JpaRepository<WorkflowInstan
                                                  @Param("initiatedBy") User initiatedBy,
                                                  @Param("status") WorkflowInstanceStatus status,
                                                  Pageable pageable);
+    
+    /**
+     * Find active tender workflow instances (for document upload)
+     * These are workflow instances associated with TENDER_NOTICE documents that are still active
+     */
+    @Query("SELECT wi FROM WorkflowInstance wi " +
+           "LEFT JOIN FETCH wi.workflow " +
+           "LEFT JOIN FETCH wi.document d " +
+           "WHERE d.documentType = 'TENDER_NOTICE' " +
+           "AND wi.status IN ('PENDING', 'IN_PROGRESS') " +
+           "ORDER BY wi.createdAt DESC")
+    List<WorkflowInstance> findActiveTenderWorkflowInstances();
 }

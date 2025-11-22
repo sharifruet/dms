@@ -187,6 +187,19 @@ public class ExpiryTrackingController {
     }
     
     /**
+     * Get Performance Security documents with expiry dates from metadata
+     */
+    @GetMapping("/performance-security")
+    public ResponseEntity<List<Map<String, Object>>> getPerformanceSecurityDocuments() {
+        try {
+            List<Map<String, Object>> documents = expiryTrackingService.getPerformanceSecurityDocumentsWithExpiry();
+            return ResponseEntity.ok(documents);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+    
+    /**
      * Create expiry tracking request DTO
      */
     public static class CreateExpiryTrackingRequest {

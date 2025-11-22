@@ -56,8 +56,9 @@ import { documentService, Document, DocumentUploadRequest } from '../services/do
 import { DocumentCategory } from '../types/document';
 import DocumentViewer from '../components/DocumentViewer';
 import FolderExplorer from '../components/FolderExplorer';
-import { Folder } from '../services/folderService';
-import { ALL_DOCUMENT_TYPES, getDocumentTypeLabel, DocumentType } from '../constants/documentTypes';
+import { Folder, folderService } from '../services/folderService';
+import { ALL_DOCUMENT_TYPES, getDocumentTypeLabel, DocumentType, requiresTenderWorkflow } from '../constants/documentTypes';
+import { workflowService, WorkflowInstance } from '../services/workflowService';
 
 const DEFAULT_CATEGORIES: DocumentCategory[] = ALL_DOCUMENT_TYPES.map((type, idx) => ({
   id: -(idx + 1),
@@ -89,6 +90,8 @@ const DocumentsEnhanced: React.FC = () => {
   const [filterDepartment, setFilterDepartment] = useState('');
   const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
   const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null);
+  const [allFolders, setAllFolders] = useState<Folder[]>([]);
+  const [loadingFolders, setLoadingFolders] = useState(false);
   
   // Upload dialog
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -102,7 +105,10 @@ const DocumentsEnhanced: React.FC = () => {
     department: user?.department || '',
     tags: '',
     folderId: null as number | null,
+    tenderWorkflowInstanceId: null as number | null,
   });
+  const [tenderWorkflowInstances, setTenderWorkflowInstances] = useState<WorkflowInstance[]>([]);
+  const [loadingTenderWorkflows, setLoadingTenderWorkflows] = useState(false);
   
   // Document viewer
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -141,6 +147,53 @@ const DocumentsEnhanced: React.FC = () => {
   useEffect(() => {
     fetchDocuments();
   }, [fetchDocuments]);
+
+  // Fetch all folders for dropdown
+  useEffect(() => {
+    const fetchFolders = async () => {
+      setLoadingFolders(true);
+      try {
+        const folders = await folderService.getFolderTree();
+        // Flatten the folder tree to get all folders
+        const flattenFolders = (folders: Folder[]): Folder[] => {
+          const result: Folder[] = [];
+          folders.forEach(folder => {
+            result.push(folder);
+            if (folder.subFolders && folder.subFolders.length > 0) {
+              result.push(...flattenFolders(folder.subFolders));
+            }
+          });
+          return result;
+        };
+        setAllFolders(flattenFolders(folders));
+      } catch (err: any) {
+        console.error('Error fetching folders:', err);
+        setError('Failed to load folders');
+      } finally {
+        setLoadingFolders(false);
+      }
+    };
+    fetchFolders();
+  }, []);
+
+  // Fetch tender workflow instances when upload dialog opens
+  useEffect(() => {
+    if (uploadDialogOpen) {
+      const fetchTenderWorkflows = async () => {
+        setLoadingTenderWorkflows(true);
+        try {
+          const instances = await workflowService.getActiveTenderWorkflowInstances();
+          setTenderWorkflowInstances(instances);
+        } catch (err: any) {
+          console.error('Error fetching tender workflow instances:', err);
+          // Don't show error to user, just log it
+        } finally {
+          setLoadingTenderWorkflows(false);
+        }
+      };
+      fetchTenderWorkflows();
+    }
+  }, [uploadDialogOpen]);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -208,7 +261,7 @@ const DocumentsEnhanced: React.FC = () => {
         });
       }, 200);
 
-      const uploadRequest: DocumentUploadRequest = {
+      const uploadRequest: DocumentUploadRequest & { tenderWorkflowInstanceId?: string } = {
         file: selectedFile,
         title: uploadForm.title,
         description: uploadForm.description,
@@ -218,6 +271,11 @@ const DocumentsEnhanced: React.FC = () => {
         folderId: uploadForm.folderId || selectedFolderId,
         userId: 1, // Should be actual user ID
       };
+
+      // Add tenderWorkflowInstanceId if required
+      if (requiresTenderWorkflow(uploadForm.documentType) && uploadForm.tenderWorkflowInstanceId) {
+        uploadRequest.tenderWorkflowInstanceId = uploadForm.tenderWorkflowInstanceId.toString();
+      }
 
       await documentService.uploadDocument(uploadRequest);
       
@@ -233,6 +291,7 @@ const DocumentsEnhanced: React.FC = () => {
         department: user?.department || '',
         tags: '',
         folderId: null,
+        tenderWorkflowInstanceId: null,
       });
       
       // Refresh documents list
@@ -708,16 +767,52 @@ const DocumentsEnhanced: React.FC = () => {
                 value={uploadForm.folderId || ''}
                 label="Folder (Optional)"
                 onChange={(e) => setUploadForm({ ...uploadForm, folderId: e.target.value ? Number(e.target.value) : null })}
+                disabled={loadingFolders}
               >
                 <MenuItem value="">No Folder</MenuItem>
-                {selectedFolder && (
-                  <MenuItem value={selectedFolder.id}>{selectedFolder.name}</MenuItem>
-                )}
+                {allFolders.map((folder) => (
+                  <MenuItem key={folder.id} value={folder.id}>
+                    {folder.folderPath || folder.name}
+                  </MenuItem>
+                ))}
               </Select>
-              <Typography variant="caption" sx={{ mt: 1, color: 'text.secondary' }}>
-                {selectedFolder ? `Current folder: ${selectedFolder.name}` : 'Select a folder from the explorer above'}
-              </Typography>
+              {loadingFolders && (
+                <Typography variant="caption" sx={{ mt: 1, color: 'text.secondary' }}>
+                  Loading folders...
+                </Typography>
+              )}
             </FormControl>
+
+            {requiresTenderWorkflow(uploadForm.documentType) && (
+              <FormControl fullWidth required>
+                <InputLabel>Tender Workflow</InputLabel>
+                <Select
+                  value={uploadForm.tenderWorkflowInstanceId || ''}
+                  label="Tender Workflow"
+                  onChange={(e) => setUploadForm({ ...uploadForm, tenderWorkflowInstanceId: e.target.value ? Number(e.target.value) : null })}
+                  disabled={loadingTenderWorkflows}
+                >
+                  <MenuItem value="">
+                    <em>Select a Tender Workflow</em>
+                  </MenuItem>
+                  {tenderWorkflowInstances.map((instance) => (
+                    <MenuItem key={instance.id} value={instance.id}>
+                      {instance.workflow?.name || 'Workflow'} - {instance.document?.originalName || `Instance #${instance.id}`} ({instance.status})
+                    </MenuItem>
+                  ))}
+                </Select>
+                {loadingTenderWorkflows && (
+                  <Typography variant="caption" sx={{ mt: 1, color: 'text.secondary' }}>
+                    Loading tender workflows...
+                  </Typography>
+                )}
+                {!loadingTenderWorkflows && tenderWorkflowInstances.length === 0 && (
+                  <Typography variant="caption" sx={{ mt: 1, color: 'error.main' }}>
+                    No active tender workflows found. Please upload a Tender Notice first to create a workflow.
+                  </Typography>
+                )}
+              </FormControl>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>

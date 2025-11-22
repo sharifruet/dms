@@ -28,7 +28,12 @@ public interface WorkflowStepRepository extends JpaRepository<WorkflowStep, Long
     /**
      * Find workflow steps by assigned user
      */
-    Page<WorkflowStep> findByAssignedTo(User assignedTo, Pageable pageable);
+    @Query("SELECT ws FROM WorkflowStep ws " +
+           "LEFT JOIN FETCH ws.workflowInstance wi " +
+           "LEFT JOIN FETCH wi.workflow " +
+           "LEFT JOIN FETCH wi.document " +
+           "WHERE ws.assignedTo = :assignedTo")
+    Page<WorkflowStep> findByAssignedTo(@Param("assignedTo") User assignedTo, Pageable pageable);
     
     /**
      * Find workflow steps by status

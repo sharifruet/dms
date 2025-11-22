@@ -152,5 +152,11 @@ export const workflowService = {
   }> => {
     const response = await api.get('/workflows/statistics');
     return response.data;
+  },
+
+  // Get active tender workflow instances (for document upload)
+  getActiveTenderWorkflowInstances: async (): Promise<WorkflowInstance[]> => {
+    const response = await api.get('/workflows/instances/tender/active');
+    return response.data;
   }
 };

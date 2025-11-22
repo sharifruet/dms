@@ -30,17 +30,40 @@ export interface BillLine {
 
 export const financeService = {
   // Get all bills
-  getBills: async (fiscalYear?: number, vendor?: string): Promise<BillHeader[]> => {
+  getBills: async (fiscalYear?: number, vendor?: string, page: number = 0, size: number = 100): Promise<{ content: BillHeader[]; totalElements: number; totalPages: number }> => {
     const params = new URLSearchParams();
     if (fiscalYear) params.append('fiscalYear', fiscalYear.toString());
     if (vendor) params.append('vendor', vendor);
+    params.append('page', page.toString());
+    params.append('size', size.toString());
     const response = await api.get(`/finance/bills?${params.toString()}`);
-    return response.data;
+    // Handle both paginated response and legacy list response
+    if (response.data.content) {
+      return response.data;
+    } else {
+      // Legacy format - wrap in paginated format
+      return {
+        content: response.data,
+        totalElements: response.data.length,
+        totalPages: 1
+      };
+    }
   },
 
   // Get a single bill by ID
   getBill: async (id: number): Promise<BillHeader> => {
     const response = await api.get(`/finance/bills/${id}`);
+    return response.data;
+  },
+
+  // Get budget summary (budget and billed amounts)
+  getBudgetSummary: async (): Promise<{
+    totalBudget: number;
+    totalBilled: number;
+    remaining: number;
+    utilizationPct: number;
+  }> => {
+    const response = await api.get('/finance/dashboard/budget-summary');
     return response.data;
   },
 
@@ -51,6 +74,7 @@ export const financeService = {
     invoiceNumber?: string;
     invoiceDate?: string;
     lines?: Array<{
+      appLineId?: number;
       projectIdentifier?: string;
       department?: string;
       costCenter?: string;

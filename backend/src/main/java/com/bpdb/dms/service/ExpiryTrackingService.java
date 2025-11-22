@@ -41,6 +41,9 @@ public class ExpiryTrackingService {
     @Autowired
     private AuditService auditService;
     
+    @Autowired
+    private DocumentMetadataService documentMetadataService;
+    
     /**
      * Create expiry tracking for a document
      */
@@ -471,5 +474,88 @@ public class ExpiryTrackingService {
         }
         
         return stats;
+    }
+    
+    /**
+     * Get Performance Security documents with expiry dates from metadata
+     */
+    public List<Map<String, Object>> getPerformanceSecurityDocumentsWithExpiry() {
+        List<Map<String, Object>> result = new ArrayList<>();
+        
+        try {
+            // Get all PERFORMANCE_SECURITY_PS documents
+            Page<Document> psDocuments = documentRepository.findByDocumentType("PERFORMANCE_SECURITY_PS", 
+                org.springframework.data.domain.PageRequest.of(0, Integer.MAX_VALUE));
+            
+            LocalDateTime now = LocalDateTime.now();
+            
+            for (Document doc : psDocuments.getContent()) {
+                try {
+                    // Get document metadata
+                    Map<String, String> metadata = documentMetadataService.getMetadataMap(doc);
+                    
+                    // Check for expiryDate in metadata
+                    String expiryDateStr = metadata.get("expiryDate");
+                    if (expiryDateStr != null && !expiryDateStr.trim().isEmpty()) {
+                        try {
+                            // Parse expiry date - try LocalDate first, then LocalDateTime
+                            LocalDateTime expiryDate;
+                            try {
+                                // Try parsing as LocalDate first (most common format)
+                                java.time.LocalDate localDate = java.time.LocalDate.parse(expiryDateStr);
+                                expiryDate = localDate.atStartOfDay();
+                            } catch (Exception e1) {
+                                // Try parsing as LocalDateTime
+                                expiryDate = LocalDateTime.parse(expiryDateStr);
+                            }
+                            
+                            // Create a map similar to ExpiryTracking for frontend
+                            Map<String, Object> docWithExpiry = new HashMap<>();
+                            docWithExpiry.put("id", doc.getId());
+                            docWithExpiry.put("documentId", doc.getId());
+                            docWithExpiry.put("document", doc);
+                            docWithExpiry.put("expiryType", "PERFORMANCE_SECURITY");
+                            docWithExpiry.put("expiryDate", expiryDate);
+                            docWithExpiry.put("status", expiryDate.isBefore(now) ? "EXPIRED" : "ACTIVE");
+                            docWithExpiry.put("department", doc.getDepartment());
+                            docWithExpiry.put("vendorName", metadata.get("vendorName"));
+                            
+                            // Try to parse contract value
+                            String contractValueStr = metadata.get("contractValue");
+                            if (contractValueStr != null && !contractValueStr.trim().isEmpty()) {
+                                try {
+                                    docWithExpiry.put("contractValue", Double.parseDouble(contractValueStr));
+                                } catch (NumberFormatException e) {
+                                    // Ignore parsing errors
+                                }
+                            }
+                            
+                            docWithExpiry.put("currency", metadata.get("currency"));
+                            docWithExpiry.put("createdAt", doc.getCreatedAt());
+                            docWithExpiry.put("updatedAt", doc.getUpdatedAt());
+                            docWithExpiry.put("isFromMetadata", true); // Flag to indicate this is from metadata, not expiry_tracking table
+                            
+                            result.add(docWithExpiry);
+                        } catch (Exception e) {
+                            logger.warn("Failed to parse expiry date for document {}: {}", doc.getId(), expiryDateStr, e);
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.warn("Failed to get metadata for document {}: {}", doc.getId(), e.getMessage());
+                }
+            }
+            
+            // Sort by expiry date (ascending - earliest expiry first)
+            result.sort((a, b) -> {
+                LocalDateTime dateA = (LocalDateTime) a.get("expiryDate");
+                LocalDateTime dateB = (LocalDateTime) b.get("expiryDate");
+                return dateA.compareTo(dateB);
+            });
+            
+        } catch (Exception e) {
+            logger.error("Failed to get Performance Security documents with expiry: {}", e.getMessage(), e);
+        }
+        
+        return result;
     }
 }

@@ -13,12 +13,18 @@ import com.bpdb.dms.service.FinanceDashboardService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 @RestController
 @RequestMapping("/api/finance")
@@ -44,18 +50,58 @@ public class FinanceController {
     private BillHeaderRepository billHeaderRepository;
 
     @GetMapping(path = "/bills")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
     public ResponseEntity<?> getBills(@RequestParam(required = false) Integer fiscalYear,
-                                      @RequestParam(required = false) String vendor) {
-        List<BillHeader> bills;
-        if (fiscalYear != null) {
-            bills = billHeaderRepository.findAll().stream()
-                .filter(b -> b.getFiscalYear().equals(fiscalYear))
-                .filter(b -> vendor == null || (b.getVendor() != null && b.getVendor().contains(vendor)))
-                .collect(java.util.stream.Collectors.toList());
-        } else {
-            bills = billHeaderRepository.findAll();
+                                      @RequestParam(required = false) String vendor,
+                                      @RequestParam(defaultValue = "0") int page,
+                                      @RequestParam(defaultValue = "100") int size) {
+        try {
+            Pageable pageable = PageRequest.of(page, size);
+            Page<BillHeader> billsPage;
+            
+            if (fiscalYear != null) {
+                List<BillHeader> allBills = billHeaderRepository.findAll();
+                List<BillHeader> filtered = allBills.stream()
+                    .filter(b -> b.getFiscalYear() != null && b.getFiscalYear().equals(fiscalYear))
+                    .filter(b -> vendor == null || (b.getVendor() != null && b.getVendor().contains(vendor)))
+                    .collect(java.util.stream.Collectors.toList());
+                
+                // Manual pagination for filtered results
+                int start = page * size;
+                int end = Math.min(start + size, filtered.size());
+                List<BillHeader> paginatedBills = start < filtered.size() ? filtered.subList(start, end) : new java.util.ArrayList<>();
+                
+                billsPage = new PageImpl<>(
+                    paginatedBills,
+                    pageable,
+                    filtered.size()
+                );
+            } else {
+                // For all bills, filter manually
+                List<BillHeader> allBills = billHeaderRepository.findAll();
+                List<BillHeader> filtered = allBills.stream()
+                    .filter(b -> vendor == null || (b.getVendor() != null && b.getVendor().contains(vendor)))
+                    .collect(java.util.stream.Collectors.toList());
+                
+                int start = page * size;
+                int end = Math.min(start + size, filtered.size());
+                List<BillHeader> paginatedBills = start < filtered.size() ? filtered.subList(start, end) : new java.util.ArrayList<>();
+                
+                billsPage = new PageImpl<>(
+                    paginatedBills,
+                    pageable,
+                    filtered.size()
+                );
+            }
+            
+            // Clear lines from response to avoid circular reference and reduce payload size
+            // Lines will be loaded when viewing individual bill details
+            billsPage.getContent().forEach(bill -> bill.setLines(new java.util.ArrayList<>()));
+            
+            return ResponseEntity.ok(billsPage);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
         }
-        return ResponseEntity.ok(bills);
     }
 
     @GetMapping(path = "/bills/{id}")
@@ -108,6 +154,11 @@ public class FinanceController {
                                              @RequestParam(required = false) String department) {
         if (year == null) return ResponseEntity.badRequest().body("year is required");
         return ResponseEntity.ok(financeDashboardService.series(year, department));
+    }
+
+    @GetMapping(path = "/dashboard/budget-summary")
+    public ResponseEntity<?> getBudgetSummary() {
+        return ResponseEntity.ok(financeDashboardService.getBudgetSummary());
     }
 }
 

@@ -24,6 +24,11 @@ export interface Document {
   createdAt?: string;
   updatedAt?: string;
   extractedText?: string;
+  folder?: {
+    id: number;
+    name: string;
+    folderPath?: string;
+  } | null;
 }
 
 export interface DocumentUploadRequest {
@@ -144,6 +149,24 @@ export const documentService = {
     return response.data;
   },
 
+  // Update document metadata (for type fields)
+  updateDocumentMetadata: async (id: number, metadata: Record<string, string>): Promise<{ success: boolean; metadata: Record<string, string>; error?: string }> => {
+    const response = await api.put(`/documents/${id}/metadata`, metadata);
+    return response.data;
+  },
+
+  // Update document folder
+  updateDocumentFolder: async (id: number, folderId: number | null): Promise<{ success: boolean; message?: string; folderId?: number | null; error?: string }> => {
+    const response = await api.put(`/documents/${id}/folder`, { folderId });
+    return response.data;
+  },
+
+  // Get tender statistics
+  getTenderStatistics: async (): Promise<{ totalTenders: number; liveTenders: number; closedTenders: number; draftTenders: number }> => {
+    const response = await api.get('/documents/statistics/tenders');
+    return response.data;
+  },
+
   // Delete document (soft delete)
   deleteDocument: async (id: number): Promise<void> => {
     await api.post(`/documents/${id}/delete`);
@@ -218,8 +241,14 @@ export const documentService = {
   },
 
   // Get document statistics
-  getDocumentStatistics: async (): Promise<DocumentStatistics> => {
+  getDocumentStatistics: async (): Promise<{ totalDocuments: number; activeDocuments: number; archivedDocuments: number; deletedDocuments: number }> => {
     const response = await api.get('/documents/statistics');
+    return response.data;
+  },
+
+  // Get document statistics by type
+  getDocumentStatisticsByType: async (): Promise<Record<string, number>> => {
+    const response = await api.get('/documents/statistics/by-type');
     return response.data;
   },
 

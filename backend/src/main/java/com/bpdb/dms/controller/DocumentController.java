@@ -6,9 +6,14 @@ import com.bpdb.dms.entity.DocumentIndex;
 import com.bpdb.dms.entity.User;
 import com.bpdb.dms.repository.DocumentIndexRepository;
 import com.bpdb.dms.repository.DocumentRepository;
+import com.bpdb.dms.repository.FolderRepository;
 import com.bpdb.dms.repository.UserRepository;
+import com.bpdb.dms.entity.Folder;
 import com.bpdb.dms.service.DocumentArchiveService;
 import com.bpdb.dms.service.DocumentCategoryService;
+import com.bpdb.dms.service.DocumentMetadataService;
+import com.bpdb.dms.service.DocumentTypeFieldService;
+import com.bpdb.dms.entity.DocumentTypeField;
 import com.bpdb.dms.service.FileUploadService;
 import com.bpdb.dms.service.StationeryTrackingService;
 import com.bpdb.dms.entity.AppDocumentEntry;
@@ -27,6 +32,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -64,6 +70,15 @@ public class DocumentController {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private DocumentTypeFieldService documentTypeFieldService;
+
+    @Autowired
+    private DocumentMetadataService documentMetadataService;
+
+    @Autowired
+    private FolderRepository folderRepository;
 
     @GetMapping
     @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
@@ -133,9 +148,112 @@ public class DocumentController {
                 response.put("ocrProcessing", true);
             }
 
+            // Get document type fields and their values
+            if (document.getDocumentType() != null) {
+                try {
+                    List<DocumentTypeField> typeFields = documentTypeFieldService.getFieldsForDocumentType(document.getDocumentType());
+                    Map<String, String> metadataMap = documentMetadataService.getMetadataMap(document);
+                    
+                    // Create a list of fields with their current values
+                    List<Map<String, Object>> fieldsWithValues = new ArrayList<>();
+                    for (DocumentTypeField field : typeFields) {
+                        Map<String, Object> fieldData = new HashMap<>();
+                        fieldData.put("id", field.getId());
+                        fieldData.put("fieldKey", field.getFieldKey());
+                        fieldData.put("fieldLabel", field.getFieldLabel());
+                        fieldData.put("fieldType", field.getFieldType());
+                        fieldData.put("isRequired", field.getIsRequired());
+                        fieldData.put("defaultValue", field.getDefaultValue());
+                        fieldData.put("fieldOptions", field.getFieldOptions());
+                        fieldData.put("displayOrder", field.getDisplayOrder());
+                        fieldData.put("description", field.getDescription());
+                        // Get current value from metadata
+                        fieldData.put("value", metadataMap.getOrDefault(field.getFieldKey(), field.getDefaultValue()));
+                        fieldsWithValues.add(fieldData);
+                    }
+                    response.put("typeFields", fieldsWithValues);
+                } catch (Exception e) {
+                    // If service is not available, just continue without type fields
+                    response.put("typeFields", Collections.emptyList());
+                }
+            } else {
+                response.put("typeFields", Collections.emptyList());
+            }
+
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @PutMapping("/{id}/metadata")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<Map<String, Object>> updateDocumentMetadata(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> metadata) {
+        try {
+            Optional<Document> documentOpt = documentRepository.findById(id);
+            if (documentOpt.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+
+            Document document = documentOpt.get();
+            Map<String, String> updatedMetadata = documentMetadataService.applyManualMetadata(document, metadata);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("metadata", updatedMetadata);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    @PutMapping("/{id}/folder")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<Map<String, Object>> updateDocumentFolder(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> request) {
+        try {
+            Optional<Document> documentOpt = documentRepository.findById(id);
+            if (documentOpt.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+
+            Document document = documentOpt.get();
+            Long folderId = request.get("folderId") != null ? 
+                (request.get("folderId") instanceof Number ? 
+                    ((Number) request.get("folderId")).longValue() : 
+                    Long.parseLong(request.get("folderId").toString())) : null;
+
+            if (folderId != null) {
+                Optional<Folder> folderOpt = folderRepository.findById(folderId);
+                if (folderOpt.isEmpty()) {
+                    Map<String, Object> response = new HashMap<>();
+                    response.put("success", false);
+                    response.put("error", "Folder not found");
+                    return ResponseEntity.badRequest().body(response);
+                }
+                document.setFolder(folderOpt.get());
+            } else {
+                document.setFolder(null);
+            }
+
+            documentRepository.save(document);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Document folder updated successfully");
+            response.put("folderId", folderId);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
         }
     }
 
@@ -567,6 +685,139 @@ public class DocumentController {
             return ResponseEntity.ok(entries);
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @GetMapping("/statistics")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<Map<String, Object>> getDocumentStatistics() {
+        try {
+            long totalDocuments = documentRepository.count();
+            long activeDocuments = documentRepository.countByIsActiveTrue();
+            long archivedDocuments = documentRepository.countArchivedDocuments();
+            long deletedDocuments = documentRepository.countDeletedDocuments();
+            
+            Map<String, Object> stats = new HashMap<>();
+            stats.put("totalDocuments", totalDocuments);
+            stats.put("activeDocuments", activeDocuments);
+            stats.put("archivedDocuments", archivedDocuments);
+            stats.put("deletedDocuments", deletedDocuments);
+            
+            return ResponseEntity.ok(stats);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.internalServerError().body(error);
+        }
+    }
+
+    @GetMapping("/statistics/by-type")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<Map<String, Long>> getDocumentStatisticsByType() {
+        try {
+            Map<String, Long> typeCounts = new HashMap<>();
+            
+            // Get all document types from categories
+            List<String> documentTypes = documentCategoryService.getActiveCategoryNames();
+            
+            // Count documents for each type
+            for (String documentType : documentTypes) {
+                long count = documentRepository.countByDocumentType(documentType);
+                if (count > 0) {
+                    typeCounts.put(documentType, count);
+                }
+            }
+            
+            // Also check for any other document types that might exist in the database
+            // but not in categories (to catch edge cases)
+            List<Document> allDocuments = documentRepository.findAll();
+            for (Document doc : allDocuments) {
+                String docType = doc.getDocumentType();
+                if (docType != null && !typeCounts.containsKey(docType) && !documentTypes.contains(docType)) {
+                    long count = documentRepository.countByDocumentType(docType);
+                    if (count > 0) {
+                        typeCounts.put(docType, count);
+                    }
+                }
+            }
+            
+            return ResponseEntity.ok(typeCounts);
+        } catch (Exception e) {
+            Map<String, Long> error = new HashMap<>();
+            return ResponseEntity.internalServerError().body(error);
+        }
+    }
+
+    @GetMapping("/statistics/tenders")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<Map<String, Object>> getTenderStatistics() {
+        try {
+            // Get all tender documents
+            List<Document> tenderNotices = documentRepository.findByDocumentType("TENDER_NOTICE", 
+                PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+            List<Document> tenderDocuments = documentRepository.findByDocumentType("TENDER_DOCUMENT", 
+                PageRequest.of(0, Integer.MAX_VALUE)).getContent();
+            
+            long totalTenders = tenderNotices.size() + tenderDocuments.size();
+            
+            // Count live and closed tenders based on closingDate metadata
+            long liveTenders = 0;
+            long closedTenders = 0;
+            java.time.LocalDate today = java.time.LocalDate.now();
+            
+            for (Document doc : tenderNotices) {
+                Map<String, String> metadata = documentMetadataService.getMetadataMap(doc);
+                String closingDateStr = metadata.get("closingDate");
+                if (closingDateStr != null && !closingDateStr.isEmpty()) {
+                    try {
+                        java.time.LocalDate closingDate = java.time.LocalDate.parse(closingDateStr);
+                        if (closingDate.isAfter(today) || closingDate.isEqual(today)) {
+                            liveTenders++;
+                        } else {
+                            closedTenders++;
+                        }
+                    } catch (Exception e) {
+                        // If date parsing fails, count as live (assume it's active)
+                        liveTenders++;
+                    }
+                } else {
+                    // If no closing date, count as live
+                    liveTenders++;
+                }
+            }
+            
+            for (Document doc : tenderDocuments) {
+                Map<String, String> metadata = documentMetadataService.getMetadataMap(doc);
+                String closingDateStr = metadata.get("closingDate");
+                if (closingDateStr != null && !closingDateStr.isEmpty()) {
+                    try {
+                        java.time.LocalDate closingDate = java.time.LocalDate.parse(closingDateStr);
+                        if (closingDate.isAfter(today) || closingDate.isEqual(today)) {
+                            liveTenders++;
+                        } else {
+                            closedTenders++;
+                        }
+                    } catch (Exception e) {
+                        // If date parsing fails, count as live
+                        liveTenders++;
+                    }
+                } else {
+                    // If no closing date, count as live
+                    liveTenders++;
+                }
+            }
+            
+            Map<String, Object> stats = new HashMap<>();
+            stats.put("totalTenders", totalTenders);
+            stats.put("liveTenders", liveTenders);
+            stats.put("closedTenders", closedTenders);
+            stats.put("draftTenders", Math.max(0, totalTenders - liveTenders - closedTenders));
+            
+            return ResponseEntity.ok(stats);
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            return ResponseEntity.internalServerError().body(error);
         }
     }
 }

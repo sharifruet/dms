@@ -80,6 +80,9 @@ public class FileUploadService {
     private AppDocumentService appDocumentService;
 
     @Autowired
+    private AppExcelImportService appExcelImportService;
+
+    @Autowired
     private DocumentMetadataService documentMetadataService;
 
     @Autowired
@@ -227,9 +230,53 @@ public class FileUploadService {
                 documentMetadataService.applyManualMetadata(savedDocument, Map.of("tenderWorkflowInstanceId", instanceIdStr));
             }
 
-            Map<String, String> additionalMetadata = Map.of();
+            Map<String, String> additionalMetadata = new HashMap<>();
             if (isExcelFile(file.getContentType(), originalFilename)) {
-                additionalMetadata = appDocumentService.processAndStoreEntries(savedDocument, file);
+                // For APP documents, import into app_headers and app_lines tables
+                if (resolvedType == DocumentType.APP) {
+                    try {
+                        appExcelImportService.importApp(file, user);
+                        additionalMetadata.put("appImportStatus", "success");
+                        logger.info("APP data imported into app_headers and app_lines tables for document: {}", savedDocument.getId());
+                    } catch (Exception e) {
+                        logger.error("Failed to import APP data for document {}: {}", savedDocument.getId(), e.getMessage());
+                        additionalMetadata.put("appImportStatus", "failed");
+                        additionalMetadata.put("appImportError", e.getMessage());
+                    }
+                }
+                // Also process for app_document_entries
+                // Read from saved file path since MultipartFile stream can only be read once
+                try {
+                    Path savedFilePath = Paths.get(savedDocument.getFilePath());
+                    if (Files.exists(savedFilePath)) {
+                        // Create a simple MultipartFile implementation from saved file
+                        MultipartFile savedFile = createMultipartFileFromPath(savedFilePath, savedDocument);
+                        Map<String, String> appDocMetadata = appDocumentService.processAndStoreEntries(savedDocument, savedFile);
+                        additionalMetadata.putAll(appDocMetadata);
+                        logger.info("APP document entries processed for document: {} ({}), status: {}, entryCount: {}", 
+                            savedDocument.getId(), savedDocument.getOriginalName(), 
+                            appDocMetadata.get("appStatus"), appDocMetadata.get("appEntryCount"));
+                        
+                        // Log any errors
+                        if ("failed".equals(appDocMetadata.get("appStatus")) || 
+                            "unsupported_format".equals(appDocMetadata.get("appStatus"))) {
+                            logger.error("APP document processing failed for {}: status={}, error={}, headers={}", 
+                                savedDocument.getOriginalName(), 
+                                appDocMetadata.get("appStatus"),
+                                appDocMetadata.get("appError"),
+                                appDocMetadata.get("appHeadersDetected"));
+                        }
+                    } else {
+                        logger.warn("Saved file not found at path: {} for document {}", 
+                            savedDocument.getFilePath(), savedDocument.getId());
+                        additionalMetadata.put("appDocStatus", "file_not_found");
+                    }
+                } catch (Exception e) {
+                    logger.error("Failed to process APP document entries for document {}: {}", 
+                        savedDocument.getId(), e.getMessage(), e);
+                    additionalMetadata.put("appDocStatus", "failed");
+                    additionalMetadata.put("appDocError", e.getMessage());
+                }
                 combinedMetadata.putAll(additionalMetadata);
             }
             
@@ -581,13 +628,67 @@ public class FileUploadService {
         }
     }
     
+    /**
+     * Create a MultipartFile from a saved file path
+     */
+    private MultipartFile createMultipartFileFromPath(Path filePath, Document document) {
+        return new MultipartFile() {
+            @Override
+            public String getName() {
+                return "file";
+            }
+
+            @Override
+            public String getOriginalFilename() {
+                return document.getOriginalName();
+            }
+
+            @Override
+            public String getContentType() {
+                return document.getMimeType();
+            }
+
+            @Override
+            public boolean isEmpty() {
+                try {
+                    return Files.size(filePath) == 0;
+                } catch (IOException e) {
+                    return true;
+                }
+            }
+
+            @Override
+            public long getSize() {
+                try {
+                    return Files.size(filePath);
+                } catch (IOException e) {
+                    return 0;
+                }
+            }
+
+            @Override
+            public byte[] getBytes() throws IOException {
+                return Files.readAllBytes(filePath);
+            }
+
+            @Override
+            public InputStream getInputStream() throws IOException {
+                return Files.newInputStream(filePath);
+            }
+
+            @Override
+            public void transferTo(File dest) throws IOException, IllegalStateException {
+                Files.copy(filePath, dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+        };
+    }
+
     private boolean requiresTenderWorkflow(DocumentType type) {
         return type == DocumentType.TENDER_DOCUMENT
             || type == DocumentType.CONTRACT_AGREEMENT
             || type == DocumentType.BANK_GUARANTEE_BG
             || type == DocumentType.PERFORMANCE_SECURITY_PS
-            || type == DocumentType.PERFORMANCE_GUARANTEE_PG
-            || type == DocumentType.APP;
+            || type == DocumentType.PERFORMANCE_GUARANTEE_PG;
     }
 
     private boolean isExcelFile(String contentType, String originalFilename) {

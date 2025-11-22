@@ -94,6 +94,8 @@ const ExpiryTrackingPage: React.FC = () => {
   const [selectedTracking, setSelectedTracking] = useState<ExpiryTracking | null>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [statistics, setStatistics] = useState<any>({});
+  const [performanceSecurityDocs, setPerformanceSecurityDocs] = useState<ExpiryTracking[]>([]);
+  const [loadingPSDocs, setLoadingPSDocs] = useState(false);
   
   const [newTracking, setNewTracking] = useState<CreateExpiryTrackingRequest>({
     documentId: 0,
@@ -109,33 +111,73 @@ const ExpiryTrackingPage: React.FC = () => {
   });
 
   useEffect(() => {
+    loadPerformanceSecurityDocuments();
+  }, []);
+
+  useEffect(() => {
     loadTrackingData();
     loadStatistics();
-  }, [currentPage, tabValue]);
+  }, [currentPage, tabValue, performanceSecurityDocs]);
+
+  const loadPerformanceSecurityDocuments = async () => {
+    try {
+      setLoadingPSDocs(true);
+      const docs = await expiryTrackingService.getPerformanceSecurityDocuments();
+      setPerformanceSecurityDocs(docs);
+    } catch (error) {
+      console.error('Failed to load Performance Security documents:', error);
+    } finally {
+      setLoadingPSDocs(false);
+    }
+  };
 
   const loadTrackingData = async () => {
     try {
       setLoading(true);
       let response;
+      let combinedData: ExpiryTracking[] = [];
       
       switch (tabValue) {
         case 0: // Active
           response = await expiryTrackingService.getActiveExpiryTracking(currentPage, 20);
-          break;
+          combinedData = [...(response.content || [])];
+          // Add Performance Security documents that are active
+          const activePSDocs = performanceSecurityDocs.filter(doc => {
+            const days = getDaysUntilExpiry(doc.expiryDate);
+            return days >= 0; // Not expired
+          });
+          combinedData = [...combinedData, ...activePSDocs];
+          setTrackingData(combinedData);
+          setTotalPages(response.totalPages || 0);
+          return;
         case 1: // Expiring (30 days)
           response = await expiryTrackingService.getExpiringDocuments(30);
-          setTrackingData(response);
+          combinedData = [...response];
+          // Add Performance Security documents expiring in 30 days
+          const expiringPSDocs = performanceSecurityDocs.filter(doc => {
+            const days = getDaysUntilExpiry(doc.expiryDate);
+            return days >= 0 && days <= 30;
+          });
+          combinedData = [...combinedData, ...expiringPSDocs];
+          setTrackingData(combinedData);
           return;
         case 2: // Expired
           response = await expiryTrackingService.getExpiredDocuments();
-          setTrackingData(response);
+          combinedData = [...response];
+          // Add expired Performance Security documents
+          const expiredPSDocs = performanceSecurityDocs.filter(doc => {
+            const days = getDaysUntilExpiry(doc.expiryDate);
+            return days < 0; // Expired
+          });
+          combinedData = [...combinedData, ...expiredPSDocs];
+          setTrackingData(combinedData);
           return;
         default:
           response = await expiryTrackingService.getActiveExpiryTracking(currentPage, 20);
+          combinedData = [...(response.content || [])];
+          setTrackingData(combinedData);
+          setTotalPages(response.totalPages || 0);
       }
-      
-      setTrackingData(response.content || response);
-      setTotalPages(response.totalPages || 0);
     } catch (error) {
       setError('Failed to load expiry tracking data');
     } finally {
@@ -355,6 +397,7 @@ const ExpiryTrackingPage: React.FC = () => {
                   <TableCell>Status</TableCell>
                   <TableCell>Vendor</TableCell>
                   <TableCell>Value</TableCell>
+                  <TableCell>Source</TableCell>
                   <TableCell>Actions</TableCell>
                 </TableRow>
               </TableHead>
@@ -366,7 +409,9 @@ const ExpiryTrackingPage: React.FC = () => {
                       <TableCell>
                         <Box display="flex" alignItems="center">
                           <AssignmentIcon sx={{ mr: 1 }} />
-                          Document #{tracking.documentId}
+                          {(tracking as any).document?.originalName || 
+                           (tracking as any).document?.fileName || 
+                           `Document #${tracking.documentId}`}
                         </Box>
                       </TableCell>
                       <TableCell>
@@ -406,6 +451,13 @@ const ExpiryTrackingPage: React.FC = () => {
                         </Box>
                       </TableCell>
                       <TableCell>
+                        <Chip
+                          label={(tracking as any).isFromMetadata ? 'Metadata' : 'Tracking'}
+                          size="small"
+                          color={(tracking as any).isFromMetadata ? 'info' : 'default'}
+                        />
+                      </TableCell>
+                      <TableCell>
                         <IconButton
                           onClick={(e) => {
                             setAnchorEl(e.currentTarget);
@@ -434,17 +486,183 @@ const ExpiryTrackingPage: React.FC = () => {
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
-          <Typography variant="h6" mb={2}>
-            Documents Expiring in Next 30 Days
-          </Typography>
-          {/* Similar table structure for expiring documents */}
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Document</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Expiry Date</TableCell>
+                  <TableCell>Days Remaining</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Vendor</TableCell>
+                  <TableCell>Value</TableCell>
+                  <TableCell>Source</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {trackingData.map((tracking) => {
+                  const daysRemaining = getDaysUntilExpiry(tracking.expiryDate);
+                  return (
+                    <TableRow key={tracking.id}>
+                      <TableCell>
+                        <Box display="flex" alignItems="center">
+                          <AssignmentIcon sx={{ mr: 1 }} />
+                          {(tracking as any).document?.originalName || 
+                           (tracking as any).document?.fileName || 
+                           `Document #${tracking.documentId}`}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={tracking.expiryType.replace(/_/g, ' ')} size="small" />
+                      </TableCell>
+                      <TableCell>
+                        <Box display="flex" alignItems="center">
+                          <CalendarTodayIcon sx={{ mr: 1 }} />
+                          {formatDate(tracking.expiryDate)}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={`${daysRemaining} days`}
+                          color={getExpiryAlertColor(daysRemaining)}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          icon={getStatusIcon(tracking.status)}
+                          label={tracking.status}
+                          color={getStatusColor(tracking.status)}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Box display="flex" alignItems="center">
+                          <BusinessIcon sx={{ mr: 1 }} />
+                          {tracking.vendorName || 'N/A'}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box display="flex" alignItems="center">
+                          <AttachMoneyIcon sx={{ mr: 1 }} />
+                          {formatCurrency(tracking.contractValue, tracking.currency)}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={(tracking as any).isFromMetadata ? 'Metadata' : 'Tracking'}
+                          size="small"
+                          color={(tracking as any).isFromMetadata ? 'info' : 'default'}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <IconButton
+                          onClick={(e) => {
+                            setAnchorEl(e.currentTarget);
+                            setSelectedTracking(tracking);
+                          }}
+                        >
+                          <MoreVertIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </TabPanel>
 
         <TabPanel value={tabValue} index={2}>
-          <Typography variant="h6" mb={2}>
-            Expired Documents
-          </Typography>
-          {/* Similar table structure for expired documents */}
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Document</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Expiry Date</TableCell>
+                  <TableCell>Days Overdue</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Vendor</TableCell>
+                  <TableCell>Value</TableCell>
+                  <TableCell>Source</TableCell>
+                  <TableCell>Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {trackingData.map((tracking) => {
+                  const daysRemaining = getDaysUntilExpiry(tracking.expiryDate);
+                  return (
+                    <TableRow key={tracking.id}>
+                      <TableCell>
+                        <Box display="flex" alignItems="center">
+                          <AssignmentIcon sx={{ mr: 1 }} />
+                          {(tracking as any).document?.originalName || 
+                           (tracking as any).document?.fileName || 
+                           `Document #${tracking.documentId}`}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip label={tracking.expiryType.replace(/_/g, ' ')} size="small" />
+                      </TableCell>
+                      <TableCell>
+                        <Box display="flex" alignItems="center">
+                          <CalendarTodayIcon sx={{ mr: 1 }} />
+                          {formatDate(tracking.expiryDate)}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={`${Math.abs(daysRemaining)} days ago`}
+                          color="error"
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          icon={getStatusIcon(tracking.status)}
+                          label={tracking.status}
+                          color={getStatusColor(tracking.status)}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Box display="flex" alignItems="center">
+                          <BusinessIcon sx={{ mr: 1 }} />
+                          {tracking.vendorName || 'N/A'}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Box display="flex" alignItems="center">
+                          <AttachMoneyIcon sx={{ mr: 1 }} />
+                          {formatCurrency(tracking.contractValue, tracking.currency)}
+                        </Box>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={(tracking as any).isFromMetadata ? 'Metadata' : 'Tracking'}
+                          size="small"
+                          color={(tracking as any).isFromMetadata ? 'info' : 'default'}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <IconButton
+                          onClick={(e) => {
+                            setAnchorEl(e.currentTarget);
+                            setSelectedTracking(tracking);
+                          }}
+                        >
+                          <MoreVertIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </TabPanel>
       </Card>
 

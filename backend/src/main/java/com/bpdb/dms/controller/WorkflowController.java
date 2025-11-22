@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
@@ -136,6 +137,7 @@ public class WorkflowController {
      * Get workflow instances for user
      */
     @GetMapping("/instances")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
     public ResponseEntity<Page<WorkflowInstance>> getWorkflowInstances(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -157,6 +159,7 @@ public class WorkflowController {
      * Get workflow steps assigned to user
      */
     @GetMapping("/steps")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
     public ResponseEntity<Page<WorkflowStep>> getWorkflowSteps(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -199,6 +202,20 @@ public class WorkflowController {
             
             return ResponseEntity.ok(statistics);
             
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+    
+    /**
+     * Get active tender workflow instances (for document upload)
+     */
+    @GetMapping("/instances/tender/active")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<List<WorkflowInstance>> getActiveTenderWorkflowInstances() {
+        try {
+            List<WorkflowInstance> instances = workflowService.getActiveTenderWorkflowInstances();
+            return ResponseEntity.ok(instances);
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();
         }

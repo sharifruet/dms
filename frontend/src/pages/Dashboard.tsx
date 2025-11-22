@@ -7,26 +7,59 @@ import {
   CardContent,
   useMediaQuery,
   useTheme,
+  LinearProgress,
+  Paper,
+  CircularProgress,
 } from '@mui/material';
 import {
   Description as DocumentsIcon,
   Search as SearchIcon,
   Assessment as ReportsIcon,
   Notifications as NotificationsIcon,
+  Gavel as TenderIcon,
 } from '@mui/icons-material';
 import ActivityFeed from '../components/ActivityFeed';
 import LineChartWidget from '../components/charts/LineChartWidget';
 import BarChartWidget from '../components/charts/BarChartWidget';
 import PieChartWidget from '../components/charts/PieChartWidget';
+import { financeService } from '../services/financeService';
+import { documentService } from '../services/documentService';
 
 const Dashboard: React.FC = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [budgetData, setBudgetData] = useState<{
+    totalBudget: number;
+    totalBilled: number;
+    remaining: number;
+    utilizationPct: number;
+  } | null>(null);
+  const [loadingBudget, setLoadingBudget] = useState(true);
+  const [documentStats, setDocumentStats] = useState<{
+    totalDocuments: number;
+    activeDocuments: number;
+    archivedDocuments: number;
+    deletedDocuments: number;
+  } | null>(null);
+  const [loadingDocumentStats, setLoadingDocumentStats] = useState(true);
+  const [tenderStats, setTenderStats] = useState<{
+    totalTenders: number;
+    liveTenders: number;
+    closedTenders: number;
+    draftTenders: number;
+  } | null>(null);
+  const [loadingTenderStats, setLoadingTenderStats] = useState(true);
+  const [documentTypesData, setDocumentTypesData] = useState<Array<{ name: string; value: number }>>([]);
+  const [loadingDocumentTypes, setLoadingDocumentTypes] = useState(true);
+
+  const formatNumber = (num: number): string => {
+    return new Intl.NumberFormat('en-US').format(num);
+  };
 
   const stats = [
     {
       title: 'Total Documents',
-      value: '1,234',
+      value: loadingDocumentStats ? '...' : formatNumber(documentStats?.totalDocuments || 0),
       icon: <DocumentsIcon sx={{ fontSize: 32 }} />,
       color: '#3b82f6',
       bgColor: '#eff6ff',
@@ -54,6 +87,30 @@ const Dashboard: React.FC = () => {
     },
   ];
 
+  const tenderStatsCards = [
+    {
+      title: 'Total Tenders',
+      value: loadingTenderStats ? '...' : formatNumber(tenderStats?.totalTenders || 0),
+      icon: <TenderIcon sx={{ fontSize: 32 }} />,
+      color: '#ef4444',
+      bgColor: '#fef2f2',
+    },
+    {
+      title: 'Live Tenders',
+      value: loadingTenderStats ? '...' : formatNumber(tenderStats?.liveTenders || 0),
+      icon: <TenderIcon sx={{ fontSize: 32 }} />,
+      color: '#10b981',
+      bgColor: '#ecfdf5',
+    },
+    {
+      title: 'Closed Tenders',
+      value: loadingTenderStats ? '...' : formatNumber(tenderStats?.closedTenders || 0),
+      icon: <TenderIcon sx={{ fontSize: 32 }} />,
+      color: '#6b7280',
+      bgColor: '#f9fafb',
+    },
+  ];
+
   // Sample data for charts
   const documentTrendsData = [
     { name: 'Jan', uploaded: 65, processed: 58 },
@@ -72,15 +129,106 @@ const Dashboard: React.FC = () => {
     { name: 'Legal', documents: 180 },
   ];
 
-  const documentTypesData = [
-    { name: 'Contracts', value: 420 },
-    { name: 'Invoices', value: 380 },
-    { name: 'Reports', value: 320 },
-    { name: 'Certificates', value: 250 },
-    { name: 'Others', value: 180 },
-  ];
+  // documentTypesData is now loaded from API - see useEffect below
 
   const chartColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+
+  useEffect(() => {
+    const loadBudgetData = async () => {
+      try {
+        setLoadingBudget(true);
+        const data = await financeService.getBudgetSummary();
+        setBudgetData(data);
+      } catch (error) {
+        console.error('Failed to load budget data:', error);
+      } finally {
+        setLoadingBudget(false);
+      }
+    };
+    loadBudgetData();
+  }, []);
+
+  useEffect(() => {
+    const loadDocumentStats = async () => {
+      try {
+        setLoadingDocumentStats(true);
+        const data = await documentService.getDocumentStatistics();
+        setDocumentStats(data);
+      } catch (error) {
+        console.error('Failed to load document statistics:', error);
+      } finally {
+        setLoadingDocumentStats(false);
+      }
+    };
+    loadDocumentStats();
+  }, []);
+
+  useEffect(() => {
+    const loadTenderStats = async () => {
+      try {
+        setLoadingTenderStats(true);
+        const data = await documentService.getTenderStatistics();
+        setTenderStats(data);
+      } catch (error) {
+        console.error('Failed to load tender statistics:', error);
+      } finally {
+        setLoadingTenderStats(false);
+      }
+    };
+    loadTenderStats();
+  }, []);
+
+  useEffect(() => {
+    const loadDocumentTypes = async () => {
+      try {
+        setLoadingDocumentTypes(true);
+        const typeCounts = await documentService.getDocumentStatisticsByType();
+        
+        // Transform the data into the format expected by PieChartWidget
+        // Sort by count (descending) and take top 5, then group the rest as "Others"
+        const sortedTypes = Object.entries(typeCounts)
+          .map(([name, value]) => ({ name, value }))
+          .sort((a, b) => b.value - a.value);
+        
+        const topTypes = sortedTypes.slice(0, 5);
+        const othersCount = sortedTypes.slice(5).reduce((sum, item) => sum + item.value, 0);
+        
+        const formattedData = topTypes.map(item => ({
+          name: item.name.replace(/_/g, ' '), // Replace underscores with spaces for better display
+          value: item.value,
+        }));
+        
+        if (othersCount > 0) {
+          formattedData.push({ name: 'Others', value: othersCount });
+        }
+        
+        setDocumentTypesData(formattedData);
+      } catch (error) {
+        console.error('Failed to load document types statistics:', error);
+        // Fallback to empty array on error
+        setDocumentTypesData([]);
+      } finally {
+        setLoadingDocumentTypes(false);
+      }
+    };
+    loadDocumentTypes();
+  }, []);
+
+  const formatCurrency = (amount: number): string => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
+  const budgetPieData = budgetData
+    ? [
+        { name: 'Remaining Budget', value: Math.max(0, budgetData.remaining) },
+        { name: 'Billed Amount', value: budgetData.totalBilled },
+      ]
+    : [];
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 } }}>
@@ -176,6 +324,225 @@ const Dashboard: React.FC = () => {
         ))}
       </Grid>
 
+      {/* Tender Statistics Section */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12}>
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 600,
+              fontSize: '1.25rem',
+              color: '#111827',
+              mb: 2,
+            }}
+          >
+            Tender Statistics
+          </Typography>
+        </Grid>
+        {tenderStatsCards.map((stat, index) => (
+          <Grid item xs={12} sm={6} md={4} key={`tender-${index}`}>
+            <Card
+              sx={{
+                borderRadius: 3,
+                boxShadow: '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.12)',
+                border: '1px solid #f3f4f6',
+                transition: 'all 0.2s ease',
+                '&:hover': {
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.08)',
+                  transform: 'translateY(-2px)',
+                },
+              }}
+            >
+              <CardContent sx={{ p: 3 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    mb: 2,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 2,
+                      backgroundColor: stat.bgColor,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: stat.color,
+                    }}
+                  >
+                    {stat.icon}
+                  </Box>
+                </Box>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: '1.875rem',
+                    color: '#111827',
+                    mb: 0.5,
+                  }}
+                >
+                  {stat.value}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: '#6b7280',
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                  }}
+                >
+                  {stat.title}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+
+      {/* Budget Summary Section */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid item xs={12} md={6}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 3,
+              borderRadius: 3,
+              border: '1px solid #e5e7eb',
+              height: '100%',
+            }}
+          >
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 600,
+                fontSize: '1.125rem',
+                color: '#1f2937',
+                mb: 3,
+              }}
+            >
+              Budget vs Billed
+            </Typography>
+            {loadingBudget ? (
+              <Box display="flex" justifyContent="center" alignItems="center" minHeight={300}>
+                <CircularProgress />
+              </Box>
+            ) : budgetData ? (
+              <PieChartWidget
+                title=""
+                data={budgetPieData}
+                colors={['#10b981', '#3b82f6']}
+                height={300}
+              />
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No budget data available
+              </Typography>
+            )}
+          </Paper>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: 3,
+              borderRadius: 3,
+              border: '1px solid #e5e7eb',
+              height: '100%',
+            }}
+          >
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 600,
+                fontSize: '1.125rem',
+                color: '#1f2937',
+                mb: 3,
+              }}
+            >
+              Budget Utilization
+            </Typography>
+            {loadingBudget ? (
+              <Box display="flex" justifyContent="center" alignItems="center" minHeight={300}>
+                <CircularProgress />
+              </Box>
+            ) : budgetData ? (
+              <Box>
+                <Box sx={{ mb: 3 }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                    <Typography variant="body2" color="text.secondary">
+                      Billed Amount
+                    </Typography>
+                    <Typography variant="h6" fontWeight={600}>
+                      {formatCurrency(budgetData.totalBilled)}
+                    </Typography>
+                  </Box>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                    <Typography variant="body2" color="text.secondary">
+                      Total Budget
+                    </Typography>
+                    <Typography variant="h6" fontWeight={600}>
+                      {formatCurrency(budgetData.totalBudget)}
+                    </Typography>
+                  </Box>
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Typography variant="body2" color="text.secondary">
+                      Remaining
+                    </Typography>
+                    <Typography
+                      variant="h6"
+                      fontWeight={600}
+                      color={budgetData.remaining >= 0 ? 'success.main' : 'error.main'}
+                    >
+                      {formatCurrency(budgetData.remaining)}
+                    </Typography>
+                  </Box>
+                </Box>
+                <Box sx={{ mb: 2 }}>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                    <Typography variant="body2" color="text.secondary">
+                      Utilization
+                    </Typography>
+                    <Typography variant="body1" fontWeight={600}>
+                      {budgetData.utilizationPct.toFixed(2)}%
+                    </Typography>
+                  </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={Math.min(100, budgetData.utilizationPct)}
+                    sx={{
+                      height: 24,
+                      borderRadius: 2,
+                      backgroundColor: '#e5e7eb',
+                      '& .MuiLinearProgress-bar': {
+                        borderRadius: 2,
+                        backgroundColor:
+                          budgetData.utilizationPct > 90
+                            ? '#ef4444'
+                            : budgetData.utilizationPct > 75
+                            ? '#f59e0b'
+                            : '#10b981',
+                      },
+                    }}
+                  />
+                </Box>
+                <Typography variant="caption" color="text.secondary">
+                  {formatCurrency(budgetData.totalBilled)} of {formatCurrency(budgetData.totalBudget)} billed
+                </Typography>
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No budget data available
+              </Typography>
+            )}
+          </Paper>
+        </Grid>
+      </Grid>
+
       {/* Charts Grid */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
         <Grid item xs={12} lg={8}>
@@ -190,12 +557,35 @@ const Dashboard: React.FC = () => {
           />
         </Grid>
         <Grid item xs={12} lg={4}>
-          <PieChartWidget
-            title="Document Types"
-            data={documentTypesData}
-            colors={chartColors}
-            height={300}
-          />
+          {loadingDocumentTypes ? (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight={300}>
+              <CircularProgress />
+            </Box>
+          ) : documentTypesData.length > 0 ? (
+            <PieChartWidget
+              title="Document Types"
+              data={documentTypesData}
+              colors={chartColors}
+              height={300}
+            />
+          ) : (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: 3,
+                border: '1px solid #e5e7eb',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                No document type data available
+              </Typography>
+            </Paper>
+          )}
         </Grid>
       </Grid>
 

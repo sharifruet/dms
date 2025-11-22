@@ -22,13 +22,29 @@ import {
   Select,
   MenuItem,
   Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  IconButton,
 } from '@mui/material';
 import {
   Search as SearchIcon,
   Receipt as BillIcon,
   FilterList as FilterIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { financeService, BillHeader, BillLine } from '../services/financeService';
+
+interface BillLineForm {
+  projectIdentifier?: string;
+  department?: string;
+  costCenter?: string;
+  category?: string;
+  amount: number;
+  taxAmount?: number;
+}
 
 const BillEntries: React.FC = () => {
   const [bills, setBills] = useState<BillHeader[]>([]);
@@ -38,6 +54,15 @@ const BillEntries: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [fiscalYearFilter, setFiscalYearFilter] = useState<number | ''>('');
   const [vendorFilter, setVendorFilter] = useState('');
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [newBill, setNewBill] = useState({
+    fiscalYear: new Date().getFullYear(),
+    vendor: '',
+    invoiceNumber: '',
+    invoiceDate: new Date().toISOString().split('T')[0],
+    lines: [{ amount: 0, taxAmount: 0 }] as BillLineForm[],
+  });
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     loadBills();
@@ -47,14 +72,15 @@ const BillEntries: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const billsData = await financeService.getBills(
+      const billsResponse = await financeService.getBills(
         fiscalYearFilter ? Number(fiscalYearFilter) : undefined,
         vendorFilter || undefined
       );
-      setBills(billsData);
+      const billsArray = Array.isArray(billsResponse) ? billsResponse : (billsResponse.content || []);
+      setBills(billsArray);
       // Load full details for selected bill if it exists
       if (selectedBill) {
-        const updatedBill = billsData.find(b => b.id === selectedBill.id);
+        const updatedBill = billsArray.find(b => b.id === selectedBill.id);
         if (updatedBill) {
           loadBillDetails(updatedBill.id);
         }
@@ -109,6 +135,74 @@ const BillEntries: React.FC = () => {
     new Set(bills.map(b => b.vendor).filter(v => v != null && v.trim() !== ''))
   ).sort();
 
+  const handleCreateBill = async () => {
+    if (!newBill.fiscalYear || !newBill.invoiceDate || newBill.lines.length === 0) {
+      setError('Please fill in all required fields (Fiscal Year, Invoice Date, and at least one line item)');
+      return;
+    }
+
+    // Validate that all lines have amounts
+    if (newBill.lines.some(line => !line.amount || line.amount <= 0)) {
+      setError('All line items must have a positive amount');
+      return;
+    }
+
+    try {
+      setCreating(true);
+      setError(null);
+      const billId = await financeService.createBill({
+        fiscalYear: newBill.fiscalYear,
+        vendor: newBill.vendor || undefined,
+        invoiceNumber: newBill.invoiceNumber || undefined,
+        invoiceDate: newBill.invoiceDate,
+        lines: newBill.lines.map(line => ({
+          projectIdentifier: line.projectIdentifier || undefined,
+          department: line.department || undefined,
+          costCenter: line.costCenter || undefined,
+          category: line.category || undefined,
+          amount: line.amount,
+          taxAmount: line.taxAmount || undefined,
+        })),
+      });
+      
+      setCreateDialogOpen(false);
+      setNewBill({
+        fiscalYear: new Date().getFullYear(),
+        vendor: '',
+        invoiceNumber: '',
+        invoiceDate: new Date().toISOString().split('T')[0],
+        lines: [{ amount: 0, taxAmount: 0 }],
+      });
+      await loadBills();
+      // Select the newly created bill
+      await loadBillDetails(billId);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to create bill');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const addBillLine = () => {
+    setNewBill({
+      ...newBill,
+      lines: [...newBill.lines, { amount: 0, taxAmount: 0 }],
+    });
+  };
+
+  const removeBillLine = (index: number) => {
+    setNewBill({
+      ...newBill,
+      lines: newBill.lines.filter((_, i) => i !== index),
+    });
+  };
+
+  const updateBillLine = (index: number, field: keyof BillLineForm, value: any) => {
+    const updatedLines = [...newBill.lines];
+    updatedLines[index] = { ...updatedLines[index], [field]: value };
+    setNewBill({ ...newBill, lines: updatedLines });
+  };
+
   const filteredBills = bills.filter((bill) =>
     (bill.invoiceNumber || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (bill.vendor || '').toLowerCase().includes(searchTerm.toLowerCase())
@@ -128,6 +222,13 @@ const BillEntries: React.FC = () => {
         <Typography variant="h4" component="h1">
           Bill Entries
         </Typography>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => setCreateDialogOpen(true)}
+        >
+          Create Bill
+        </Button>
       </Box>
 
       {error && (
@@ -399,6 +500,157 @@ const BillEntries: React.FC = () => {
           </Card>
         </Grid>
       </Grid>
+
+      {/* Create Bill Dialog */}
+      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle>Create New Bill</DialogTitle>
+        <DialogContent>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                required
+                label="Fiscal Year"
+                type="number"
+                value={newBill.fiscalYear}
+                onChange={(e) => setNewBill({ ...newBill, fiscalYear: parseInt(e.target.value) || new Date().getFullYear() })}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Invoice Date"
+                type="date"
+                required
+                value={newBill.invoiceDate}
+                onChange={(e) => setNewBill({ ...newBill, invoiceDate: e.target.value })}
+                InputLabelProps={{ shrink: true }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Vendor"
+                value={newBill.vendor}
+                onChange={(e) => setNewBill({ ...newBill, vendor: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Invoice Number"
+                value={newBill.invoiceNumber}
+                onChange={(e) => setNewBill({ ...newBill, invoiceNumber: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                <Typography variant="h6">Line Items</Typography>
+                <Button
+                  size="small"
+                  startIcon={<AddIcon />}
+                  onClick={addBillLine}
+                >
+                  Add Line
+                </Button>
+              </Box>
+            </Grid>
+            {newBill.lines.map((line, index) => (
+              <Grid item xs={12} key={index}>
+                <Card variant="outlined">
+                  <CardContent>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                      <Typography variant="subtitle2">Line {index + 1}</Typography>
+                      {newBill.lines.length > 1 && (
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => removeBillLine(index)}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      )}
+                    </Box>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Project Identifier"
+                          value={line.projectIdentifier || ''}
+                          onChange={(e) => updateBillLine(index, 'projectIdentifier', e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Department"
+                          value={line.department || ''}
+                          onChange={(e) => updateBillLine(index, 'department', e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Cost Center"
+                          value={line.costCenter || ''}
+                          onChange={(e) => updateBillLine(index, 'costCenter', e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Category"
+                          value={line.category || ''}
+                          onChange={(e) => updateBillLine(index, 'category', e.target.value)}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          required
+                          size="small"
+                          label="Amount"
+                          type="number"
+                          value={line.amount || ''}
+                          onChange={(e) => updateBillLine(index, 'amount', parseFloat(e.target.value) || 0)}
+                          inputProps={{ min: 0, step: 0.01 }}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <TextField
+                          fullWidth
+                          size="small"
+                          label="Tax Amount"
+                          type="number"
+                          value={line.taxAmount || ''}
+                          onChange={(e) => updateBillLine(index, 'taxAmount', parseFloat(e.target.value) || 0)}
+                          inputProps={{ min: 0, step: 0.01 }}
+                        />
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateDialogOpen(false)} disabled={creating}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleCreateBill}
+            variant="contained"
+            disabled={creating}
+          >
+            {creating ? <CircularProgress size={24} /> : 'Create Bill'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

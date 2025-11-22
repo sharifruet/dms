@@ -108,6 +108,41 @@ class ExpiryTrackingService {
       throw error;
     }
   }
+
+  async getPerformanceSecurityDocuments(): Promise<ExpiryTracking[]> {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/expiry-tracking/performance-security`, {
+        headers: this.getAuthHeaders()
+      });
+      // Transform the response to match ExpiryTracking interface
+      return response.data.map((item: any) => ({
+        id: item.id || item.documentId,
+        documentId: item.documentId || item.id,
+        expiryType: item.expiryType || 'PERFORMANCE_SECURITY',
+        expiryDate: item.expiryDate,
+        alert30Days: false,
+        alert15Days: false,
+        alert7Days: false,
+        alertExpired: false,
+        status: item.status || 'ACTIVE',
+        renewalDate: item.renewalDate,
+        renewalDocumentId: item.renewalDocumentId,
+        notes: item.notes,
+        assignedTo: item.assignedTo,
+        department: item.department || item.document?.department,
+        vendorName: item.vendorName || item.document?.description,
+        contractValue: item.contractValue,
+        currency: item.currency,
+        createdAt: item.createdAt || item.document?.createdAt,
+        updatedAt: item.updatedAt || item.document?.updatedAt,
+        document: item.document, // Include full document object
+        isFromMetadata: true, // Flag to indicate this is from metadata
+      }));
+    } catch (error) {
+      console.error('Error fetching Performance Security documents:', error);
+      throw error;
+    }
+  }
 }
 
 export interface ExpiryTracking {
@@ -130,6 +165,8 @@ export interface ExpiryTracking {
   currency?: string;
   createdAt: string;
   updatedAt: string;
+  document?: any; // Full document object (optional)
+  isFromMetadata?: boolean; // Flag to indicate if this is from metadata vs expiry_tracking table
 }
 
 export interface CreateExpiryTrackingRequest {

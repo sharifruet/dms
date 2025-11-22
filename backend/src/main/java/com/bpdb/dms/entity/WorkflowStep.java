@@ -1,5 +1,6 @@
 package com.bpdb.dms.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
@@ -13,6 +14,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "workflow_steps")
 @EntityListeners(AuditingEntityListener.class)
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class WorkflowStep {
     
     @Id
@@ -21,6 +23,7 @@ public class WorkflowStep {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "workflow_instance_id", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private WorkflowInstance workflowInstance;
     
     @Column(name = "step_number", nullable = false)
@@ -38,6 +41,7 @@ public class WorkflowStep {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_to")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private User assignedTo;
     
     @Enumerated(EnumType.STRING)

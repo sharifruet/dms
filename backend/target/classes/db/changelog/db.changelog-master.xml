@@ -30,4 +30,5 @@
     <include file="db/changelog/020-add-stationery-tracking.xml"/>
     <include file="db/changelog/021-create-finance-billing-tables.xml"/>
     <include file="db/changelog/022-update-workflows-table.xml"/>
+    <include file="db/changelog/023-add-app-lines-fields.xml"/>
 </databaseChangeLog>

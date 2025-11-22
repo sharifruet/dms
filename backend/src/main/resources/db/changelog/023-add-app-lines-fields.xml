@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="023-001-add-package-no" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="app_lines" columnName="package_no"/>
+            </not>
+        </preConditions>
+        <comment>Add package_no column to app_lines table</comment>
+        <addColumn tableName="app_lines">
+            <column name="package_no" type="VARCHAR(100)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="023-002-add-item-description" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="app_lines" columnName="item_description"/>
+            </not>
+        </preConditions>
+        <comment>Add item_description column to app_lines table</comment>
+        <addColumn tableName="app_lines">
+            <column name="item_description" type="VARCHAR(1000)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="023-003-add-unit-label" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="app_lines" columnName="unit_label"/>
+            </not>
+        </preConditions>
+        <comment>Add unit_label column to app_lines table</comment>
+        <addColumn tableName="app_lines">
+            <column name="unit_label" type="VARCHAR(100)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="023-004-add-quantity" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="app_lines" columnName="quantity"/>
+            </not>
+        </preConditions>
+        <comment>Add quantity column to app_lines table</comment>
+        <addColumn tableName="app_lines">
+            <column name="quantity" type="NUMERIC(18,2)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="023-005-add-procurement-method" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="app_lines" columnName="procurement_method"/>
+            </not>
+        </preConditions>
+        <comment>Add procurement_method column to app_lines table</comment>
+        <addColumn tableName="app_lines">
+            <column name="procurement_method" type="VARCHAR(255)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="023-006-add-approving-authority" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="app_lines" columnName="approving_authority"/>
+            </not>
+        </preConditions>
+        <comment>Add approving_authority column to app_lines table</comment>
+        <addColumn tableName="app_lines">
+            <column name="approving_authority" type="VARCHAR(255)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="023-007-add-source-of-fund" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="app_lines" columnName="source_of_fund"/>
+            </not>
+        </preConditions>
+        <comment>Add source_of_fund column to app_lines table</comment>
+        <addColumn tableName="app_lines">
+            <column name="source_of_fund" type="VARCHAR(255)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="023-008-add-estimated-cost-lakh" author="system">
+        <preConditions onFail="MARK_RAN" onError="HALT">
+            <not>
+                <columnExists tableName="app_lines" columnName="estimated_cost_lakh"/>
+            </not>
+        </preConditions>
+        <comment>Add estimated_cost_lakh column to app_lines table</comment>
+        <addColumn tableName="app_lines">
+            <column name="estimated_cost_lakh" type="NUMERIC(18,2)"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>
+

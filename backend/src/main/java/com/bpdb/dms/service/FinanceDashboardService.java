@@ -1,5 +1,7 @@
 package com.bpdb.dms.service;
 
+import com.bpdb.dms.repository.AppLineRepository;
+import com.bpdb.dms.repository.BillLineRepository;
 import com.bpdb.dms.service.FinanceReportService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -14,6 +16,12 @@ public class FinanceDashboardService {
 
     @Autowired
     private FinanceReportService financeReportService;
+
+    @Autowired
+    private AppLineRepository appLineRepository;
+
+    @Autowired
+    private BillLineRepository billLineRepository;
 
     public Map<String, Object> summary(Integer year, String department) {
         List<Map<String, Object>> rows = financeReportService.appVsBillsByYear(year, department, null);
@@ -53,6 +61,46 @@ public class FinanceDashboardService {
         result.put("department", department);
         result.put("budgetByCategory", budgetByCategory);
         result.put("actualByCategory", actualByCategory);
+        return result;
+    }
+
+    /**
+     * Get budget and billed amounts summary
+     * Budget = sum of estimated_cost_lakh from app_lines * 100000
+     * Billed = sum of amounts from bill_lines
+     */
+    public Map<String, Object> getBudgetSummary() {
+        // Calculate total budget: sum of estimated_cost_lakh * 100000
+        BigDecimal totalBudget = appLineRepository.findAll().stream()
+            .map(line -> {
+                BigDecimal costLakh = line.getEstimatedCostLakh();
+                if (costLakh == null) {
+                    return BigDecimal.ZERO;
+                }
+                return costLakh.multiply(BigDecimal.valueOf(100000));
+            })
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Calculate total billed: sum of amounts from all bill lines
+        BigDecimal totalBilled = billLineRepository.findAll().stream()
+            .map(line -> {
+                BigDecimal amount = line.getAmount() == null ? BigDecimal.ZERO : line.getAmount();
+                BigDecimal taxAmount = line.getTaxAmount() == null ? BigDecimal.ZERO : line.getTaxAmount();
+                return amount.add(taxAmount);
+            })
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal remaining = totalBudget.subtract(totalBilled);
+        BigDecimal utilizationPct = totalBudget.compareTo(BigDecimal.ZERO) == 0 
+            ? BigDecimal.ZERO
+            : totalBilled.multiply(BigDecimal.valueOf(100))
+                .divide(totalBudget, 2, java.math.RoundingMode.HALF_UP);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("totalBudget", totalBudget);
+        result.put("totalBilled", totalBilled);
+        result.put("remaining", remaining);
+        result.put("utilizationPct", utilizationPct);
         return result;
     }
 }

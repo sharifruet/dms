@@ -115,5 +115,29 @@
         </sql>
     </changeSet>
 
+    <changeSet id="018-006" author="dms">
+        <comment>Update tenderType field options for TENDER_NOTICE with procurement method types</comment>
+        <sql>
+            UPDATE document_type_fields 
+            SET field_options = '["OTM","DPM","OSTETM","RFQ","LTM","TSTM","LCS","QCBS","SSS"]'
+            WHERE document_type = 'TENDER_NOTICE' 
+            AND field_key = 'tenderType';
+        </sql>
+    </changeSet>
+
+    <changeSet id="018-007" author="dms">
+        <comment>Add tenderType field to TENDER_DOCUMENT with procurement method types</comment>
+        <sql>
+            INSERT INTO document_type_fields (document_type, field_key, field_label, field_type, is_required, is_ocr_mappable, field_options, display_order, description)
+            VALUES 
+            ('TENDER_DOCUMENT', 'tenderType', 'Tender Type', 'select', false, false, '["OTM","DPM","OSTETM","RFQ","LTM","TSTM","LCS","QCBS","SSS"]', 3, 'Type of tender (OTM/DPM/OSTETM/RFQ/LTM/TSTM/LCS/QCBS/SSS)')
+            ON CONFLICT (document_type, field_key) DO UPDATE 
+            SET field_options = '["OTM","DPM","OSTETM","RFQ","LTM","TSTM","LCS","QCBS","SSS"]',
+                field_label = 'Tender Type',
+                field_type = 'select',
+                description = 'Type of tender (OTM/DPM/OSTETM/RFQ/LTM/TSTM/LCS/QCBS/SSS)';
+        </sql>
+    </changeSet>
+
 </databaseChangeLog>
 

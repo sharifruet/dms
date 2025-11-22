@@ -13,6 +13,13 @@ import {
   Tabs,
   Tab,
   Divider,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Chip,
+  Grid,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -21,8 +28,13 @@ import {
   ZoomOut as ZoomOutIcon,
   ChevronLeft as PrevIcon,
   ChevronRight as NextIcon,
+  Edit as EditIcon,
+  Save as SaveIcon,
+  Cancel as CancelIcon,
 } from '@mui/icons-material';
 import { Document, documentService } from '../services/documentService';
+import { DocumentTypeField } from '../types/document';
+import { folderService, Folder } from '../services/folderService';
 import DocumentRelationships from './DocumentRelationships';
 
 interface DocumentViewerProps {
@@ -71,10 +83,19 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const [ocrProcessing, setOcrProcessing] = useState<boolean>(false);
   const [ocrConfidence, setOcrConfidence] = useState<number | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
+  const [typeFields, setTypeFields] = useState<DocumentTypeField[]>([]);
+  const [editingMetadata, setEditingMetadata] = useState(false);
+  const [metadataValues, setMetadataValues] = useState<Record<string, string>>({});
+  const [savingMetadata, setSavingMetadata] = useState(false);
+  const [allFolders, setAllFolders] = useState<Folder[]>([]);
+  const [documentFolderId, setDocumentFolderId] = useState<number | null>(null);
+  const [loadingFolders, setLoadingFolders] = useState(false);
+  const [savingFolder, setSavingFolder] = useState(false);
 
   useEffect(() => {
     if (open && doc) {
       loadDocumentPreview();
+      loadFolders();
     }
     return () => {
       if (previewUrl) {
@@ -82,6 +103,51 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       }
     };
   }, [open, doc]);
+
+  // Load folders for dropdown
+  const loadFolders = async () => {
+    setLoadingFolders(true);
+    try {
+      const folders = await folderService.getFolderTree();
+      // Flatten the folder tree to get all folders
+      const flattenFolders = (folders: Folder[]): Folder[] => {
+        const result: Folder[] = [];
+        folders.forEach(folder => {
+          result.push(folder);
+          if (folder.subFolders && folder.subFolders.length > 0) {
+            result.push(...flattenFolders(folder.subFolders));
+          }
+        });
+        return result;
+      };
+      setAllFolders(flattenFolders(folders));
+    } catch (err: any) {
+      console.error('Error fetching folders:', err);
+    } finally {
+      setLoadingFolders(false);
+    }
+  };
+
+  // Handle folder change
+  const handleFolderChange = async (newFolderId: number | null) => {
+    if (!doc?.id) return;
+    
+    setSavingFolder(true);
+    try {
+      await documentService.updateDocumentFolder(doc.id, newFolderId);
+      setDocumentFolderId(newFolderId);
+      // Reload document to get updated folder info
+      const documentData = await documentService.getDocumentById(doc.id);
+      if ((documentData as any).document?.folder) {
+        setDocumentFolderId((documentData as any).document.folder.id);
+      }
+    } catch (error: any) {
+      console.error('Failed to update folder:', error);
+      alert('Failed to update folder: ' + (error.message || 'Unknown error'));
+    } finally {
+      setSavingFolder(false);
+    }
+  };
 
   // Poll for OCR text when processing
   useEffect(() => {
@@ -139,6 +205,27 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
       // Fetch document details including OCR text from backend
       try {
         const documentData = await documentService.getDocumentById(doc.id);
+        
+        // Set document folder ID
+        if (doc.folder?.id) {
+          setDocumentFolderId(doc.folder.id);
+        } else if ((documentData as any).document?.folder?.id) {
+          setDocumentFolderId((documentData as any).document.folder.id);
+        } else {
+          setDocumentFolderId(null);
+        }
+        
+        // Load document type fields if available
+        if ((documentData as any).typeFields) {
+          const fields = (documentData as any).typeFields as DocumentTypeField[];
+          setTypeFields(fields);
+          const initialValues: Record<string, string> = {};
+          fields.forEach(field => {
+            initialValues[field.fieldKey] = field.value || field.defaultValue || '';
+          });
+          setMetadataValues(initialValues);
+        }
+        
         if (documentData.ocrText && documentData.ocrText.trim() !== '') {
           setOcrText(documentData.ocrText);
           setOcrProcessing(false);
@@ -446,68 +533,317 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
     );
   };
 
+  const handleMetadataChange = (fieldKey: string, value: string) => {
+    setMetadataValues(prev => ({
+      ...prev,
+      [fieldKey]: value
+    }));
+  };
+
+  const handleSaveMetadata = async () => {
+    if (!doc?.id) return;
+    
+    setSavingMetadata(true);
+    try {
+      await documentService.updateDocumentMetadata(doc.id, metadataValues);
+      setEditingMetadata(false);
+      // Reload document to get updated values
+      const documentData = await documentService.getDocumentById(doc.id);
+      if ((documentData as any).typeFields) {
+        const fields = (documentData as any).typeFields as DocumentTypeField[];
+        setTypeFields(fields);
+        const updatedValues: Record<string, string> = {};
+        fields.forEach(field => {
+          updatedValues[field.fieldKey] = field.value || field.defaultValue || '';
+        });
+        setMetadataValues(updatedValues);
+      }
+    } catch (error: any) {
+      console.error('Failed to save metadata:', error);
+      alert('Failed to save metadata: ' + (error.message || 'Unknown error'));
+    } finally {
+      setSavingMetadata(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    // Reset to original values
+    const originalValues: Record<string, string> = {};
+    typeFields.forEach(field => {
+      originalValues[field.fieldKey] = field.value || field.defaultValue || '';
+    });
+    setMetadataValues(originalValues);
+    setEditingMetadata(false);
+  };
+
+  const renderFieldInput = (field: DocumentTypeField) => {
+    const value = metadataValues[field.fieldKey] || '';
+    
+    switch (field.fieldType) {
+      case 'select':
+        try {
+          const options = field.fieldOptions ? JSON.parse(field.fieldOptions) : [];
+          return (
+            <FormControl fullWidth size="small">
+              <InputLabel>{field.fieldLabel}</InputLabel>
+              <Select
+                value={value}
+                label={field.fieldLabel}
+                onChange={(e) => handleMetadataChange(field.fieldKey, e.target.value)}
+                disabled={!editingMetadata}
+              >
+                {Array.isArray(options) && options.map((opt: string, idx: number) => (
+                  <MenuItem key={idx} value={opt}>{opt}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          );
+        } catch {
+          return (
+            <TextField
+              fullWidth
+              size="small"
+              label={field.fieldLabel}
+              value={value}
+              onChange={(e) => handleMetadataChange(field.fieldKey, e.target.value)}
+              disabled={!editingMetadata}
+              required={field.isRequired}
+            />
+          );
+        }
+      case 'multiselect':
+        try {
+          const options = field.fieldOptions ? JSON.parse(field.fieldOptions) : [];
+          const selectedValues = value ? value.split(',').map(v => v.trim()) : [];
+          return (
+            <FormControl fullWidth size="small">
+              <InputLabel>{field.fieldLabel}</InputLabel>
+              <Select
+                multiple
+                value={selectedValues}
+                label={field.fieldLabel}
+                onChange={(e) => handleMetadataChange(field.fieldKey, Array.isArray(e.target.value) ? e.target.value.join(',') : '')}
+                disabled={!editingMetadata}
+                renderValue={(selected) => (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {(selected as string[]).map((val) => (
+                      <Chip key={val} label={val} size="small" />
+                    ))}
+                  </Box>
+                )}
+              >
+                {Array.isArray(options) && options.map((opt: string, idx: number) => (
+                  <MenuItem key={idx} value={opt}>{opt}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          );
+        } catch {
+          return (
+            <TextField
+              fullWidth
+              size="small"
+              label={field.fieldLabel}
+              value={value}
+              onChange={(e) => handleMetadataChange(field.fieldKey, e.target.value)}
+              disabled={!editingMetadata}
+              required={field.isRequired}
+            />
+          );
+        }
+      case 'number':
+        return (
+          <TextField
+            fullWidth
+            size="small"
+            type="number"
+            label={field.fieldLabel}
+            value={value}
+            onChange={(e) => handleMetadataChange(field.fieldKey, e.target.value)}
+            disabled={!editingMetadata}
+            required={field.isRequired}
+          />
+        );
+      case 'date':
+        return (
+          <TextField
+            fullWidth
+            size="small"
+            type="date"
+            label={field.fieldLabel}
+            value={value}
+            onChange={(e) => handleMetadataChange(field.fieldKey, e.target.value)}
+            disabled={!editingMetadata}
+            required={field.isRequired}
+            InputLabelProps={{ shrink: true }}
+          />
+        );
+      default:
+        return (
+          <TextField
+            fullWidth
+            size="small"
+            label={field.fieldLabel}
+            value={value}
+            onChange={(e) => handleMetadataChange(field.fieldKey, e.target.value)}
+            disabled={!editingMetadata}
+            required={field.isRequired}
+            multiline={field.fieldType === 'textarea'}
+            rows={field.fieldType === 'textarea' ? 3 : 1}
+          />
+        );
+    }
+  };
+
   const renderMetadata = () => {
     if (!doc) return null;
 
     return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {/* Basic Document Information */}
         <Box>
-          <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-            File Name
-          </Typography>
-          <Typography variant="body1">{doc.fileName}</Typography>
-        </Box>
-        <Divider />
-        <Box>
-          <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-            Document Type
-          </Typography>
-          <Typography variant="body1">{doc.documentType}</Typography>
-        </Box>
-        <Divider />
-        <Box>
-          <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-            Department
-          </Typography>
-          <Typography variant="body1">{doc.department || 'N/A'}</Typography>
-        </Box>
-        <Divider />
-        <Box>
-          <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-            Uploaded By
-          </Typography>
-          <Typography variant="body1">{typeof doc.uploadedBy === 'string' ? doc.uploadedBy : doc.uploadedBy?.username || 'Unknown'}</Typography>
-        </Box>
-        <Divider />
-        <Box>
-          <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-            Upload Date
-          </Typography>
-          <Typography variant="body1">
-            {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleString() : 'N/A'}
-          </Typography>
-        </Box>
-        {doc.description && (
-          <>
+          <Typography variant="h6" gutterBottom>Document Information</Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box>
+              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                File Name
+              </Typography>
+              <Typography variant="body1">{doc.fileName}</Typography>
+            </Box>
             <Divider />
             <Box>
               <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                Description
+                Document Type
               </Typography>
-              <Typography variant="body1">{doc.description}</Typography>
+              <Typography variant="body1">{doc.documentType}</Typography>
             </Box>
-          </>
-        )}
-        {doc.tags && (
-          <>
             <Divider />
             <Box>
               <Typography variant="subtitle2" color="textSecondary" gutterBottom>
-                Tags
+                Department
               </Typography>
-              <Typography variant="body1">{doc.tags}</Typography>
+              <Typography variant="body1">{doc.department || 'N/A'}</Typography>
             </Box>
-          </>
+            <Divider />
+            <Box>
+              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                Uploaded By
+              </Typography>
+              <Typography variant="body1">{typeof doc.uploadedBy === 'string' ? doc.uploadedBy : doc.uploadedBy?.username || 'Unknown'}</Typography>
+            </Box>
+            <Divider />
+            <Box>
+              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                Upload Date
+              </Typography>
+              <Typography variant="body1">
+                {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleString() : 'N/A'}
+              </Typography>
+            </Box>
+            {doc.description && (
+              <>
+                <Divider />
+                <Box>
+                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                    Description
+                  </Typography>
+                  <Typography variant="body1">{doc.description}</Typography>
+                </Box>
+              </>
+            )}
+            {doc.tags && (
+              <>
+                <Divider />
+                <Box>
+                  <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                    Tags
+                  </Typography>
+                  <Typography variant="body1">{doc.tags}</Typography>
+                </Box>
+              </>
+            )}
+            <Divider />
+            <Box>
+              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                Folder
+              </Typography>
+              <FormControl fullWidth size="small" sx={{ mt: 1 }}>
+                <InputLabel>Folder</InputLabel>
+                <Select
+                  value={documentFolderId || ''}
+                  label="Folder"
+                  onChange={(e) => handleFolderChange(e.target.value ? Number(e.target.value) : null)}
+                  disabled={savingFolder || loadingFolders}
+                >
+                  <MenuItem value="">No Folder</MenuItem>
+                  {allFolders.map((folder) => (
+                    <MenuItem key={folder.id} value={folder.id}>
+                      {folder.folderPath || folder.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {savingFolder && (
+                  <Typography variant="caption" sx={{ mt: 1, color: 'text.secondary' }}>
+                    Saving...
+                  </Typography>
+                )}
+              </FormControl>
+            </Box>
+          </Box>
+        </Box>
+
+        {/* Document Type Fields */}
+        {typeFields.length > 0 && (
+          <Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6">Document Type Fields</Typography>
+              {!editingMetadata ? (
+                <Button
+                  startIcon={<EditIcon />}
+                  variant="outlined"
+                  size="small"
+                  onClick={() => setEditingMetadata(true)}
+                >
+                  Edit
+                </Button>
+              ) : (
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Button
+                    startIcon={<SaveIcon />}
+                    variant="contained"
+                    size="small"
+                    onClick={handleSaveMetadata}
+                    disabled={savingMetadata}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    startIcon={<CancelIcon />}
+                    variant="outlined"
+                    size="small"
+                    onClick={handleCancelEdit}
+                    disabled={savingMetadata}
+                  >
+                    Cancel
+                  </Button>
+                </Box>
+              )}
+            </Box>
+            <Grid container spacing={2}>
+              {typeFields
+                .sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+                .map((field) => (
+                  <Grid item xs={12} sm={6} key={field.id}>
+                    {renderFieldInput(field)}
+                    {field.description && (
+                      <Typography variant="caption" color="textSecondary" sx={{ mt: 0.5, display: 'block' }}>
+                        {field.description}
+                      </Typography>
+                    )}
+                  </Grid>
+                ))}
+            </Grid>
+          </Box>
         )}
       </Box>
     );

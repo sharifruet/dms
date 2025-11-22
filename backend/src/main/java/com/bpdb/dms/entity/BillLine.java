@@ -1,10 +1,12 @@
 package com.bpdb.dms.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 
 @Entity
 @Table(name = "bill_lines")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class BillLine {
 
     @Id
@@ -13,6 +15,7 @@ public class BillLine {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "header_id", nullable = false)
+    @JsonIgnoreProperties({"lines", "createdBy", "hibernateLazyInitializer", "handler"})
     private BillHeader header;
 
     @ManyToOne(fetch = FetchType.LAZY)
