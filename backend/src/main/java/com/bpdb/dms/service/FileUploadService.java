@@ -1,15 +1,26 @@
 package com.bpdb.dms.service;
 
-import com.bpdb.dms.dto.FileUploadResponse;
-import com.bpdb.dms.entity.Document;
-import com.bpdb.dms.entity.User;
-import com.bpdb.dms.model.DocumentType;
-import com.bpdb.dms.repository.DocumentRepository;
-import com.bpdb.dms.repository.FolderRepository;
-import com.bpdb.dms.entity.WorkflowInstance;
-import com.bpdb.dms.entity.WorkflowInstanceStatus;
-import com.bpdb.dms.entity.WorkflowType;
-import com.bpdb.dms.repository.WorkflowInstanceRepository;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Optional;
+import java.util.UUID;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,24 +29,19 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import com.bpdb.dms.dto.FileUploadResponse;
+import com.bpdb.dms.entity.Document;
+import com.bpdb.dms.entity.DocumentMetadata;
+import com.bpdb.dms.entity.DocumentMetadata.MetadataSource;
+import com.bpdb.dms.entity.User;
+import com.bpdb.dms.entity.WorkflowInstance;
+import com.bpdb.dms.entity.WorkflowInstanceStatus;
+import com.bpdb.dms.entity.WorkflowType;
+import com.bpdb.dms.model.DocumentType;
+import com.bpdb.dms.repository.DocumentMetadataRepository;
+import com.bpdb.dms.repository.DocumentRepository;
+import com.bpdb.dms.repository.FolderRepository;
+import com.bpdb.dms.repository.WorkflowInstanceRepository;
 
 /**
  * Service for handling file upload operations
@@ -93,6 +99,9 @@ public class FileUploadService {
     
     @Autowired
     private DocumentVersioningService documentVersioningService;
+    
+    @Autowired
+    private DocumentMetadataRepository documentMetadataRepository;
 
     /**
      * Upload a single file
@@ -439,6 +448,22 @@ public class FileUploadService {
                     0.0
                 );
                 return;
+            }
+            
+            
+            try {
+            	Map<String, String> extractedMetadata = ocrService.getContractData(managedDocument.getExtractedText());
+				for (Entry<String, String> entry : extractedMetadata.entrySet()) {
+					DocumentMetadata docMeta = new DocumentMetadata();
+					docMeta.setDocument(managedDocument);
+					docMeta.setKey(entry.getKey());
+					docMeta.setValue(entry.getValue());
+					docMeta.setSource(MetadataSource.AUTO_OCR);	
+					documentMetadataRepository.save(docMeta);
+				}
+            } catch (Exception e) {
+            	logger.error("Error extracting contract data from OCR text for document {}: {}", documentId, e.getMessage());
+            	throw e;
             }
             
             if (ocrResult != null && ocrResult.isSuccess()) {
