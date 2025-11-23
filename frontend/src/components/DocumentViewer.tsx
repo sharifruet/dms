@@ -226,8 +226,11 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           setMetadataValues(initialValues);
         }
         
-        if (documentData.ocrText && documentData.ocrText.trim() !== '') {
-          setOcrText(documentData.ocrText);
+        const ocrTextValue = documentData.ocrText || 
+                     (documentData as any).document?.extractedText ||
+                     (documentData as any).document?.ocrText;
+        if (ocrTextValue && ocrTextValue.trim() !== '') {
+          setOcrText(ocrTextValue);
           setOcrProcessing(false);
           setOcrConfidence(documentData.ocrConfidence || null);
           setOcrError(null);
