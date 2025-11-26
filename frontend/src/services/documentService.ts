@@ -69,7 +69,10 @@ export const documentService = {
     return response.data;
   },
   // Upload a new document
-  uploadDocument: async (uploadRequest: DocumentUploadRequest & { tenderWorkflowInstanceId?: string }): Promise<import('../types/document').FileUploadResponse> => {
+  uploadDocument: async (
+    uploadRequest: DocumentUploadRequest & { tenderWorkflowInstanceId?: string },
+    metadata?: Record<string, string>
+  ): Promise<import('../types/document').FileUploadResponse> => {
     const formData = new FormData();
     formData.append('file', uploadRequest.file);
     // Backend expects: file, documentType, description (optional), folderId (optional)
@@ -82,13 +85,13 @@ export const documentService = {
       formData.append('folderId', uploadRequest.folderId.toString());
     }
 
-    // Optional metadata payload (JSON string), include tenderWorkflowInstanceId if provided
-    const metadata: Record<string, string> = {};
+    // Merge metadata: include tenderWorkflowInstanceId from uploadRequest if provided, and any additional metadata
+    const combinedMetadata: Record<string, string> = metadata ? { ...metadata } : {};
     if (uploadRequest.tenderWorkflowInstanceId) {
-      metadata['tenderWorkflowInstanceId'] = uploadRequest.tenderWorkflowInstanceId;
+      combinedMetadata['tenderWorkflowInstanceId'] = uploadRequest.tenderWorkflowInstanceId;
     }
-    if (Object.keys(metadata).length > 0) {
-      formData.append('metadata', JSON.stringify(metadata));
+    if (Object.keys(combinedMetadata).length > 0) {
+      formData.append('metadata', JSON.stringify(combinedMetadata));
     }
 
     // Don't set Content-Type manually - axios will set it with proper boundary for multipart/form-data

@@ -150,6 +150,100 @@ class SearchService {
     
     return response.data;
   }
+
+  /**
+   * Export search results to Excel
+   */
+  async exportToExcel(
+    query?: string,
+    filters?: SearchFilters,
+    page: number = 0,
+    size: number = 1000
+  ): Promise<Blob> {
+    const params = new URLSearchParams();
+    
+    if (query) params.append('query', query);
+    if (filters?.documentTypes) {
+      filters.documentTypes.forEach(type => params.append('documentTypes', type));
+    }
+    if (filters?.departments) {
+      filters.departments.forEach(dept => params.append('departments', dept));
+    }
+    if (filters?.uploadedBy) {
+      filters.uploadedBy.forEach(user => params.append('uploadedBy', user));
+    }
+    if (filters?.startDate) params.append('startDate', filters.startDate);
+    if (filters?.endDate) params.append('endDate', filters.endDate);
+    if (filters?.minOcrConfidence !== undefined) {
+      params.append('minOcrConfidence', filters.minOcrConfidence.toString());
+    }
+    if (filters?.isActive !== undefined) {
+      params.append('isActive', filters.isActive.toString());
+    }
+    
+    params.append('page', page.toString());
+    params.append('size', size.toString());
+
+    const token = localStorage.getItem('token');
+    const response = await axios.get(
+      `${API_BASE_URL}/search/export/excel?${params.toString()}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        responseType: 'blob'
+      }
+    );
+    
+    return response.data;
+  }
+
+  /**
+   * Export search results to PDF
+   */
+  async exportToPdf(
+    query?: string,
+    filters?: SearchFilters,
+    page: number = 0,
+    size: number = 100
+  ): Promise<Blob> {
+    const params = new URLSearchParams();
+    
+    if (query) params.append('query', query);
+    if (filters?.documentTypes) {
+      filters.documentTypes.forEach(type => params.append('documentTypes', type));
+    }
+    if (filters?.departments) {
+      filters.departments.forEach(dept => params.append('departments', dept));
+    }
+    if (filters?.uploadedBy) {
+      filters.uploadedBy.forEach(user => params.append('uploadedBy', user));
+    }
+    if (filters?.startDate) params.append('startDate', filters.startDate);
+    if (filters?.endDate) params.append('endDate', filters.endDate);
+    if (filters?.minOcrConfidence !== undefined) {
+      params.append('minOcrConfidence', filters.minOcrConfidence.toString());
+    }
+    if (filters?.isActive !== undefined) {
+      params.append('isActive', filters.isActive.toString());
+    }
+    
+    params.append('page', page.toString());
+    params.append('size', size.toString());
+
+    const token = localStorage.getItem('token');
+    const response = await axios.get(
+      `${API_BASE_URL}/search/export/pdf?${params.toString()}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+        responseType: 'blob'
+      }
+    );
+    
+    return response.data;
+  }
 }
 
 export const searchService = new SearchService();

@@ -1,8 +1,25 @@
 # TODO - DMS Implementation Status & Remaining Tasks
 
 **Last Updated**: [Current Date]  
-**Based on**: Requirements Specification v1.1  
-**Status**: Comprehensive gap analysis between requirements and current implementation
+**Based on**: Requirements Specification v1.2 (Updated with APP/Bill changes and workflow requirements)  
+**Status**: Comprehensive gap analysis between requirements and current implementation  
+**Implementation Phases**: See [IMPLEMENTATION_PHASES.md](./IMPLEMENTATION_PHASES.md) for phased implementation plan
+
+**Recent Changes**:
+- Updated workflow requirements: Folder-based workflow selection, mandatory folder selection for Tender Notice
+- APP removed as document type, now manual entry only
+- BILL added as document type with OCR extraction
+- Workflow supports multiple PS/PG/Bills per workflow
+
+**Refinements Made**:
+- Clarified one-to-one folder-to-workflow relationship (each folder can only have one workflow)
+- Added validation to prevent multiple Tender Notices in same folder
+- Clarified which document types support multiple instances (PS, PG, Bills, Correspondence) vs single instances
+- Added error handling requirements for edge cases (folder without workflow, OCR failures)
+- Enhanced APP entry validation (duplicate warning with confirmation option)
+- Enhanced Bill OCR failure handling (allow full manual entry if OCR fails)
+- Added OCR confidence tracking and accuracy metrics requirements
+- Clarified Purchase Order (PO) and Letter of Credit (LC) may be classified as "Other" document type
 
 ---
 
@@ -21,7 +38,7 @@
 | Document Linkage & Lifecycle | 2 | 2 | 1 | 5 |
 | Security & Backup | 2 | 1 | 1 | 4 |
 | System Administration | 3 | 1 | 1 | 5 |
-| Finance & Billing | 3 | 1 | 0 | 4 |
+| Finance & Billing | 3 | 1 | 2 | 6 |
 | Advanced AI Features | 0 | 0 | 18 | 18 |
 | Mobile & Offline | 0 | 0 | 15 | 15 |
 | Collaboration Features | 0 | 0 | 20 | 20 |
@@ -44,6 +61,9 @@
 - ❌ AI/ML-based classification missing
 
 **Tasks**:
+- [ ] Remove APP from document types list (no longer a document type)
+- [ ] Add BILL to document types list (new document type)
+- [ ] Note: Purchase Order (PO) and Letter of Credit (LC) may be classified as "Other" if not separately defined in DocumentType enum
 - [ ] Implement document type auto-detection using OCR content analysis
 - [ ] Create classification rules engine based on keywords and patterns
 - [ ] Integrate ML model for document classification (FR-128)
@@ -58,29 +78,49 @@
 
 ---
 
-### 2. Tender Workflow Auto-Creation (FR-009)
+### 2. Tender Workflow Auto-Creation (FR-009, FR-006a-d)
 **Status**: ❌ **NOT STARTED**  
 **Priority**: CRITICAL  
-**Requirements**: FR-009 (Workflow Rule)
+**Requirements**: FR-009 (Workflow Rule), FR-006a-d (Folder-Based Workflow Selection)
 
 **Current State**:
 - ✅ Workflow entities exist
 - ✅ WorkflowService exists
+- ✅ Folder entity and FolderService exist
 - ❌ Auto-workflow creation on Tender Notice upload not implemented
-- ❌ Workflow linking to related documents missing
+- ❌ Folder selection mandatory enforcement missing
+- ❌ Folder-to-workflow mapping not implemented
+- ❌ Multiple PS/PG/Bills per workflow not supported
 
 **Tasks**:
+- [ ] Make folder selection mandatory for Tender Notice uploads (FR-006a)
+- [ ] Add validation to prevent Tender Notice upload if folder is not selected
 - [ ] Implement automatic workflow creation when Tender Notice is uploaded
-- [ ] Create workflow template for Tender → Related Documents (2-7)
-- [ ] Add workflow tracking for required documents (Tender Doc, PO, LC, BG, PS, PG, Contract)
-- [ ] Implement workflow status dashboard
+- [ ] Use folder name as workflow name (FR-006b)
+- [ ] Create one-to-one folder-to-workflow mapping system (FR-006c, FR-006d)
+- [ ] Prevent multiple Tender Notices in the same folder (one workflow per folder)
+- [ ] Validate that selected folder has associated workflow before allowing related document uploads
+- [ ] Implement folder-based workflow association for subsequent documents (FR-006d)
+- [ ] Remove separate workflow selection UI - use folder selection instead
+- [ ] Support workflow document types: Tender Document, Contract, PS (multiple), PG (multiple), Bills (multiple), Correspondence (multiple), and others
+- [ ] Clarify which document types are single vs multiple per workflow (FR-006f)
+- [ ] Implement multiple documents of same type (PS, PG, Bills, Correspondence) per workflow
+- [ ] Add workflow tracking and status dashboard
 - [ ] Add alerts for missing workflow documents
-- [ ] Create workflow completion tracking
+- [ ] Create workflow completion tracking (based on key documents uploaded)
+- [ ] Add error handling for edge cases (folder without workflow, duplicate Tender Notice attempts)
 
 **Files to Create/Modify**:
 - `backend/src/main/java/com/bpdb/dms/service/TenderWorkflowService.java` (new)
-- `backend/src/main/java/com/bpdb/dms/service/FileUploadService.java` (modify)
+- `backend/src/main/java/com/bpdb/dms/service/FileUploadService.java` (modify - add folder validation, workflow creation, duplicate prevention)
+- `backend/src/main/java/com/bpdb/dms/entity/Folder.java` (add one-to-one workflow relationship)
+- `backend/src/main/java/com/bpdb/dms/entity/Workflow.java` (add folder relationship)
+- `backend/src/main/java/com/bpdb/dms/service/FolderService.java` (add workflow validation methods)
+- `backend/src/main/java/com/bpdb/dms/controller/FolderController.java` (add workflow mapping endpoints, validation)
+- `backend/src/main/resources/db/changelog/XXX-add-folder-workflow-mapping.xml` (new - add foreign key)
 - `frontend/src/pages/TenderWorkflows.tsx` (new)
+- `frontend/src/components/DocumentUpload.tsx` (modify - enforce folder selection for Tender Notice, remove workflow selector, add error handling)
+- `frontend/src/components/FolderSelector.tsx` (new or modify - add validation messages)
 
 ---
 
@@ -166,6 +206,109 @@
 - `backend/src/main/java/com/bpdb/dms/service/WatermarkService.java` (new)
 - `backend/src/main/java/com/bpdb/dms/controller/DocumentController.java` (enhance)
 - `frontend/src/components/WatermarkSettings.tsx` (new)
+
+---
+
+### 2a. APP Manual Entry Form (FR-241-243)
+**Status**: ❌ **NOT STARTED**  
+**Priority**: CRITICAL  
+**Requirements**: FR-241, FR-242, FR-243
+
+**Current State**:
+- ✅ APP entities exist (app_headers, app_lines tables)
+- ✅ AppDocumentService exists
+- ❌ APP Excel upload currently implemented (needs to be removed)
+- ❌ Manual entry form not implemented
+- ❌ New APP fields not in database schema
+
+**Tasks**:
+- [ ] Remove APP Excel upload functionality
+- [ ] Remove APP as document type from DocumentType enum
+- [ ] Update database schema to support new APP fields:
+  - Fiscal Year (dropdown)
+  - Allocation/Release Type (Annual/Revised/Additional/Emergency)
+  - Budget Release Date
+  - Allocation Amount (BDT)
+  - Release Installment No. (auto/manual)
+  - Reference/Memo Number
+  - Attachment (PDF upload)
+- [ ] Create APP manual entry form in frontend
+- [ ] Implement fiscal year dropdown with predefined values (e.g., 2024-25, 2025-26, etc.)
+- [ ] Implement allocation type dropdown (Annual/Revised/Additional/Emergency)
+- [ ] Add date picker for budget release date
+- [ ] Add installment number auto-increment logic (based on existing entries for same fiscal year)
+- [ ] Allow manual override of installment number
+- [ ] Implement PDF attachment upload for budget release letter
+- [ ] Add validation for duplicate fiscal year/installment combinations (warn user, allow confirmation to proceed)
+- [ ] Add required field validation (Fiscal Year, Allocation Type, Budget Release Date, Allocation Amount)
+- [ ] Update APP service to handle manual entry instead of Excel parsing
+- [ ] Add form validation error messages and user feedback
+
+**Files to Create/Modify**:
+- `backend/src/main/resources/db/changelog/XXX-update-app-entries-schema.xml` (new - update schema)
+- `backend/src/main/java/com/bpdb/dms/entity/AppEntry.java` (new or modify - update fields)
+- `backend/src/main/java/com/bpdb/dms/service/AppEntryService.java` (new - manual entry service)
+- `backend/src/main/java/com/bpdb/dms/controller/AppEntryController.java` (new or modify)
+- `backend/src/main/java/com/bpdb/dms/service/AppExcelImportService.java` (remove or deprecate)
+- `backend/src/main/java/com/bpdb/dms/model/DocumentType.java` (remove APP enum value)
+- `frontend/src/pages/AppEntries.tsx` (complete rewrite - manual form instead of Excel display)
+- `frontend/src/components/AppEntryForm.tsx` (new)
+- `frontend/src/constants/documentTypes.ts` (remove APP from DocumentType enum)
+
+---
+
+### 2b. Bill Document Type and OCR Extraction (FR-244-251)
+**Status**: ❌ **NOT STARTED**  
+**Priority**: CRITICAL  
+**Requirements**: FR-244, FR-245, FR-246, FR-247, FR-248, FR-249, FR-250, FR-251
+
+**Current State**:
+- ✅ BillHeader and BillLine entities exist
+- ✅ BillService exists for manual entry
+- ✅ OCRService exists
+- ❌ Bill not defined as document type (currently mapped to OTHER)
+- ❌ Manual bill entry currently implemented (needs to be changed to upload only)
+- ❌ OCR extraction for bills not implemented
+- ❌ Bill verification interface not implemented
+
+**Tasks**:
+- [ ] Add BILL as document type in DocumentType enum
+- [ ] Remove manual bill entry form (replace with upload-only interface)
+- [ ] Implement bill upload via image/PDF files only (JPEG, PNG, TIFF, PDF formats)
+- [ ] Create OCR extraction service for bills:
+  - Extract vendor name
+  - Extract invoice number
+  - Extract invoice date
+  - Extract fiscal year
+  - Extract line items with amounts
+  - Extract tax amounts
+  - Extract total amounts
+- [ ] Track OCR confidence scores for each extracted field
+- [ ] Handle OCR extraction failures gracefully (allow full manual entry if OCR fails)
+- [ ] Implement bill verification interface for reviewing OCR-extracted data
+- [ ] Highlight fields with low OCR confidence scores in verification interface
+- [ ] Add manual correction capability for all OCR fields
+- [ ] Store original OCR-extracted values separately from corrected values (for accuracy tracking)
+- [ ] Link bills to fiscal year and APP lines
+- [ ] Validate bill year matches APP year when linked
+- [ ] Auto-calculate totals from extracted line items
+- [ ] Validate arithmetic consistency (sum of line items + tax should equal total)
+- [ ] Store original uploaded bill file as attachment and document
+- [ ] Index bill files for search (document search, not just bill entries)
+- [ ] Add Bill to tender workflow document types (supports multiple bills per workflow)
+- [ ] Track OCR accuracy metrics for continuous improvement
+
+**Files to Create/Modify**:
+- `backend/src/main/java/com/bpdb/dms/model/DocumentType.java` (add BILL enum value)
+- `backend/src/main/java/com/bpdb/dms/service/BillOCRService.java` (new)
+- `backend/src/main/java/com/bpdb/dms/service/OCRService.java` (enhance - add bill-specific extraction)
+- `backend/src/main/java/com/bpdb/dms/service/BillService.java` (modify - remove manual entry, add OCR processing)
+- `backend/src/main/java/com/bpdb/dms/controller/FinanceController.java` (modify - add bill upload endpoint)
+- `backend/src/main/java/com/bpdb/dms/dto/BillOCRResult.java` (new)
+- `frontend/src/pages/BillEntries.tsx` (complete rewrite - file upload with OCR verification)
+- `frontend/src/components/BillUploadForm.tsx` (new)
+- `frontend/src/components/BillVerificationForm.tsx` (new)
+- `frontend/src/constants/documentTypes.ts` (add BILL to DocumentType enum)
 
 ---
 
@@ -778,17 +921,18 @@
 **Review Frequency**: Weekly
 
 **Key Metrics**:
-- Total Requirements: 133
-- Implemented: 47 (35%)
-- Partial: 20 (15%)
-- Not Started: 66 (50%)
+- Total Requirements: 138 (updated with new requirements)
+- Implemented: 47 (34%)
+- Partial: 20 (14%)
+- Not Started: 71 (51%)
 
 **Focus Areas for Next Sprint**:
-1. Auto Document Type Detection
-2. Tender Workflow Auto-Creation
-3. Full-Text Search Enhancement
-4. Two-Factor Authentication
-5. Document Watermarking
+1. **Phase 1**: Document Type Foundation (Remove APP, Add BILL)
+2. **Phase 2**: Tender Workflow Auto-Creation (with folder-based selection)
+3. **Phase 3**: APP Manual Entry Form Implementation
+4. **Phase 3**: Bill Document Type and OCR Extraction
+
+**See [IMPLEMENTATION_PHASES.md](./IMPLEMENTATION_PHASES.md) for complete phased implementation plan with detailed tasks, dependencies, and timelines.**
 
 ---
 

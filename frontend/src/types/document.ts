@@ -42,6 +42,8 @@ export interface FileUploadResponse {
   duplicateDocumentType?: string;
   duplicateCreatedAt?: string;
   duplicateUploadedBy?: string;
+  detectedDocumentType?: string;
+  detectionConfidence?: number;
 }
 
 export interface DocumentCategory {

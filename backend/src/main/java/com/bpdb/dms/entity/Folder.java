@@ -17,7 +17,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
@@ -26,7 +28,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 @Entity
 @Table(name = "folders")
 @EntityListeners(AuditingEntityListener.class)
-@JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "parentFolder", "subFolders"})
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "parentFolder", "workflow"})
 public class Folder {
     
     @Id
@@ -45,7 +47,7 @@ public class Folder {
     private Folder parentFolder;
     
     @OneToMany(mappedBy = "parentFolder", fetch = FetchType.LAZY)
-    @JsonIgnoreProperties({"parentFolder", "subFolders", "documents"})
+    @JsonIgnoreProperties({"parentFolder", "documents", "workflow", "hibernateLazyInitializer", "handler"})
     private List<Folder> subFolders;
     
     @Column(name = "folder_path", length = 1000)
@@ -58,6 +60,11 @@ public class Folder {
     @JoinColumn(name = "created_by", nullable = false)
     @JsonIgnoreProperties({"role", "hibernateLazyInitializer", "handler"})
     private User createdBy;
+    
+    @OneToOne(mappedBy = "folder", fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"folder", "hibernateLazyInitializer", "handler"})
+    @JsonIgnore
+    private Workflow workflow;
     
     @Column(name = "is_active")
     private Boolean isActive = true;
@@ -176,6 +183,14 @@ public class Folder {
     
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+    
+    public Workflow getWorkflow() {
+        return workflow;
+    }
+    
+    public void setWorkflow(Workflow workflow) {
+        this.workflow = workflow;
     }
 }
 

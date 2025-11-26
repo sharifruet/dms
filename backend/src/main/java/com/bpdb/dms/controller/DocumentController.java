@@ -172,12 +172,21 @@ public class DocumentController {
                         fieldsWithValues.add(fieldData);
                     }
                     response.put("typeFields", fieldsWithValues);
+                    // Also include raw metadata map for direct access (useful for bill fields with confidence scores)
+                    response.put("metadata", metadataMap);
                 } catch (Exception e) {
                     // If service is not available, just continue without type fields
                     response.put("typeFields", Collections.emptyList());
+                    response.put("metadata", Collections.emptyMap());
                 }
             } else {
                 response.put("typeFields", Collections.emptyList());
+                try {
+                    Map<String, String> metadataMap = documentMetadataService.getMetadataMap(document);
+                    response.put("metadata", metadataMap);
+                } catch (Exception e) {
+                    response.put("metadata", Collections.emptyMap());
+                }
             }
 
             return ResponseEntity.ok(response);
@@ -677,8 +686,11 @@ public class DocumentController {
             }
 
             Document document = documentOpt.get();
-            if (!"APP".equals(document.getDocumentType())) {
-                return ResponseEntity.badRequest().build();
+            // Note: APP is no longer a document type. This endpoint supports legacy APP documents only.
+            // For new APP entries, use the manual entry form (see AppEntryController).
+            if (!"APP".equals(document.getDocumentType()) && !"OTHER".equals(document.getDocumentType())) {
+                // Allow OTHER type as well for backward compatibility with migrated APP documents
+                return ResponseEntity.badRequest().body(null);
             }
 
             List<AppDocumentEntry> entries = appDocumentEntryRepository.findByDocument(document);

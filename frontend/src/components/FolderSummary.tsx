@@ -31,6 +31,7 @@ const FolderSummary: React.FC<FolderSummaryProps> = ({ folderId }) => {
     } else {
       setSummary(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [folderId]);
 
   const loadSummary = async () => {

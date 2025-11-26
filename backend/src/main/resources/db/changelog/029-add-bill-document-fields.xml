@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="029-001" author="dms">
+        <comment>Insert document type fields for BILL document type</comment>
+        <sql>
+            INSERT INTO document_type_fields (document_type, field_key, field_label, field_type, is_required, is_ocr_mappable, ocr_pattern, display_order, description)
+            VALUES 
+            ('BILL', 'vendorName', 'Vendor Name', 'text', true, true, '(?i)(?:vendor|supplier|from|bill\\s*to|sold\\s*to)[:;]?\\s*([A-Z][A-Za-z0-9\\s&amp;.,-]+(?:Limited|Ltd|Corp|Corporation|Inc|Company|Co\\.)?)', 1, 'Name of the vendor/supplier'),
+            ('BILL', 'invoiceNumber', 'Invoice Number', 'text', true, true, '(?i)(?:invoice|bill|inv)[\\s#:]+([A-Z0-9\\-/]+)', 2, 'Invoice or bill number'),
+            ('BILL', 'invoiceDate', 'Invoice Date', 'date', true, true, '(?i)(?:date|invoice\\s*date|bill\\s*date|dated)[:;]?\\s*(\\d{1,2}[/-]\\d{1,2}[/-]\\d{2,4})', 3, 'Date of the invoice'),
+            ('BILL', 'fiscalYear', 'Fiscal Year', 'number', true, false, null, 4, 'Fiscal year (calculated from invoice date)'),
+            ('BILL', 'totalAmount', 'Total Amount', 'number', true, true, '(?i)(?:total|grand\\s*total|amount\\s*due|total\\s*amount)[:;]?\\s*(?:BDT|Tk|Taka|\\$|USD)?\\s*([\\d,]+(?:\\.\\d{2})?)', 5, 'Total invoice amount in BDT'),
+            ('BILL', 'taxAmount', 'Tax Amount', 'number', false, true, '(?i)(?:tax|vat|gst|sales\\s*tax)[:;]?\\s*(?:BDT|Tk|Taka|\\$|USD)?\\s*([\\d,]+(?:\\.\\d{2})?)', 6, 'Tax/VAT amount'),
+            ('BILL', 'netAmount', 'Net Amount', 'number', false, false, null, 7, 'Net amount (total - tax)'),
+            ('BILL', 'description', 'Description', 'text', false, false, null, 8, 'Additional description or notes')
+            ON CONFLICT (document_type, field_key) DO UPDATE 
+            SET field_label = EXCLUDED.field_label,
+                field_type = EXCLUDED.field_type,
+                is_required = EXCLUDED.is_required,
+                is_ocr_mappable = EXCLUDED.is_ocr_mappable,
+                ocr_pattern = EXCLUDED.ocr_pattern,
+                display_order = EXCLUDED.display_order,
+                description = EXCLUDED.description;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
+

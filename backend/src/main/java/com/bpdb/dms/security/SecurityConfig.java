@@ -55,12 +55,12 @@ public class SecurityConfig {
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                // WebSocket endpoints - must come early to allow handshake requests
+                .requestMatchers("/ws/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/api/users/register").permitAll()
-                // WebSocket endpoints
-                .requestMatchers("/ws/**").permitAll()
                 // Document endpoints
                 .requestMatchers(HttpMethod.GET, "/api/documents/**").hasAuthority(PermissionConstants.DOCUMENT_VIEW)
                 .requestMatchers(HttpMethod.GET, "/api/document-categories/**").hasAuthority(PermissionConstants.DOCUMENT_VIEW)

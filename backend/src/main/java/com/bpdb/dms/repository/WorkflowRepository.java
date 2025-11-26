@@ -4,6 +4,7 @@ import com.bpdb.dms.entity.Workflow;
 import com.bpdb.dms.entity.WorkflowStatus;
 import com.bpdb.dms.entity.WorkflowType;
 import com.bpdb.dms.entity.User;
+import com.bpdb.dms.entity.Folder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -75,4 +76,20 @@ public interface WorkflowRepository extends JpaRepository<Workflow, Long> {
                                          @Param("isPublic") Boolean isPublic,
                                          @Param("isAutomatic") Boolean isAutomatic,
                                          Pageable pageable);
+    
+    /**
+     * Find workflow by folder (one-to-one relationship)
+     */
+    Optional<Workflow> findByFolder(Folder folder);
+    
+    /**
+     * Check if folder has a workflow
+     */
+    boolean existsByFolder(Folder folder);
+
+    /**
+     * Find all workflows that are linked to an APP entry
+     */
+    @Query("SELECT w FROM Workflow w WHERE w.appEntry IS NOT NULL")
+    java.util.List<Workflow> findWithAppEntry();
 }

@@ -44,6 +44,7 @@ import {
 } from '@mui/icons-material';
 import { useAppSelector } from '../hooks/redux';
 import { documentService, Document as DmsDocument } from '../services/documentService';
+import { folderService, Folder } from '../services/folderService';
 import { DocumentCategory } from '../types/document';
 import { DocumentType, getDocumentTypeLabel, requiresTenderWorkflow, getDocumentTypeColor, ALL_DOCUMENT_TYPES } from '../constants/documentTypes';
 
@@ -65,18 +66,64 @@ const Documents: React.FC = () => {
     department: '',
     tags: ''
   });
-  const [tenderWorkflowInstanceId, setTenderWorkflowInstanceId] = useState<string>('');
+  const [selectedFolderId, setSelectedFolderId] = useState<number | null>(null);
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [folderHasWorkflow, setFolderHasWorkflow] = useState<boolean>(false);
+  const [loadingFolders, setLoadingFolders] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('');
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [duplicateInfo, setDuplicateInfo] = useState<import('../types/document').FileUploadResponse | null>(null);
+  const [detectedDocumentType, setDetectedDocumentType] = useState<{ type: string; confidence: number } | null>(null);
 
   const departments = ['IT', 'HR', 'Finance', 'Operations', 'Legal', 'Marketing'];
   useEffect(() => {
     loadDocuments();
     loadCategories();
+    loadFolders();
   }, []);
+
+  useEffect(() => {
+    // Check if selected folder has workflow when document type requires it
+    if (selectedFolderId && requiresTenderWorkflow(formData.documentType)) {
+      checkFolderWorkflow(selectedFolderId);
+    } else {
+      setFolderHasWorkflow(false);
+    }
+  }, [selectedFolderId, formData.documentType]);
+
+  const loadFolders = async () => {
+    try {
+      setLoadingFolders(true);
+      const folderTree = await folderService.getFolderTree();
+      setFolders(folderTree);
+    } catch (err: any) {
+      console.error('Failed to load folders', err);
+    } finally {
+      setLoadingFolders(false);
+    }
+  };
+
+  const checkFolderWorkflow = async (folderId: number) => {
+    try {
+      const hasWorkflow = await folderService.folderHasWorkflow(folderId);
+      setFolderHasWorkflow(hasWorkflow);
+    } catch (err: any) {
+      console.error('Failed to check folder workflow', err);
+      setFolderHasWorkflow(false);
+    }
+  };
+
+  const flattenFolders = (folderTree: Folder[], result: Folder[] = []): Folder[] => {
+    folderTree.forEach(folder => {
+      result.push(folder);
+      if (folder.subFolders && folder.subFolders.length > 0) {
+        flattenFolders(folder.subFolders, result);
+      }
+    });
+    return result;
+  };
 
   const loadDocuments = async () => {
     try {
@@ -102,7 +149,8 @@ const Documents: React.FC = () => {
         [DocumentType.BANK_GUARANTEE_BG]: 4,
         [DocumentType.PERFORMANCE_SECURITY_PS]: 5,
         [DocumentType.PERFORMANCE_GUARANTEE_PG]: 6,
-        [DocumentType.APP]: 7,
+        [DocumentType.BILL]: 7,
+        [DocumentType.STATIONERY_RECORD]: 8,
         [DocumentType.OTHER]: 99,
       };
       const mapped: DocumentCategory[] = filtered.map((t, idx) => ({
@@ -148,6 +196,25 @@ const Documents: React.FC = () => {
         return;
       }
 
+      // Phase 2: Folder validation
+      if (formData.documentType === DocumentType.TENDER_NOTICE) {
+        if (!selectedFolderId) {
+          setError('Folder selection is required for Tender Notice uploads');
+          return;
+        }
+      }
+
+      if (requiresTenderWorkflow(formData.documentType)) {
+        if (!selectedFolderId) {
+          setError('Folder selection is required for this document type. Please select the folder used for the Tender Notice upload.');
+          return;
+        }
+        if (!folderHasWorkflow) {
+          setError('Selected folder does not have an associated workflow. Please select a folder that was used for a Tender Notice upload.');
+          return;
+        }
+      }
+
       const response = await documentService.uploadDocument({
         file: uploadFile,
         title: formData.title || uploadFile.name,
@@ -156,7 +223,7 @@ const Documents: React.FC = () => {
         department: formData.department,
         tags: formData.tags,
         userId: user?.id || 0,
-        tenderWorkflowInstanceId: requiresTenderWorkflow(formData.documentType) ? (tenderWorkflowInstanceId || undefined) : undefined,
+        folderId: selectedFolderId || undefined,
       });
 
       // Check if duplicate was detected
@@ -169,6 +236,7 @@ const Documents: React.FC = () => {
       // Success - close dialog and refresh
       setOpenUploadDialog(false);
       setUploadFile(null);
+      setDetectedDocumentType(null);
       setFormData({
         title: '',
         description: '',
@@ -176,7 +244,17 @@ const Documents: React.FC = () => {
         department: '',
         tags: ''
       });
-      setTenderWorkflowInstanceId('');
+      setSelectedFolderId(null);
+      setFolderHasWorkflow(false);
+      
+      // Show detection result if available
+      if (response.detectedDocumentType && response.detectionConfidence) {
+        setDetectedDocumentType({
+          type: response.detectedDocumentType,
+          confidence: response.detectionConfidence
+        });
+      }
+      
       await loadDocuments();
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to upload document');
@@ -189,19 +267,14 @@ const Documents: React.FC = () => {
     }
 
     try {
-      const metadata: Record<string, string> = {};
-      if (requiresTenderWorkflow(formData.documentType) && tenderWorkflowInstanceId) {
-        metadata['tenderWorkflowInstanceId'] = tenderWorkflowInstanceId;
-      }
-
       const response = await documentService.handleDuplicateUpload(
         uploadFile,
         formData.documentType,
         duplicateInfo.duplicateDocumentId,
         action,
         formData.description,
-        Object.keys(metadata).length > 0 ? metadata : undefined,
-        undefined // folderId
+        undefined, // metadata - no longer needed
+        selectedFolderId || undefined // folderId
       );
 
       if (response.success) {
@@ -216,7 +289,8 @@ const Documents: React.FC = () => {
           department: '',
           tags: ''
         });
-        setTenderWorkflowInstanceId('');
+        setSelectedFolderId(null);
+        setFolderHasWorkflow(false);
         await loadDocuments();
       } else {
         setError(response.message || 'Failed to handle duplicate upload');
@@ -535,7 +609,11 @@ const Documents: React.FC = () => {
       </Grid>
 
       {/* Upload Document Dialog */}
-      <Dialog open={openUploadDialog} onClose={() => setOpenUploadDialog(false)} maxWidth="md" fullWidth>
+      <Dialog open={openUploadDialog} onClose={() => {
+        setOpenUploadDialog(false);
+        setSelectedFolderId(null);
+        setFolderHasWorkflow(false);
+      }} maxWidth="md" fullWidth>
         <DialogTitle>Upload New Document</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
@@ -550,7 +628,51 @@ const Documents: React.FC = () => {
                 <input
                   type="file"
                   hidden
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setUploadFile(file);
+                    // Quick classification based on filename
+                    if (file) {
+                      const fileName = file.name.toLowerCase();
+                      let detectedType: string | null = null;
+                      let confidence = 0.5;
+                      
+                      if (fileName.includes('tender') && fileName.includes('notice')) {
+                        detectedType = DocumentType.TENDER_NOTICE;
+                        confidence = 0.7;
+                      } else if (fileName.includes('tender') && (fileName.includes('doc') || fileName.includes('document'))) {
+                        detectedType = DocumentType.TENDER_DOCUMENT;
+                        confidence = 0.7;
+                      } else if (fileName.includes('contract')) {
+                        detectedType = DocumentType.CONTRACT_AGREEMENT;
+                        confidence = 0.7;
+                      } else if (fileName.includes('bank') && fileName.includes('guarantee')) {
+                        detectedType = DocumentType.BANK_GUARANTEE_BG;
+                        confidence = 0.7;
+                      } else if (fileName.includes('performance') && fileName.includes('security')) {
+                        detectedType = DocumentType.PERFORMANCE_SECURITY_PS;
+                        confidence = 0.7;
+                      } else if (fileName.includes('performance') && fileName.includes('guarantee')) {
+                        detectedType = DocumentType.PERFORMANCE_GUARANTEE_PG;
+                        confidence = 0.7;
+                      } else if (fileName.includes('invoice') || fileName.includes('bill')) {
+                        detectedType = DocumentType.BILL;
+                        confidence = 0.7;
+                      }
+                      
+                      if (detectedType) {
+                        setDetectedDocumentType({ type: detectedType, confidence });
+                        // Auto-select if confidence is high enough and no type is selected
+                        if (confidence >= 0.6 && !formData.documentType) {
+                          setFormData({ ...formData, documentType: detectedType });
+                        }
+                      } else {
+                        setDetectedDocumentType(null);
+                      }
+                    } else {
+                      setDetectedDocumentType(null);
+                    }
+                  }}
                   accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png"
                 />
               </Button>
@@ -569,7 +691,10 @@ const Documents: React.FC = () => {
                 <Select
                   value={formData.documentType}
                   label="Document Type"
-                  onChange={(e) => setFormData({ ...formData, documentType: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, documentType: e.target.value });
+                    setDetectedDocumentType(null); // Clear detection when manually changed
+                  }}
                   disabled={categories.length === 0}
                 >
                   {categories.map((category) => (
@@ -578,13 +703,66 @@ const Documents: React.FC = () => {
                     </MenuItem>
                   ))}
                 </Select>
+                {detectedDocumentType && detectedDocumentType.confidence >= 0.3 && (
+                  <Box sx={{ mt: 1 }}>
+                    <Alert severity={detectedDocumentType.confidence >= 0.6 ? "info" : "warning"} sx={{ py: 0.5 }}>
+                      <Typography variant="caption">
+                        Auto-detected: <strong>{getDocumentTypeLabel(detectedDocumentType.type)}</strong>
+                        {' '}({Math.round(detectedDocumentType.confidence * 100)}% confidence)
+                        {detectedDocumentType.confidence < 0.6 && ' - Please verify'}
+                      </Typography>
+                    </Alert>
+                  </Box>
+                )}
               </FormControl>
+            </Grid>
+            {/* Phase 2: Folder Selection - Required for Tender Notice and workflow documents */}
+            <Grid item xs={12}>
+              <FormControl fullWidth required={formData.documentType === DocumentType.TENDER_NOTICE || requiresTenderWorkflow(formData.documentType)}>
+                <InputLabel>Folder *</InputLabel>
+                <Select
+                  value={selectedFolderId || ''}
+                  label="Folder *"
+                  onChange={(e) => {
+                    const folderId = e.target.value as number | '';
+                    setSelectedFolderId(folderId === '' ? null : folderId);
+                  }}
+                  disabled={loadingFolders}
+                >
+                  {flattenFolders(folders).map((folder) => (
+                    <MenuItem key={folder.id} value={folder.id}>
+                      {folder.folderPath || folder.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {formData.documentType === DocumentType.TENDER_NOTICE && !selectedFolderId && (
+                <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block' }}>
+                  Folder selection is required for Tender Notice uploads
+                </Typography>
+              )}
+              {requiresTenderWorkflow(formData.documentType) && selectedFolderId && !folderHasWorkflow && (
+                <Alert severity="warning" sx={{ mt: 1 }}>
+                  Selected folder does not have an associated workflow. Please select a folder that was used for a Tender Notice upload.
+                </Alert>
+              )}
+              {formData.documentType === DocumentType.TENDER_NOTICE && selectedFolderId && (
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  A workflow will be automatically created for this folder using the folder name. Subsequent documents can be uploaded to this same folder.
+                </Alert>
+              )}
+              {requiresTenderWorkflow(formData.documentType) && selectedFolderId && folderHasWorkflow && (
+                <Alert severity="success" sx={{ mt: 1 }}>
+                  Folder has an associated workflow. This document will be added to that workflow.
+                </Alert>
+              )}
             </Grid>
             {formData.documentType === DocumentType.TENDER_NOTICE && (
               <Grid item xs={12}>
                 <Alert severity="info">
-                  Selecting <strong>Tender Notice</strong> will initiate a workflow automatically. 
-                  Upload subsequent documents (2–7) via that workflow.
+                  Selecting <strong>Tender Notice</strong> requires a folder selection. 
+                  A workflow will be automatically created with the folder name. 
+                  Upload subsequent documents (2–7) to the same folder.
                 </Alert>
               </Grid>
             )}
@@ -613,20 +791,6 @@ const Documents: React.FC = () => {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               />
             </Grid>
-            {requiresTenderWorkflow(formData.documentType) && (
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Tender Workflow Instance ID"
-                  value={tenderWorkflowInstanceId}
-                  onChange={(e) => setTenderWorkflowInstanceId(e.target.value)}
-                  placeholder="Enter the workflow instance ID created with the Tender Notice"
-                />
-                <Typography variant="caption" color="text.secondary">
-                  Documents 2–7 (Tender Document, Contract Agreement, BG, PS, PG, APP) must be uploaded via the Tender workflow.
-                </Typography>
-              </Grid>
-            )}
             <Grid item xs={12}>
               <TextField
                 fullWidth
@@ -639,7 +803,11 @@ const Documents: React.FC = () => {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenUploadDialog(false)}>Cancel</Button>
+          <Button onClick={() => {
+            setOpenUploadDialog(false);
+            setSelectedFolderId(null);
+            setFolderHasWorkflow(false);
+          }}>Cancel</Button>
           <Button onClick={handleUploadDocument} variant="contained">
             Upload
           </Button>

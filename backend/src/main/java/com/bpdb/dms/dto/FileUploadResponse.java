@@ -25,6 +25,10 @@ public class FileUploadResponse {
     private LocalDateTime duplicateCreatedAt;
     private String duplicateUploadedBy;
     
+    // Auto-detected document type information
+    private String detectedDocumentType;
+    private Double detectionConfidence;
+    
     // Constructors
     public FileUploadResponse() {}
     
@@ -212,5 +216,21 @@ public class FileUploadResponse {
     
     public void setDuplicateUploadedBy(String duplicateUploadedBy) {
         this.duplicateUploadedBy = duplicateUploadedBy;
+    }
+    
+    public String getDetectedDocumentType() {
+        return detectedDocumentType;
+    }
+    
+    public void setDetectedDocumentType(String detectedDocumentType) {
+        this.detectedDocumentType = detectedDocumentType;
+    }
+    
+    public Double getDetectionConfidence() {
+        return detectionConfidence;
+    }
+    
+    public void setDetectionConfidence(Double detectionConfidence) {
+        this.detectionConfidence = detectionConfidence;
     }
 }

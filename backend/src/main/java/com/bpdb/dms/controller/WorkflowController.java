@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Controller for workflow management
@@ -26,6 +27,9 @@ public class WorkflowController {
     
     @Autowired
     private WorkflowService workflowService;
+    
+    @Autowired
+    private com.bpdb.dms.service.TenderWorkflowService tenderWorkflowService;
     
     @Autowired
     private UserRepository userRepository;
@@ -221,6 +225,92 @@ public class WorkflowController {
         }
     }
     
+    /**
+     * Link a workflow to an APP entry (budget entry)
+     */
+    @PostMapping("/{workflowId}/link-app-entry")
+    @PreAuthorize("hasAuthority('PERM_WORKFLOW_MANAGE')")
+    public ResponseEntity<Map<String, Object>> linkWorkflowToAppEntry(
+            @PathVariable Long workflowId,
+            @RequestBody LinkAppEntryRequest request) {
+        try {
+            Workflow workflow = tenderWorkflowService.linkWorkflowToAppEntry(workflowId, request.getAppEntryId());
+            
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("success", true);
+            response.put("workflow", workflow);
+            response.put("message", "Workflow linked to APP entry successfully");
+            
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("success", false);
+            response.put("message", "Failed to link workflow to APP entry: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+    
+    /**
+     * Get APP entry for a workflow
+     */
+    @GetMapping("/{workflowId}/app-entry")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<Map<String, Object>> getAppEntryForWorkflow(@PathVariable Long workflowId) {
+        try {
+            Optional<AppHeader> appEntry = tenderWorkflowService.getAppEntryForWorkflow(workflowId);
+            
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("success", true);
+            response.put("appEntry", appEntry.orElse(null));
+            response.put("hasAppEntry", appEntry.isPresent());
+            
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("success", false);
+            response.put("message", "Failed to get APP entry for workflow: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+    
+    /**
+     * Unlink workflow from APP entry
+     */
+    @DeleteMapping("/{workflowId}/link-app-entry")
+    @PreAuthorize("hasAuthority('PERM_WORKFLOW_MANAGE')")
+    public ResponseEntity<Map<String, Object>> unlinkWorkflowFromAppEntry(@PathVariable Long workflowId) {
+        try {
+            Workflow workflow = tenderWorkflowService.unlinkWorkflowFromAppEntry(workflowId);
+            
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("success", true);
+            response.put("workflow", workflow);
+            response.put("message", "Workflow unlinked from APP entry successfully");
+            
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("success", false);
+            response.put("message", "Failed to unlink workflow from APP entry: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+    
     // Request DTOs
     public static class CreateWorkflowRequest {
         private String name;
@@ -268,5 +358,13 @@ public class WorkflowController {
         // Getters and Setters
         public String getReason() { return reason; }
         public void setReason(String reason) { this.reason = reason; }
+    }
+    
+    public static class LinkAppEntryRequest {
+        private Long appEntryId;
+        
+        // Getters and Setters
+        public Long getAppEntryId() { return appEntryId; }
+        public void setAppEntryId(Long appEntryId) { this.appEntryId = appEntryId; }
     }
 }

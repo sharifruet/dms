@@ -36,6 +36,8 @@ import { Document, documentService } from '../services/documentService';
 import { DocumentTypeField } from '../types/document';
 import { folderService, Folder } from '../services/folderService';
 import DocumentRelationships from './DocumentRelationships';
+import BillFieldsEditor from './BillFieldsEditor';
+import { DocumentType } from '../constants/documentTypes';
 
 interface DocumentViewerProps {
   open: boolean;
@@ -91,6 +93,7 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const [documentFolderId, setDocumentFolderId] = useState<number | null>(null);
   const [loadingFolders, setLoadingFolders] = useState(false);
   const [savingFolder, setSavingFolder] = useState(false);
+  const [documentMetadata, setDocumentMetadata] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (open && doc) {
@@ -215,15 +218,23 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           setDocumentFolderId(null);
         }
         
+        // Extract metadata from document
+        const metadata = (documentData as any).metadata || (documentData as any).document?.metadata || {};
+        setDocumentMetadata(metadata);
+        
         // Load document type fields if available
         if ((documentData as any).typeFields) {
           const fields = (documentData as any).typeFields as DocumentTypeField[];
           setTypeFields(fields);
           const initialValues: Record<string, string> = {};
           fields.forEach(field => {
-            initialValues[field.fieldKey] = field.value || field.defaultValue || '';
+            // Use metadata value if available, otherwise use field value or default
+            initialValues[field.fieldKey] = metadata[field.fieldKey] || field.value || field.defaultValue || '';
           });
           setMetadataValues(initialValues);
+        } else {
+          // If no type fields loaded but document has metadata, set metadata values
+          setMetadataValues(metadata);
         }
         
         const ocrTextValue = documentData.ocrText || 
@@ -795,8 +806,25 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({
           </Box>
         </Box>
 
-        {/* Document Type Fields */}
-        {typeFields.length > 0 && (
+        {/* Bill Fields Editor - Special handling for BILL documents */}
+        {doc.documentType === DocumentType.BILL && doc.id && (
+          <BillFieldsEditor
+            documentId={doc.id}
+            documentType={doc.documentType}
+            metadata={documentMetadata}
+            onSave={async (metadata) => {
+              if (!doc.id) return;
+              await documentService.updateDocumentMetadata(doc.id, metadata);
+              // Reload document to refresh metadata
+              const updatedDoc = await documentService.getDocumentById(doc.id);
+              const updatedMetadata = (updatedDoc as any).metadata || (updatedDoc as any).document?.metadata || {};
+              setDocumentMetadata(updatedMetadata);
+            }}
+          />
+        )}
+
+        {/* Document Type Fields - For non-BILL documents or as fallback */}
+        {doc.documentType !== DocumentType.BILL && typeFields.length > 0 && (
           <Box>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
               <Typography variant="h6">Document Type Fields</Typography>

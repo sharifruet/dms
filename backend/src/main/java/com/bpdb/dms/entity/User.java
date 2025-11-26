@@ -62,6 +62,18 @@ public class User {
     @Column(name = "is_active")
     private Boolean isActive = true;
     
+    // Note: 2FA fields deferred - will be added when 2FA is implemented
+    // @Column(name = "two_factor_enabled")
+    // private Boolean twoFactorEnabled = false;
+    // @Column(name = "two_factor_secret")
+    // @JsonIgnore
+    // private String twoFactorSecret;
+    // @Column(name = "two_factor_backup_codes", columnDefinition = "TEXT")
+    // @JsonIgnore
+    // private String twoFactorBackupCodes;
+    // @Column(name = "two_factor_verified_at")
+    // private LocalDateTime twoFactorVerifiedAt;
+    
     @CreatedDate
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -176,4 +188,6 @@ public class User {
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
+    
+    // Note: 2FA getters and setters will be added when 2FA is implemented
 }

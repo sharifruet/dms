@@ -148,6 +148,7 @@ public class DocumentMetadataService {
                 }
             }
             case "BILL" -> {
+                // Bill-specific metadata extraction will be enhanced in Phase 3
                 if (!inferred.containsKey("date")) {
                     extractDate(extractedText).ifPresent(date -> inferred.put("date", date));
                 }
@@ -156,7 +157,7 @@ public class DocumentMetadataService {
                 }
                 inferred.putIfAbsent("title", fallbackTitle);
             }
-            case "APP" -> inferred.putIfAbsent("title", fallbackTitle);
+            // Note: APP is no longer a document type - removed from metadata inference
             default -> inferred.putIfAbsent("title", fallbackTitle);
         }
 

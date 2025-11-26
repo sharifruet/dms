@@ -5,7 +5,6 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.redis.repository.configuration.EnableRedisRepositories;
-import org.springframework.scheduling.annotation.EnableAsync;
 
 /**
  * Main application class for Document Management System (DMS)
@@ -17,7 +16,6 @@ import org.springframework.scheduling.annotation.EnableAsync;
  */
 @SpringBootApplication
 @EnableJpaAuditing
-@EnableAsync
 @EnableJpaRepositories(basePackages = "com.bpdb.dms.repository")
 @EnableRedisRepositories(basePackages = "com.bpdb.dms.repository.redis")
 public class DmsApplication {

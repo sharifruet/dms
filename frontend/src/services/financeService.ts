@@ -28,6 +28,17 @@ export interface BillLine {
   };
 }
 
+export interface AppBudgetSummary {
+  appId: number;
+  fiscalYear: number;
+  releaseInstallmentNo?: number;
+  allocationType?: string;
+  allocationAmount: number;
+  totalBilled: number;
+  remaining: number;
+  utilizationPct: number;
+}
+
 export const financeService = {
   // Get all bills
   getBills: async (fiscalYear?: number, vendor?: string, page: number = 0, size: number = 100): Promise<{ content: BillHeader[]; totalElements: number; totalPages: number }> => {
@@ -67,6 +78,12 @@ export const financeService = {
     return response.data;
   },
 
+  // Get per-APP budget vs billed summary
+  getBudgetByApp: async (): Promise<AppBudgetSummary[]> => {
+    const response = await api.get('/finance/dashboard/budget-by-app');
+    return response.data;
+  },
+
   // Create a new bill
   createBill: async (bill: {
     fiscalYear: number;
@@ -86,5 +103,58 @@ export const financeService = {
     const response = await api.post('/finance/bills', bill);
     return response.data;
   },
+
+  // Extract bill information from uploaded file using OCR (Phase 3)
+  extractBillOCR: async (file: File): Promise<BillOCRResult> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post('/finance/bills/extract-ocr', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data.ocrResult;
+  },
 };
+
+export interface BillOCRResult {
+  success: boolean;
+  errorMessage?: string;
+  extractedText?: string;
+  vendorName?: string;
+  vendorNameConfidence?: number;
+  invoiceNumber?: string;
+  invoiceNumberConfidence?: number;
+  invoiceDate?: string;
+  invoiceDateConfidence?: number;
+  fiscalYear?: number;
+  fiscalYearConfidence?: number;
+  totalAmount?: number;
+  totalAmountConfidence?: number;
+  taxAmount?: number;
+  taxAmountConfidence?: number;
+  subtotalAmount?: number;
+  subtotalAmountConfidence?: number;
+  lineItems?: BillLineItemOCR[];
+  overallConfidence?: number;
+  originalValues?: {
+    vendorName?: string;
+    invoiceNumber?: string;
+    invoiceDate?: string;
+    fiscalYear?: number;
+    totalAmount?: number;
+    taxAmount?: number;
+  };
+}
+
+export interface BillLineItemOCR {
+  projectIdentifier?: string;
+  department?: string;
+  costCenter?: string;
+  category?: string;
+  description?: string;
+  amount?: number;
+  taxAmount?: number;
+  confidence?: number;
+}
 

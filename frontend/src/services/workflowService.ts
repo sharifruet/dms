@@ -1,5 +1,16 @@
 import api from './api';
 
+export interface AppEntry {
+  id: number;
+  fiscalYear: number;
+  allocationType?: string;
+  budgetReleaseDate?: string;
+  allocationAmount?: number;
+  releaseInstallmentNo?: number;
+  referenceMemoNumber?: string;
+  department?: string;
+}
+
 export interface Workflow {
   id: number;
   name: string;
@@ -19,6 +30,7 @@ export interface Workflow {
   nextExecutionAt: string;
   createdAt: string;
   updatedAt: string;
+  appEntry?: AppEntry; // Linked APP entry
 }
 
 export interface WorkflowInstance {
@@ -157,6 +169,37 @@ export const workflowService = {
   // Get active tender workflow instances (for document upload)
   getActiveTenderWorkflowInstances: async (): Promise<WorkflowInstance[]> => {
     const response = await api.get('/workflows/instances/tender/active');
+    return response.data;
+  },
+
+  // Link a workflow to an APP entry (budget entry)
+  linkWorkflowToAppEntry: async (workflowId: number, appEntryId: number): Promise<{
+    success: boolean;
+    workflow?: Workflow;
+    message?: string;
+  }> => {
+    const response = await api.post(`/workflows/${workflowId}/link-app-entry`, { appEntryId });
+    return response.data;
+  },
+
+  // Get APP entry for a workflow
+  getAppEntryForWorkflow: async (workflowId: number): Promise<{
+    success: boolean;
+    appEntry?: AppEntry;
+    hasAppEntry: boolean;
+    message?: string;
+  }> => {
+    const response = await api.get(`/workflows/${workflowId}/app-entry`);
+    return response.data;
+  },
+
+  // Unlink workflow from APP entry
+  unlinkWorkflowFromAppEntry: async (workflowId: number): Promise<{
+    success: boolean;
+    workflow?: Workflow;
+    message?: string;
+  }> => {
+    const response = await api.delete(`/workflows/${workflowId}/link-app-entry`);
     return response.data;
   }
 };

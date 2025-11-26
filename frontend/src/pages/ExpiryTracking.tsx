@@ -287,7 +287,7 @@ const ExpiryTrackingPage: React.FC = () => {
     if (!amount) return 'N/A';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: currency || 'USD'
+      currency: currency || 'BDT'
     }).format(amount);
   };
 

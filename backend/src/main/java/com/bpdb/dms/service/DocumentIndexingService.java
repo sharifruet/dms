@@ -14,10 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.cache.annotation.CacheEvict;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
+import org.springframework.data.domain.PageImpl;
 
 /**
  * Service for document indexing and search operations
@@ -119,15 +118,23 @@ public class DocumentIndexingService {
     }
     
     /**
-     * Search documents with advanced query
+     * Search documents with advanced query (supports Boolean operators)
      */
     public SearchResult searchDocuments(String query, SearchFilters filters, Pageable pageable) {
         try {
-            // For now, use simple repository methods instead of complex Elasticsearch queries
             Page<DocumentIndex> results;
             
             if (query != null && !query.trim().isEmpty()) {
-                results = documentIndexRepository.searchByText(query, pageable);
+                // Parse query for Boolean operators
+                BooleanQueryParser.ParsedQueryResult parsedQuery = BooleanQueryParser.parseQuery(query);
+                
+                if (parsedQuery.getType() == BooleanQueryParser.QueryType.BOOLEAN) {
+                    // Use Boolean query with operators
+                    results = searchWithBooleanQuery(parsedQuery, pageable);
+                } else {
+                    // Simple query - use existing method
+                    results = documentIndexRepository.searchByText(query, pageable);
+                }
             } else {
                 results = documentIndexRepository.findAll(pageable);
             }
@@ -173,6 +180,83 @@ public class DocumentIndexingService {
             logger.error("Search failed: {}", e.getMessage());
             throw new RuntimeException("Search operation failed", e);
         }
+    }
+    
+    /**
+     * Search with Boolean query operators (AND, OR, NOT)
+     * For now, we implement basic Boolean logic in-memory after fetching results
+     * A production implementation would use Elasticsearch's bool query directly
+     */
+    private Page<DocumentIndex> searchWithBooleanQuery(BooleanQueryParser.ParsedQueryResult parsedQuery, Pageable pageable) {
+        List<String> terms = parsedQuery.getTerms();
+        List<String> operators = parsedQuery.getOperators();
+        
+        if (terms.isEmpty()) {
+            return documentIndexRepository.findAll(pageable);
+        }
+        
+        // For simplicity, implement Boolean logic by:
+        // 1. Searching for each term separately
+        // 2. Combining results based on operators
+        
+        // Get results for each term
+        List<Page<DocumentIndex>> termResults = new ArrayList<>();
+        for (String term : terms) {
+            Page<DocumentIndex> termPage = documentIndexRepository.searchByText(term, Pageable.unpaged());
+            termResults.add(termPage);
+        }
+        
+        // Combine results based on operators
+        Map<Long, DocumentIndex> combinedResultsMap = new LinkedHashMap<>();
+        
+        if (termResults.isEmpty()) {
+            return documentIndexRepository.findAll(pageable);
+        }
+        
+        // Start with first term's results
+        for (DocumentIndex doc : termResults.get(0).getContent()) {
+            if (doc.getDocumentId() != null) {
+                combinedResultsMap.put(doc.getDocumentId(), doc);
+            }
+        }
+        
+        // Apply operators sequentially
+        for (int i = 0; i < operators.size() && i + 1 < termResults.size(); i++) {
+            String operator = operators.get(i);
+            List<DocumentIndex> nextTermResults = termResults.get(i + 1).getContent();
+            
+            // Extract document IDs from next term results
+            Set<Long> nextTermDocIds = nextTermResults.stream()
+                .map(DocumentIndex::getDocumentId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+            
+            if ("AND".equals(operator)) {
+                // Keep only documents that are in both result sets
+                combinedResultsMap.keySet().retainAll(nextTermDocIds);
+            } else if ("OR".equals(operator)) {
+                // Add all documents from next term (avoid duplicates)
+                for (DocumentIndex doc : nextTermResults) {
+                    if (doc.getDocumentId() != null && !combinedResultsMap.containsKey(doc.getDocumentId())) {
+                        combinedResultsMap.put(doc.getDocumentId(), doc);
+                    }
+                }
+            } else if ("NOT".equals(operator)) {
+                // Remove documents that are in next term results
+                combinedResultsMap.keySet().removeAll(nextTermDocIds);
+            }
+        }
+        
+        List<DocumentIndex> combinedResults = new ArrayList<>(combinedResultsMap.values());
+        
+        // Apply pagination
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), combinedResults.size());
+        List<DocumentIndex> paginatedResults = start < combinedResults.size() 
+            ? combinedResults.subList(start, end) 
+            : Collections.emptyList();
+        
+        return new PageImpl<>(paginatedResults, pageable, combinedResults.size());
     }
     
     /**

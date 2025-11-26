@@ -40,9 +40,14 @@ import {
   Refresh,
   Assignment,
   Timeline,
-  Warning
+  Warning,
+  Edit as EditIcon,
+  Link as LinkIcon,
+  LinkOff as LinkOffIcon,
+  AccountBalance as BudgetIcon,
 } from '@mui/icons-material';
-import { workflowService, WorkflowInstance, WorkflowStep } from '../services/workflowService';
+import { workflowService, WorkflowInstance, WorkflowStep, AppEntry } from '../services/workflowService';
+import AppEntrySelector from '../components/AppEntrySelector';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -79,6 +84,17 @@ const Workflows: React.FC = () => {
   const [actionType, setActionType] = useState<'complete' | 'reject'>('complete');
   const [actionTaken, setActionTaken] = useState('');
   const [comments, setComments] = useState('');
+  
+  // Workflow details dialog
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [selectedInstance, setSelectedInstance] = useState<WorkflowInstance | null>(null);
+  const [linkedAppEntry, setLinkedAppEntry] = useState<AppEntry | null>(null);
+  const [loadingAppEntry, setLoadingAppEntry] = useState(false);
+  
+  // Change APP Entry dialog
+  const [changeAppEntryDialogOpen, setChangeAppEntryDialogOpen] = useState(false);
+  const [selectedAppEntryId, setSelectedAppEntryId] = useState<number | null>(null);
+  const [changingAppEntry, setChangingAppEntry] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -133,6 +149,77 @@ const Workflows: React.FC = () => {
     } catch (err) {
       setError('Failed to update workflow step');
     }
+  };
+
+  // Handle view workflow details
+  const handleViewDetails = async (instance: WorkflowInstance) => {
+    setSelectedInstance(instance);
+    setDetailsDialogOpen(true);
+    setLoadingAppEntry(true);
+    
+    // Load APP entry for this workflow
+    try {
+      const appEntryResponse = await workflowService.getAppEntryForWorkflow(instance.workflow.id);
+      if (appEntryResponse.success && appEntryResponse.appEntry) {
+        setLinkedAppEntry(appEntryResponse.appEntry);
+      } else {
+        setLinkedAppEntry(null);
+      }
+    } catch (err: any) {
+      console.error('Failed to load APP entry:', err);
+      setLinkedAppEntry(null);
+    } finally {
+      setLoadingAppEntry(false);
+    }
+  };
+
+  // Handle change APP entry
+  const handleOpenChangeAppEntry = () => {
+    setSelectedAppEntryId(linkedAppEntry?.id || null);
+    setChangeAppEntryDialogOpen(true);
+  };
+
+  const handleSaveAppEntry = async () => {
+    if (!selectedInstance) return;
+    
+    setChangingAppEntry(true);
+    try {
+      const workflowId = selectedInstance.workflow.id;
+      
+      if (selectedAppEntryId) {
+        // Link or change APP entry
+        const response = await workflowService.linkWorkflowToAppEntry(workflowId, selectedAppEntryId);
+        if (response.success && response.workflow) {
+          setLinkedAppEntry(response.workflow.appEntry || null);
+          setChangeAppEntryDialogOpen(false);
+          setError(null);
+        } else {
+          setError(response.message || 'Failed to link APP entry');
+        }
+      } else {
+        // Unlink APP entry
+        const response = await workflowService.unlinkWorkflowFromAppEntry(workflowId);
+        if (response.success) {
+          setLinkedAppEntry(null);
+          setChangeAppEntryDialogOpen(false);
+          setError(null);
+        } else {
+          setError(response.message || 'Failed to unlink APP entry');
+        }
+      }
+      
+      // Reload data to refresh workflow instances
+      loadData();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to update APP entry');
+    } finally {
+      setChangingAppEntry(false);
+    }
+  };
+
+  const formatFiscalYear = (year: number): string => {
+    const nextYear = (year + 1) % 100;
+    return `${year}-${nextYear.toString().padStart(2, '0')}`;
   };
 
   const getStatusColor = (status: string) => {
@@ -264,6 +351,7 @@ const Workflows: React.FC = () => {
                 <TableCell>Document</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Progress</TableCell>
+                <TableCell>Budget Entry</TableCell>
                 <TableCell>Due Date</TableCell>
                 <TableCell>Priority</TableCell>
                 <TableCell>Actions</TableCell>
@@ -316,6 +404,25 @@ const Workflows: React.FC = () => {
                     </Box>
                   </TableCell>
                   <TableCell>
+                    {instance.workflow.appEntry ? (
+                      <Tooltip 
+                        title={`FY ${formatFiscalYear(instance.workflow.appEntry.fiscalYear)}, Installment ${instance.workflow.appEntry.releaseInstallmentNo || 'N/A'}`}
+                      >
+                        <Chip
+                          icon={<BudgetIcon />}
+                          label={`FY ${formatFiscalYear(instance.workflow.appEntry.fiscalYear)}`}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                        />
+                      </Tooltip>
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">
+                        Not linked
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     {instance.dueDate ? new Date(instance.dueDate).toLocaleDateString() : 'N/A'}
                   </TableCell>
                   <TableCell>
@@ -327,7 +434,7 @@ const Workflows: React.FC = () => {
                   </TableCell>
                   <TableCell>
                     <Tooltip title="View Details">
-                      <IconButton size="small">
+                      <IconButton size="small" onClick={() => handleViewDetails(instance)}>
                         <Visibility />
                       </IconButton>
                     </Tooltip>
@@ -416,6 +523,7 @@ const Workflows: React.FC = () => {
                 <TableCell>Workflow</TableCell>
                 <TableCell>Document</TableCell>
                 <TableCell>Status</TableCell>
+                <TableCell>Budget Entry</TableCell>
                 <TableCell>Due Date</TableCell>
                 <TableCell>Days Overdue</TableCell>
                 <TableCell>Actions</TableCell>
@@ -440,6 +548,25 @@ const Workflows: React.FC = () => {
                     />
                   </TableCell>
                   <TableCell>
+                    {instance.workflow.appEntry ? (
+                      <Tooltip 
+                        title={`FY ${formatFiscalYear(instance.workflow.appEntry.fiscalYear)}, Installment ${instance.workflow.appEntry.releaseInstallmentNo || 'N/A'}`}
+                      >
+                        <Chip
+                          icon={<BudgetIcon />}
+                          label={`FY ${formatFiscalYear(instance.workflow.appEntry.fiscalYear)}`}
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                        />
+                      </Tooltip>
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">
+                        Not linked
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
                     {instance.dueDate ? new Date(instance.dueDate).toLocaleDateString() : 'N/A'}
                   </TableCell>
                   <TableCell>
@@ -451,7 +578,7 @@ const Workflows: React.FC = () => {
                   </TableCell>
                   <TableCell>
                     <Tooltip title="View Details">
-                      <IconButton size="small">
+                      <IconButton size="small" onClick={() => handleViewDetails(instance)}>
                         <Visibility />
                       </IconButton>
                     </Tooltip>
@@ -498,6 +625,232 @@ const Workflows: React.FC = () => {
             color={actionType === 'complete' ? 'success' : 'error'}
           >
             {actionType === 'complete' ? 'Complete' : 'Reject'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Workflow Details Dialog */}
+      <Dialog 
+        open={detailsDialogOpen} 
+        onClose={() => {
+          setDetailsDialogOpen(false);
+          setSelectedInstance(null);
+          setLinkedAppEntry(null);
+        }} 
+        maxWidth="md" 
+        fullWidth
+      >
+        <DialogTitle>
+          Workflow Details
+        </DialogTitle>
+        <DialogContent>
+          {selectedInstance && (
+            <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {/* Workflow Information */}
+              <Box>
+                <Typography variant="h6" gutterBottom>Workflow Information</Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="text.secondary">Name</Typography>
+                    <Typography variant="body1">{selectedInstance.workflow.name}</Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="text.secondary">Type</Typography>
+                    <Typography variant="body1">{selectedInstance.workflow.type}</Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="text.secondary">Status</Typography>
+                    <Chip
+                      label={selectedInstance.status}
+                      color={getStatusColor(selectedInstance.status) as any}
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="text.secondary">Progress</Typography>
+                    <Typography variant="body1">
+                      {selectedInstance.currentStep} / {selectedInstance.totalSteps}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="text.secondary">Document</Typography>
+                    <Typography variant="body1">
+                      {selectedInstance.document?.originalName || 'N/A'}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="body2" color="text.secondary">Initiated By</Typography>
+                    <Typography variant="body1">
+                      {selectedInstance.initiatedBy?.username || 'N/A'}
+                    </Typography>
+                  </Grid>
+                  {selectedInstance.dueDate && (
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="body2" color="text.secondary">Due Date</Typography>
+                      <Typography variant="body1">
+                        {new Date(selectedInstance.dueDate).toLocaleDateString()}
+                      </Typography>
+                    </Grid>
+                  )}
+                </Grid>
+              </Box>
+
+              {/* Linked APP Entry Section */}
+              <Box>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Typography variant="h6">Linked Budget Entry (APP Entry)</Typography>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    startIcon={<EditIcon />}
+                    onClick={handleOpenChangeAppEntry}
+                  >
+                    Change APP Entry
+                  </Button>
+                </Box>
+                
+                {loadingAppEntry ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+                    <CircularProgress size={24} />
+                  </Box>
+                ) : linkedAppEntry ? (
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="body2" color="text.secondary">
+                            Fiscal Year
+                          </Typography>
+                          <Typography variant="body1" fontWeight="medium">
+                            {formatFiscalYear(linkedAppEntry.fiscalYear)}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Typography variant="body2" color="text.secondary">
+                            Installment No.
+                          </Typography>
+                          <Typography variant="body1" fontWeight="medium">
+                            {linkedAppEntry.releaseInstallmentNo || 'N/A'}
+                          </Typography>
+                        </Grid>
+                        {linkedAppEntry.allocationType && (
+                          <Grid item xs={12} sm={6}>
+                            <Typography variant="body2" color="text.secondary">
+                              Allocation Type
+                            </Typography>
+                            <Typography variant="body1" fontWeight="medium">
+                              {linkedAppEntry.allocationType}
+                            </Typography>
+                          </Grid>
+                        )}
+                        {linkedAppEntry.allocationAmount && (
+                          <Grid item xs={12} sm={6}>
+                            <Typography variant="body2" color="text.secondary">
+                              Allocation Amount
+                            </Typography>
+                            <Typography variant="body1" fontWeight="medium">
+                              {new Intl.NumberFormat('en-BD', {
+                                style: 'currency',
+                                currency: 'BDT',
+                                minimumFractionDigits: 0,
+                                maximumFractionDigits: 0,
+                              }).format(linkedAppEntry.allocationAmount)}
+                            </Typography>
+                          </Grid>
+                        )}
+                        {linkedAppEntry.budgetReleaseDate && (
+                          <Grid item xs={12} sm={6}>
+                            <Typography variant="body2" color="text.secondary">
+                              Budget Release Date
+                            </Typography>
+                            <Typography variant="body1" fontWeight="medium">
+                              {new Date(linkedAppEntry.budgetReleaseDate).toLocaleDateString()}
+                            </Typography>
+                          </Grid>
+                        )}
+                        {linkedAppEntry.referenceMemoNumber && (
+                          <Grid item xs={12} sm={6}>
+                            <Typography variant="body2" color="text.secondary">
+                              Reference/Memo Number
+                            </Typography>
+                            <Typography variant="body1" fontWeight="medium">
+                              {linkedAppEntry.referenceMemoNumber}
+                            </Typography>
+                          </Grid>
+                        )}
+                      </Grid>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <Alert severity="info">
+                    No APP entry (budget entry) is currently linked to this workflow.
+                  </Alert>
+                )}
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setDetailsDialogOpen(false);
+            setSelectedInstance(null);
+            setLinkedAppEntry(null);
+          }}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Change APP Entry Dialog */}
+      <Dialog 
+        open={changeAppEntryDialogOpen} 
+        onClose={() => {
+          setChangeAppEntryDialogOpen(false);
+          setSelectedAppEntryId(null);
+        }} 
+        maxWidth="sm" 
+        fullWidth
+      >
+        <DialogTitle>
+          Change APP Entry (Budget Entry)
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <AppEntrySelector
+              value={selectedAppEntryId}
+              onChange={(appEntryId) => setSelectedAppEntryId(appEntryId)}
+              required={false}
+              disabled={changingAppEntry}
+              showDetails={true}
+            />
+            <Alert severity="info">
+              Select an APP entry to link to this workflow. Leave blank to unlink the current APP entry.
+            </Alert>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => {
+              setChangeAppEntryDialogOpen(false);
+              setSelectedAppEntryId(null);
+            }}
+            disabled={changingAppEntry}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSaveAppEntry}
+            variant="contained"
+            disabled={changingAppEntry}
+          >
+            {changingAppEntry ? (
+              <>
+                <CircularProgress size={20} sx={{ mr: 1 }} />
+                Saving...
+              </>
+            ) : (
+              selectedAppEntryId ? 'Link APP Entry' : 'Unlink APP Entry'
+            )}
           </Button>
         </DialogActions>
       </Dialog>

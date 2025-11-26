@@ -8,9 +8,6 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
   MenuItem,
   Alert,
   Breadcrumbs,
@@ -50,6 +47,7 @@ const FolderExplorer: React.FC<FolderExplorerProps> = ({
   const [menuFolder, setMenuFolder] = useState<Folder | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [treeRefreshTrigger, setTreeRefreshTrigger] = useState(0);
   
   const [createForm, setCreateForm] = useState<CreateFolderRequest>({
     name: '',
@@ -64,24 +62,40 @@ const FolderExplorer: React.FC<FolderExplorerProps> = ({
     department: '',
   });
 
-  useEffect(() => {
-    if (selectedFolderId) {
-      loadFolder(selectedFolderId);
-    }
-  }, [selectedFolderId]);
+  const loadingFolderRef = React.useRef<number | null>(null);
+  const currentFolderIdRef = React.useRef<number | null>(null);
 
-  const loadFolder = async (folderId: number) => {
+  const loadFolder = React.useCallback(async (folderId: number) => {
+    // Prevent concurrent loads of the same folder
+    if (loadingFolderRef.current === folderId) {
+      return;
+    }
+    
+    // Prevent loading if already selected
+    if (currentFolderIdRef.current === folderId) {
+      return;
+    }
+
+    loadingFolderRef.current = folderId;
     try {
       const folder = await folderService.getFolder(folderId);
       setSelectedFolder(folder);
+      currentFolderIdRef.current = folderId;
       buildBreadcrumbs(folder);
-      if (onFolderSelect) {
-        onFolderSelect(folder);
-      }
+      // Don't call onFolderSelect here - it should only be called from user interactions
+      // to prevent infinite loops
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to load folder');
+    } finally {
+      loadingFolderRef.current = null;
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (selectedFolderId && selectedFolderId !== currentFolderIdRef.current) {
+      loadFolder(selectedFolderId);
+    }
+  }, [selectedFolderId, loadFolder]);
 
   const buildBreadcrumbs = (folder: Folder) => {
     const crumbs: Folder[] = [];
@@ -96,10 +110,14 @@ const FolderExplorer: React.FC<FolderExplorerProps> = ({
   };
 
   const handleFolderSelect = (folder: Folder | null) => {
-    setSelectedFolder(folder);
+    // Update ref to prevent reload
     if (folder) {
+      currentFolderIdRef.current = folder.id;
+      setSelectedFolder(folder);
       buildBreadcrumbs(folder);
     } else {
+      currentFolderIdRef.current = null;
+      setSelectedFolder(null);
       setBreadcrumbs([]);
     }
     if (onFolderSelect) {
@@ -116,13 +134,17 @@ const FolderExplorer: React.FC<FolderExplorerProps> = ({
     try {
       await folderService.createFolder({
         ...createForm,
-        parentFolderId: selectedFolder?.id || null,
+        // parentFolderId is already set in createForm when dialog opens
       });
       setSuccess('Folder created successfully');
       setOpenCreateDialog(false);
       setCreateForm({ name: '', description: '', parentFolderId: null, department: '' });
-      // Reload folder tree would be handled by parent component
-      window.location.reload(); // Simple refresh for now
+      // Trigger tree refresh
+      setTreeRefreshTrigger(prev => prev + 1);
+      // Expand parent folder if subfolder was created
+      if (createForm.parentFolderId && selectedFolder?.id === createForm.parentFolderId) {
+        // Keep parent selected and expanded
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to create folder');
     }
@@ -141,7 +163,7 @@ const FolderExplorer: React.FC<FolderExplorerProps> = ({
       if (menuFolder.id === selectedFolder?.id) {
         loadFolder(menuFolder.id);
       }
-      window.location.reload();
+      setTreeRefreshTrigger(prev => prev + 1);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to update folder');
     }
@@ -165,7 +187,7 @@ const FolderExplorer: React.FC<FolderExplorerProps> = ({
           onFolderSelect(null);
         }
       }
-      window.location.reload();
+      setTreeRefreshTrigger(prev => prev + 1);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to delete folder');
     }
@@ -179,7 +201,7 @@ const FolderExplorer: React.FC<FolderExplorerProps> = ({
       setSuccess('Folder moved successfully');
       setOpenMoveDialog(false);
       setMenuAnchor(null);
-      window.location.reload();
+      setTreeRefreshTrigger(prev => prev + 1);
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to move folder');
     }
@@ -223,7 +245,15 @@ const FolderExplorer: React.FC<FolderExplorerProps> = ({
             <Button
               size="small"
               startIcon={<CreateFolderIcon />}
-              onClick={() => setOpenCreateDialog(true)}
+              onClick={() => {
+                setCreateForm({ 
+                  name: '', 
+                  description: '', 
+                  parentFolderId: selectedFolder?.id || null, 
+                  department: '' 
+                });
+                setOpenCreateDialog(true);
+              }}
               variant="outlined"
             >
               New
@@ -234,9 +264,15 @@ const FolderExplorer: React.FC<FolderExplorerProps> = ({
             selectedFolderId={selectedFolder?.id}
             showCreateButton={true}
             onCreateFolder={(parentId) => {
-              setCreateForm({ ...createForm, parentFolderId: parentId || null });
+              setCreateForm({ 
+                name: '', 
+                description: '', 
+                parentFolderId: parentId || null, 
+                department: '' 
+              });
               setOpenCreateDialog(true);
             }}
+            refreshTrigger={treeRefreshTrigger}
           />
         </Box>
 
@@ -322,8 +358,20 @@ const FolderExplorer: React.FC<FolderExplorerProps> = ({
       </Menu>
 
       {/* Create Folder Dialog */}
-      <Dialog open={openCreateDialog} onClose={() => setOpenCreateDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Create New Folder</DialogTitle>
+      <Dialog 
+        open={openCreateDialog} 
+        onClose={() => {
+          setOpenCreateDialog(false);
+          setCreateForm({ name: '', description: '', parentFolderId: null, department: '' });
+        }} 
+        maxWidth="sm" 
+        fullWidth
+      >
+        <DialogTitle>
+          {createForm.parentFolderId 
+            ? 'Create Subfolder' 
+            : 'Create New Folder'}
+        </DialogTitle>
         <DialogContent>
           <TextField
             fullWidth
@@ -332,6 +380,7 @@ const FolderExplorer: React.FC<FolderExplorerProps> = ({
             onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
             margin="normal"
             required
+            autoFocus
           />
           <TextField
             fullWidth
@@ -351,7 +400,10 @@ const FolderExplorer: React.FC<FolderExplorerProps> = ({
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenCreateDialog(false)}>Cancel</Button>
+          <Button onClick={() => {
+            setOpenCreateDialog(false);
+            setCreateForm({ name: '', description: '', parentFolderId: null, department: '' });
+          }}>Cancel</Button>
           <Button onClick={handleCreateFolder} variant="contained">Create</Button>
         </DialogActions>
       </Dialog>

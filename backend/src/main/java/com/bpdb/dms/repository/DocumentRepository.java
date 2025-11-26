@@ -165,4 +165,10 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
      */
     @Query("SELECT d.assignedEmployee.id, COUNT(d) FROM Document d WHERE d.documentType = 'STATIONERY_RECORD' AND d.isActive = true AND d.deletedAt IS NULL GROUP BY d.assignedEmployee.id")
     List<Object[]> countStationeryRecordsPerEmployee();
+
+    /**
+     * Find all BILL documents in a given folder (active, not deleted)
+     */
+    @Query("SELECT d FROM Document d WHERE d.folder = :folder AND d.documentType = 'BILL' AND d.isActive = true AND d.deletedAt IS NULL")
+    List<Document> findBillDocumentsByFolder(@Param("folder") Folder folder);
 }

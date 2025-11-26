@@ -9,7 +9,9 @@ export enum DocumentType {
   BANK_GUARANTEE_BG = 'BANK_GUARANTEE_BG',
   PERFORMANCE_SECURITY_PS = 'PERFORMANCE_SECURITY_PS',
   PERFORMANCE_GUARANTEE_PG = 'PERFORMANCE_GUARANTEE_PG',
-  APP = 'APP',
+  BILL = 'BILL',
+  CORRESPONDENCE = 'CORRESPONDENCE',
+  STATIONERY_RECORD = 'STATIONERY_RECORD',
   OTHER = 'OTHER',
 }
 
@@ -23,7 +25,9 @@ export const DocumentTypeLabels: Record<DocumentType, string> = {
   [DocumentType.BANK_GUARANTEE_BG]: 'Bank Guarantee (BG)',
   [DocumentType.PERFORMANCE_SECURITY_PS]: 'Performance Security (PS)',
   [DocumentType.PERFORMANCE_GUARANTEE_PG]: 'Performance Guarantee (PG)',
-  [DocumentType.APP]: 'APP',
+  [DocumentType.BILL]: 'Bill',
+  [DocumentType.CORRESPONDENCE]: 'Correspondence',
+  [DocumentType.STATIONERY_RECORD]: 'Stationery Record',
   [DocumentType.OTHER]: 'Other',
 };
 
@@ -43,7 +47,8 @@ export const TENDER_WORKFLOW_TYPES: DocumentType[] = [
   DocumentType.BANK_GUARANTEE_BG,
   DocumentType.PERFORMANCE_SECURITY_PS,
   DocumentType.PERFORMANCE_GUARANTEE_PG,
-  DocumentType.APP,
+  DocumentType.BILL,
+  DocumentType.CORRESPONDENCE,
 ];
 
 /**
@@ -63,7 +68,7 @@ export const getDocumentTypeColor = (type: string): 'default' | 'primary' | 'sec
   if (normalized.includes('TENDER')) return 'primary';
   if (normalized.includes('CONTRACT')) return 'success';
   if (normalized.includes('GUARANTEE') || normalized.includes('SECURITY')) return 'info';
-  if (normalized.includes('APP')) return 'warning';
+  if (normalized.includes('BILL')) return 'warning';
   
   return 'default';
 };

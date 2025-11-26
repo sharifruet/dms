@@ -33,6 +33,9 @@ public class FolderService {
     @Autowired
     private AuditService auditService;
     
+    @Autowired
+    private TenderWorkflowService tenderWorkflowService;
+    
     /**
      * Create a new folder
      */
@@ -367,6 +370,21 @@ public class FolderService {
         
         public long getRemainingUploads() { return remainingUploads; }
         public void setRemainingUploads(long remainingUploads) { this.remainingUploads = remainingUploads; }
+    }
+    
+    /**
+     * Get workflow for a folder
+     */
+    public com.bpdb.dms.entity.Workflow getWorkflowByFolder(Long folderId) {
+        return tenderWorkflowService.getWorkflowByFolder(folderId)
+            .orElse(null);
+    }
+    
+    /**
+     * Check if folder has a workflow
+     */
+    public boolean folderHasWorkflow(Long folderId) {
+        return tenderWorkflowService.folderHasWorkflow(folderId);
     }
 }
 

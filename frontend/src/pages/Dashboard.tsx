@@ -22,7 +22,7 @@ import ActivityFeed from '../components/ActivityFeed';
 import LineChartWidget from '../components/charts/LineChartWidget';
 import BarChartWidget from '../components/charts/BarChartWidget';
 import PieChartWidget from '../components/charts/PieChartWidget';
-import { financeService } from '../services/financeService';
+import { financeService, AppBudgetSummary } from '../services/financeService';
 import { documentService } from '../services/documentService';
 
 const Dashboard: React.FC = () => {
@@ -34,6 +34,7 @@ const Dashboard: React.FC = () => {
     remaining: number;
     utilizationPct: number;
   } | null>(null);
+  const [perAppBudget, setPerAppBudget] = useState<AppBudgetSummary[]>([]);
   const [loadingBudget, setLoadingBudget] = useState(true);
   const [documentStats, setDocumentStats] = useState<{
     totalDocuments: number;
@@ -137,8 +138,12 @@ const Dashboard: React.FC = () => {
     const loadBudgetData = async () => {
       try {
         setLoadingBudget(true);
-        const data = await financeService.getBudgetSummary();
-        setBudgetData(data);
+        const [summary, byApp] = await Promise.all([
+          financeService.getBudgetSummary(),
+          financeService.getBudgetByApp(),
+        ]);
+        setBudgetData(summary);
+        setPerAppBudget(byApp);
       } catch (error) {
         console.error('Failed to load budget data:', error);
       } finally {
@@ -217,18 +222,16 @@ const Dashboard: React.FC = () => {
   const formatCurrency = (amount: number): string => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'BDT',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
   };
 
-  const budgetPieData = budgetData
-    ? [
-        { name: 'Remaining Budget', value: Math.max(0, budgetData.remaining) },
-        { name: 'Billed Amount', value: budgetData.totalBilled },
-      ]
-    : [];
+  const formatFiscalYear = (year: number): string => {
+    const nextYear = (year + 1) % 100;
+    return `${year}-${nextYear.toString().padStart(2, '0')}`;
+  };
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 } }}>
@@ -404,143 +407,151 @@ const Dashboard: React.FC = () => {
         ))}
       </Grid>
 
-      {/* Budget Summary Section */}
+      {/* Budget Summary Section - Per APP */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} md={6}>
-          <Paper
-            elevation={0}
+        <Grid item xs={12}>
+          <Typography
+            variant="h5"
             sx={{
-              p: 3,
-              borderRadius: 3,
-              border: '1px solid #e5e7eb',
-              height: '100%',
+              fontWeight: 600,
+              fontSize: '1.25rem',
+              color: '#111827',
+              mb: 2,
             }}
           >
-            <Typography
-              variant="h6"
-              sx={{
-                fontWeight: 600,
-                fontSize: '1.125rem',
-                color: '#1f2937',
-                mb: 3,
-              }}
-            >
-              Budget vs Billed
-            </Typography>
-            {loadingBudget ? (
-              <Box display="flex" justifyContent="center" alignItems="center" minHeight={300}>
-                <CircularProgress />
-              </Box>
-            ) : budgetData ? (
-              <PieChartWidget
-                title=""
-                data={budgetPieData}
-                colors={['#10b981', '#3b82f6']}
-                height={300}
-              />
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                No budget data available
-              </Typography>
-            )}
-          </Paper>
+            Budget vs Billed by APP
+          </Typography>
         </Grid>
-        <Grid item xs={12} md={6}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: 3,
-              borderRadius: 3,
-              border: '1px solid #e5e7eb',
-              height: '100%',
-            }}
-          >
-            <Typography
-              variant="h6"
-              sx={{
-                fontWeight: 600,
-                fontSize: '1.125rem',
-                color: '#1f2937',
-                mb: 3,
-              }}
-            >
-              Budget Utilization
+
+        {loadingBudget ? (
+          <Grid item xs={12}>
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight={300}>
+              <CircularProgress />
+            </Box>
+          </Grid>
+        ) : perAppBudget.length === 0 ? (
+          <Grid item xs={12}>
+            <Typography variant="body2" color="text.secondary">
+              No APP budget data available
             </Typography>
-            {loadingBudget ? (
-              <Box display="flex" justifyContent="center" alignItems="center" minHeight={300}>
-                <CircularProgress />
-              </Box>
-            ) : budgetData ? (
-              <Box>
-                <Box sx={{ mb: 3 }}>
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      Billed Amount
-                    </Typography>
-                    <Typography variant="h6" fontWeight={600}>
-                      {formatCurrency(budgetData.totalBilled)}
-                    </Typography>
-                  </Box>
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      Total Budget
-                    </Typography>
-                    <Typography variant="h6" fontWeight={600}>
-                      {formatCurrency(budgetData.totalBudget)}
-                    </Typography>
-                  </Box>
-                  <Box display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography variant="body2" color="text.secondary">
-                      Remaining
-                    </Typography>
-                    <Typography
-                      variant="h6"
-                      fontWeight={600}
-                      color={budgetData.remaining >= 0 ? 'success.main' : 'error.main'}
-                    >
-                      {formatCurrency(budgetData.remaining)}
-                    </Typography>
-                  </Box>
-                </Box>
-                <Box sx={{ mb: 2 }}>
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                    <Typography variant="body2" color="text.secondary">
-                      Utilization
-                    </Typography>
-                    <Typography variant="body1" fontWeight={600}>
-                      {budgetData.utilizationPct.toFixed(2)}%
-                    </Typography>
-                  </Box>
-                  <LinearProgress
-                    variant="determinate"
-                    value={Math.min(100, budgetData.utilizationPct)}
+          </Grid>
+        ) : (
+          perAppBudget.map((app) => {
+            const pieData = [
+              { name: 'Remaining Budget', value: Math.max(0, app.remaining) },
+              { name: 'Billed Amount', value: app.totalBilled },
+            ];
+
+            const utilization = Number(app.utilizationPct || 0);
+
+            return (
+              <Grid item xs={12} md={6} key={app.appId}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 3,
+                    borderRadius: 3,
+                    border: '1px solid #e5e7eb',
+                    height: '100%',
+                  }}
+                >
+                  <Typography
+                    variant="subtitle1"
                     sx={{
-                      height: 24,
-                      borderRadius: 2,
-                      backgroundColor: '#e5e7eb',
-                      '& .MuiLinearProgress-bar': {
-                        borderRadius: 2,
-                        backgroundColor:
-                          budgetData.utilizationPct > 90
-                            ? '#ef4444'
-                            : budgetData.utilizationPct > 75
-                            ? '#f59e0b'
-                            : '#10b981',
-                      },
+                      fontWeight: 600,
+                      fontSize: '1rem',
+                      color: '#1f2937',
+                      mb: 0.5,
                     }}
-                  />
-                </Box>
-                <Typography variant="caption" color="text.secondary">
-                  {formatCurrency(budgetData.totalBilled)} of {formatCurrency(budgetData.totalBudget)} billed
-                </Typography>
-              </Box>
-            ) : (
-              <Typography variant="body2" color="text.secondary">
-                No budget data available
-              </Typography>
-            )}
-          </Paper>
-        </Grid>
+                  >
+                    APP {app.appId} - FY {formatFiscalYear(app.fiscalYear)}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                    Installment {app.releaseInstallmentNo ?? '-'} {app.allocationType ? `(${app.allocationType})` : ''}
+                  </Typography>
+
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <PieChartWidget
+                        title=""
+                        data={pieData}
+                        colors={['#10b981', '#3b82f6']}
+                        height={220}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Box>
+                        <Box sx={{ mb: 2 }}>
+                          <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
+                            <Typography variant="body2" color="text.secondary">
+                              Billed Amount
+                            </Typography>
+                            <Typography variant="body2" fontWeight={600}>
+                              {formatCurrency(app.totalBilled)}
+                            </Typography>
+                          </Box>
+                          <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
+                            <Typography variant="body2" color="text.secondary">
+                              Total Budget
+                            </Typography>
+                            <Typography variant="body2" fontWeight={600}>
+                              {formatCurrency(app.allocationAmount)}
+                            </Typography>
+                          </Box>
+                          <Box display="flex" justifyContent="space-between" alignItems="center">
+                            <Typography variant="body2" color="text.secondary">
+                              Remaining
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              fontWeight={600}
+                              color={app.remaining >= 0 ? 'success.main' : 'error.main'}
+                            >
+                              {formatCurrency(app.remaining)}
+                            </Typography>
+                          </Box>
+                        </Box>
+
+                        <Box sx={{ mb: 1.5 }}>
+                          <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
+                            <Typography variant="body2" color="text.secondary">
+                              Utilization
+                            </Typography>
+                            <Typography variant="body2" fontWeight={600}>
+                              {utilization.toFixed(2)}%
+                            </Typography>
+                          </Box>
+                          <LinearProgress
+                            variant="determinate"
+                            value={Math.min(100, utilization)}
+                            sx={{
+                              height: 16,
+                              borderRadius: 2,
+                              backgroundColor: '#e5e7eb',
+                              '& .MuiLinearProgress-bar': {
+                                borderRadius: 2,
+                                backgroundColor:
+                                  utilization > 90
+                                    ? '#ef4444'
+                                    : utilization > 75
+                                    ? '#f59e0b'
+                                    : '#10b981',
+                              },
+                            }}
+                          />
+                        </Box>
+
+                        <Typography variant="caption" color="text.secondary">
+                          {formatCurrency(app.totalBilled)} of {formatCurrency(app.allocationAmount)} billed
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Paper>
+              </Grid>
+            );
+          })
+        )}
       </Grid>
 
       {/* Charts Grid */}

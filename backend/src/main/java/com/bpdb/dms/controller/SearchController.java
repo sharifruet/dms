@@ -5,13 +5,18 @@ import com.bpdb.dms.service.DocumentIndexingService.SearchFilters;
 import com.bpdb.dms.service.DocumentIndexingService.SearchResult;
 import com.bpdb.dms.service.DocumentIndexingService.SearchResultItem;
 import com.bpdb.dms.service.AuditService;
+import com.bpdb.dms.service.SearchExportService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.format.DateTimeFormatter;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,6 +35,9 @@ public class SearchController {
     
     @Autowired
     private AuditService auditService;
+    
+    @Autowired
+    private SearchExportService searchExportService;
     
     /**
      * Search documents with advanced query
@@ -219,6 +227,128 @@ public class SearchController {
             );
             
             return ResponseEntity.ok(similarDocuments);
+            
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+    
+    /**
+     * Export search results to Excel format
+     */
+    @GetMapping("/export/excel")
+    public ResponseEntity<byte[]> exportSearchResultsToExcel(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) List<String> documentTypes,
+            @RequestParam(required = false) List<String> departments,
+            @RequestParam(required = false) List<String> uploadedBy,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            @RequestParam(required = false) Double minOcrConfidence,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1000") int size,
+            Authentication authentication) {
+        
+        try {
+            // Create search filters
+            SearchFilters filters = new SearchFilters();
+            filters.setDocumentTypes(documentTypes);
+            filters.setDepartments(departments);
+            filters.setUploadedBy(uploadedBy);
+            filters.setStartDate(startDate);
+            filters.setEndDate(endDate);
+            filters.setMinOcrConfidence(minOcrConfidence);
+            filters.setIsActive(isActive);
+            
+            // Create pageable (use larger size for export)
+            Pageable pageable = PageRequest.of(page, size);
+            
+            // Perform search
+            SearchResult searchResults = documentIndexingService.searchDocuments(query, filters, pageable);
+            
+            // Export to Excel
+            byte[] excelData = searchExportService.exportToExcel(searchResults, query, filters);
+            
+            // Log export activity
+            auditService.logActivity(
+                authentication.getName(),
+                "SEARCH_EXPORT",
+                "Search results exported to Excel",
+                Map.of("query", query != null ? query : "", "format", "Excel", "results", searchResults.getTotalHits())
+            );
+            
+            // Create response headers
+            String fileName = "search_results_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")) + ".xlsx";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            headers.setContentDispositionFormData("attachment", fileName);
+            headers.setContentLength(excelData.length);
+            
+            return ResponseEntity.ok()
+                .headers(headers)
+                .body(excelData);
+            
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+    
+    /**
+     * Export search results to PDF format
+     */
+    @GetMapping("/export/pdf")
+    public ResponseEntity<byte[]> exportSearchResultsToPdf(
+            @RequestParam(required = false) String query,
+            @RequestParam(required = false) List<String> documentTypes,
+            @RequestParam(required = false) List<String> departments,
+            @RequestParam(required = false) List<String> uploadedBy,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            @RequestParam(required = false) Double minOcrConfidence,
+            @RequestParam(required = false) Boolean isActive,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size,
+            Authentication authentication) {
+        
+        try {
+            // Create search filters
+            SearchFilters filters = new SearchFilters();
+            filters.setDocumentTypes(documentTypes);
+            filters.setDepartments(departments);
+            filters.setUploadedBy(uploadedBy);
+            filters.setStartDate(startDate);
+            filters.setEndDate(endDate);
+            filters.setMinOcrConfidence(minOcrConfidence);
+            filters.setIsActive(isActive);
+            
+            // Create pageable (use smaller size for PDF)
+            Pageable pageable = PageRequest.of(page, size);
+            
+            // Perform search
+            SearchResult searchResults = documentIndexingService.searchDocuments(query, filters, pageable);
+            
+            // Export to PDF
+            byte[] pdfData = searchExportService.exportToPdf(searchResults, query, filters);
+            
+            // Log export activity
+            auditService.logActivity(
+                authentication.getName(),
+                "SEARCH_EXPORT",
+                "Search results exported to PDF",
+                Map.of("query", query != null ? query : "", "format", "PDF", "results", searchResults.getTotalHits())
+            );
+            
+            // Create response headers
+            String fileName = "search_results_" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")) + ".pdf";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_PDF);
+            headers.setContentDispositionFormData("attachment", fileName);
+            headers.setContentLength(pdfData.length);
+            
+            return ResponseEntity.ok()
+                .headers(headers)
+                .body(pdfData);
             
         } catch (Exception e) {
             return ResponseEntity.internalServerError().build();

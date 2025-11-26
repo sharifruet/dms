@@ -16,7 +16,8 @@ public enum DocumentType {
     BANK_GUARANTEE_BG("Bank Guarantee (BG)"),
     PERFORMANCE_SECURITY_PS("Performance Security (PS)"),
     PERFORMANCE_GUARANTEE_PG("Performance Guarantee (PG)"),
-    APP("APP"),
+    BILL("Bill"),
+    CORRESPONDENCE("Correspondence"),
     STATIONERY_RECORD("Stationery Record"),
     OTHER("Other");
 
@@ -49,7 +50,10 @@ public enum DocumentType {
         base.put(normalize("PS"), PERFORMANCE_SECURITY_PS);
         base.put(normalize("Performance Guarantee"), PERFORMANCE_GUARANTEE_PG);
         base.put(normalize("PG"), PERFORMANCE_GUARANTEE_PG);
-        base.put(normalize("APP"), APP);
+        base.put(normalize("Bill"), BILL);
+        base.put(normalize("BILL"), BILL);
+        base.put(normalize("Correspondence"), CORRESPONDENCE);
+        base.put(normalize("CORRESPONDENCE"), CORRESPONDENCE);
         base.put(normalize("Stationery Record"), STATIONERY_RECORD);
         base.put(normalize("Stationery"), STATIONERY_RECORD);
         base.put(normalize("Other"), OTHER);
@@ -57,7 +61,8 @@ public enum DocumentType {
         base.put(normalize("TENDER"), TENDER_DOCUMENT);
         base.put(normalize("CONTRACT"), CONTRACT_AGREEMENT);
         base.put(normalize("GENERAL"), OTHER);
-        base.put(normalize("BILL"), OTHER);
+        // Legacy APP mapping - map to OTHER for backward compatibility
+        base.put(normalize("APP"), OTHER);
 
         // Also map labels
         Arrays.stream(values()).forEach(dt -> base.put(normalize(dt.getLabel()), dt));

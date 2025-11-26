@@ -254,6 +254,49 @@ public class FolderController {
     }
     
     /**
+     * Get workflow for a folder
+     */
+    @GetMapping("/{id}/workflow")
+    public ResponseEntity<Map<String, Object>> getFolderWorkflow(@PathVariable Long id) {
+        try {
+            com.bpdb.dms.entity.Workflow workflow = folderService.getWorkflowByFolder(id);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("workflow", workflow);
+            response.put("hasWorkflow", workflow != null);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+    
+    /**
+     * Check if folder has a workflow
+     */
+    @GetMapping("/{id}/has-workflow")
+    public ResponseEntity<Map<String, Object>> checkFolderHasWorkflow(@PathVariable Long id) {
+        try {
+            boolean hasWorkflow = folderService.folderHasWorkflow(id);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("hasWorkflow", hasWorkflow);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+    
+    /**
      * Helper method to get User from Authentication
      */
     private User getUserFromAuthentication(Authentication authentication) {

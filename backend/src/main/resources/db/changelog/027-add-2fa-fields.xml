@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!-- Note: 2FA implementation deferred - only watermark templates table created -->
+
+    <changeSet id="027-001" author="dms">
+        <comment>Create watermark_templates table</comment>
+        <createTable tableName="watermark_templates">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="TEXT"/>
+            <column name="watermark_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="text_content" type="VARCHAR(500)"/>
+            <column name="font_family" type="VARCHAR(100)"/>
+            <column name="font_size" type="INTEGER"/>
+            <column name="font_color" type="VARCHAR(50)"/>
+            <column name="opacity" type="DECIMAL(3,2)"/>
+            <column name="position" type="VARCHAR(50)"/>
+            <column name="rotation" type="INTEGER"/>
+            <column name="image_path" type="VARCHAR(1000)"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="027-002" author="dms">
+        <comment>Add foreign key constraint for watermark_templates.created_by</comment>
+        <addForeignKeyConstraint
+                baseTableName="watermark_templates"
+                baseColumnNames="created_by"
+                constraintName="fk_watermark_templates_created_by"
+                referencedTableName="users"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+    </changeSet>
+
+    <changeSet id="027-003" author="dms">
+        <comment>Create index on watermark_templates.watermark_type</comment>
+        <createIndex tableName="watermark_templates" indexName="idx_watermark_templates_type">
+            <column name="watermark_type"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

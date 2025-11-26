@@ -19,6 +19,7 @@ import org.apache.tika.Tika;
 import org.apache.tika.exception.TikaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -58,6 +59,9 @@ public class OCRService {
     private final ITesseract tesseract;
     private final Tika tika;
     private volatile boolean ocrAvailable;
+    
+    @Autowired(required = false)
+    private DocumentClassificationService documentClassificationService;
     
     public OCRService() {
         this.tesseract = new Tesseract();
@@ -526,35 +530,45 @@ public class OCRService {
     }
     
     /**
-     * Classify document type based on content
+     * Classify document type based on content using DocumentClassificationService
      */
     private DocumentTypeClassification classifyDocument(String text, String fileName) {
         DocumentTypeClassification classification = new DocumentTypeClassification();
         
-        String lowerText = text.toLowerCase();
+        // Use the enhanced classification service if available
+        if (documentClassificationService != null) {
+            try {
+                DocumentClassificationService.ClassificationResult result = 
+                    documentClassificationService.classify(text, fileName);
+                
+                classification.setDocumentType(result.getDocumentType().name());
+                classification.setConfidence(result.getConfidence());
+            } catch (Exception e) {
+                logger.warn("Document classification service failed, using fallback: {}", e.getMessage());
+                // Fall through to fallback
+            }
+        }
         
-        // Simple keyword-based classification
-        if (lowerText.contains("tender") || lowerText.contains("bid") || lowerText.contains("proposal")) {
-            classification.setDocumentType("TENDER");
-            classification.setConfidence(0.8);
-        } else if (lowerText.contains("purchase order") || lowerText.contains("po number")) {
-            classification.setDocumentType("PURCHASE_ORDER");
-            classification.setConfidence(0.9);
-        } else if (lowerText.contains("letter of credit") || lowerText.contains("lc")) {
-            classification.setDocumentType("LETTER_OF_CREDIT");
-            classification.setConfidence(0.9);
-        } else if (lowerText.contains("bank guarantee") || lowerText.contains("bg")) {
-            classification.setDocumentType("BANK_GUARANTEE");
-            classification.setConfidence(0.9);
-        } else if (lowerText.contains("contract") || lowerText.contains("agreement")) {
-            classification.setDocumentType("CONTRACT");
-            classification.setConfidence(0.8);
-        } else if (lowerText.contains("correspondence") || lowerText.contains("letter")) {
-            classification.setDocumentType("CORRESPONDENCE");
-            classification.setConfidence(0.7);
-        } else {
-            classification.setDocumentType("OTHER");
-            classification.setConfidence(0.5);
+        // Fallback to simple classification if service not available or failed
+        if (classification.getDocumentType() == null || classification.getConfidence() < 0.3) {
+            String lowerText = text != null ? text.toLowerCase() : "";
+            
+            if (lowerText.contains("tender") || lowerText.contains("bid") || lowerText.contains("proposal")) {
+                classification.setDocumentType("TENDER_DOCUMENT");
+                classification.setConfidence(0.6);
+            } else if (lowerText.contains("bank guarantee") || lowerText.contains("bg")) {
+                classification.setDocumentType("BANK_GUARANTEE_BG");
+                classification.setConfidence(0.6);
+            } else if (lowerText.contains("contract") || lowerText.contains("agreement")) {
+                classification.setDocumentType("CONTRACT_AGREEMENT");
+                classification.setConfidence(0.6);
+            } else if (lowerText.contains("invoice") || lowerText.contains("bill")) {
+                classification.setDocumentType("BILL");
+                classification.setConfidence(0.6);
+            } else {
+                classification.setDocumentType("OTHER");
+                classification.setConfidence(0.3);
+            }
         }
         
         return classification;

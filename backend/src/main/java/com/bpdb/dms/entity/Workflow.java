@@ -40,6 +40,16 @@ public class Workflow {
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private User createdBy;
     
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "folder_id", unique = true)
+    @JsonIgnoreProperties({"workflow", "hibernateLazyInitializer", "handler"})
+    private Folder folder;
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "app_header_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "lines"})
+    private AppHeader appEntry; // Link workflow to APP entry / budget entry
+    
     @Column(name = "definition", length = 5000)
     private String definition; // JSON string for workflow definition
     
@@ -124,5 +134,11 @@ public class Workflow {
     
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    
+    public Folder getFolder() { return folder; }
+    public void setFolder(Folder folder) { this.folder = folder; }
+    
+    public AppHeader getAppEntry() { return appEntry; }
+    public void setAppEntry(AppHeader appEntry) { this.appEntry = appEntry; }
 }
 

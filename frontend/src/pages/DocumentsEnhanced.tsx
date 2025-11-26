@@ -56,9 +56,9 @@ import { documentService, Document, DocumentUploadRequest } from '../services/do
 import { DocumentCategory } from '../types/document';
 import DocumentViewer from '../components/DocumentViewer';
 import FolderExplorer from '../components/FolderExplorer';
+import AppEntrySelector from '../components/AppEntrySelector';
 import { Folder, folderService } from '../services/folderService';
 import { ALL_DOCUMENT_TYPES, getDocumentTypeLabel, DocumentType, requiresTenderWorkflow } from '../constants/documentTypes';
-import { workflowService, WorkflowInstance } from '../services/workflowService';
 
 const DEFAULT_CATEGORIES: DocumentCategory[] = ALL_DOCUMENT_TYPES.map((type, idx) => ({
   id: -(idx + 1),
@@ -105,10 +105,9 @@ const DocumentsEnhanced: React.FC = () => {
     department: user?.department || '',
     tags: '',
     folderId: null as number | null,
-    tenderWorkflowInstanceId: null as number | null,
+    appEntryId: null as number | null, // APP entry ID for workflow linking
   });
-  const [tenderWorkflowInstances, setTenderWorkflowInstances] = useState<WorkflowInstance[]>([]);
-  const [loadingTenderWorkflows, setLoadingTenderWorkflows] = useState(false);
+  const [folderHasWorkflow, setFolderHasWorkflow] = useState<boolean>(false);
   
   // Document viewer
   const [viewerOpen, setViewerOpen] = useState(false);
@@ -176,24 +175,23 @@ const DocumentsEnhanced: React.FC = () => {
     fetchFolders();
   }, []);
 
-  // Fetch tender workflow instances when upload dialog opens
+  // Check if selected folder has workflow when document type requires it
   useEffect(() => {
-    if (uploadDialogOpen) {
-      const fetchTenderWorkflows = async () => {
-        setLoadingTenderWorkflows(true);
+    const checkFolderWorkflow = async () => {
+      if (uploadForm.folderId && requiresTenderWorkflow(uploadForm.documentType)) {
         try {
-          const instances = await workflowService.getActiveTenderWorkflowInstances();
-          setTenderWorkflowInstances(instances);
+          const hasWorkflow = await folderService.folderHasWorkflow(uploadForm.folderId);
+          setFolderHasWorkflow(hasWorkflow);
         } catch (err: any) {
-          console.error('Error fetching tender workflow instances:', err);
-          // Don't show error to user, just log it
-        } finally {
-          setLoadingTenderWorkflows(false);
+          console.error('Error checking folder workflow:', err);
+          setFolderHasWorkflow(false);
         }
-      };
-      fetchTenderWorkflows();
-    }
-  }, [uploadDialogOpen]);
+      } else {
+        setFolderHasWorkflow(false);
+      }
+    };
+    checkFolderWorkflow();
+  }, [uploadForm.folderId, uploadForm.documentType]);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -261,7 +259,27 @@ const DocumentsEnhanced: React.FC = () => {
         });
       }, 200);
 
-      const uploadRequest: DocumentUploadRequest & { tenderWorkflowInstanceId?: string } = {
+      // Phase 2: Validate folder selection for Tender Notice and workflow documents
+      if (uploadForm.documentType === DocumentType.TENDER_NOTICE && !uploadForm.folderId) {
+        setError('Folder selection is required for Tender Notice uploads');
+        setUploading(false);
+        return;
+      }
+
+      if (requiresTenderWorkflow(uploadForm.documentType)) {
+        if (!uploadForm.folderId) {
+          setError('Folder selection is required for this document type. Please select the folder used for the Tender Notice upload.');
+          setUploading(false);
+          return;
+        }
+        if (!folderHasWorkflow) {
+          setError('Selected folder does not have an associated workflow. Please select a folder that was used for a Tender Notice upload.');
+          setUploading(false);
+          return;
+        }
+      }
+
+      const uploadRequest: DocumentUploadRequest = {
         file: selectedFile,
         title: uploadForm.title,
         description: uploadForm.description,
@@ -272,12 +290,13 @@ const DocumentsEnhanced: React.FC = () => {
         userId: 1, // Should be actual user ID
       };
 
-      // Add tenderWorkflowInstanceId if required
-      if (requiresTenderWorkflow(uploadForm.documentType) && uploadForm.tenderWorkflowInstanceId) {
-        uploadRequest.tenderWorkflowInstanceId = uploadForm.tenderWorkflowInstanceId.toString();
+      // Add APP entry ID to metadata if provided (for Tender Notice workflows)
+      const metadata: Record<string, string> = {};
+      if (uploadForm.appEntryId) {
+        metadata['appEntryId'] = uploadForm.appEntryId.toString();
       }
 
-      await documentService.uploadDocument(uploadRequest);
+      await documentService.uploadDocument(uploadRequest, metadata);
       
       clearInterval(progressInterval);
       setUploadProgress(100);
@@ -291,8 +310,9 @@ const DocumentsEnhanced: React.FC = () => {
         department: user?.department || '',
         tags: '',
         folderId: null,
-        tenderWorkflowInstanceId: null,
+        appEntryId: null,
       });
+      setFolderHasWorkflow(false);
       
       // Refresh documents list
       fetchDocuments();
@@ -761,12 +781,19 @@ const DocumentsEnhanced: React.FC = () => {
               placeholder="contract, legal, important"
             />
 
-            <FormControl fullWidth>
-              <InputLabel>Folder (Optional)</InputLabel>
+            {/* Phase 2: Folder Selection - Required for Tender Notice and workflow documents */}
+            <FormControl 
+              fullWidth 
+              required={uploadForm.documentType === DocumentType.TENDER_NOTICE || requiresTenderWorkflow(uploadForm.documentType)}
+            >
+              <InputLabel>Folder {uploadForm.documentType === DocumentType.TENDER_NOTICE || requiresTenderWorkflow(uploadForm.documentType) ? '*' : ''}</InputLabel>
               <Select
                 value={uploadForm.folderId || ''}
-                label="Folder (Optional)"
-                onChange={(e) => setUploadForm({ ...uploadForm, folderId: e.target.value ? Number(e.target.value) : null })}
+                label={`Folder ${uploadForm.documentType === DocumentType.TENDER_NOTICE || requiresTenderWorkflow(uploadForm.documentType) ? '*' : ''}`}
+                onChange={(e) => {
+                  const folderId = e.target.value ? Number(e.target.value) : null;
+                  setUploadForm({ ...uploadForm, folderId });
+                }}
                 disabled={loadingFolders}
               >
                 <MenuItem value="">No Folder</MenuItem>
@@ -781,37 +808,42 @@ const DocumentsEnhanced: React.FC = () => {
                   Loading folders...
                 </Typography>
               )}
+              {uploadForm.documentType === DocumentType.TENDER_NOTICE && !uploadForm.folderId && (
+                <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block' }}>
+                  Folder selection is required for Tender Notice uploads
+                </Typography>
+              )}
+              {requiresTenderWorkflow(uploadForm.documentType) && uploadForm.folderId && !folderHasWorkflow && (
+                <Alert severity="warning" sx={{ mt: 1 }}>
+                  Selected folder does not have an associated workflow. Please select a folder that was used for a Tender Notice upload.
+                </Alert>
+              )}
+              {uploadForm.documentType === DocumentType.TENDER_NOTICE && uploadForm.folderId && (
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  A workflow will be automatically created for this folder using the folder name. Subsequent documents can be uploaded to this same folder.
+                </Alert>
+              )}
+              {requiresTenderWorkflow(uploadForm.documentType) && uploadForm.folderId && folderHasWorkflow && (
+                <Alert severity="success" sx={{ mt: 1 }}>
+                  Folder has an associated workflow. This document will be added to that workflow.
+                </Alert>
+              )}
             </FormControl>
 
-            {requiresTenderWorkflow(uploadForm.documentType) && (
-              <FormControl fullWidth required>
-                <InputLabel>Tender Workflow</InputLabel>
-                <Select
-                  value={uploadForm.tenderWorkflowInstanceId || ''}
-                  label="Tender Workflow"
-                  onChange={(e) => setUploadForm({ ...uploadForm, tenderWorkflowInstanceId: e.target.value ? Number(e.target.value) : null })}
-                  disabled={loadingTenderWorkflows}
-                >
-                  <MenuItem value="">
-                    <em>Select a Tender Workflow</em>
-                  </MenuItem>
-                  {tenderWorkflowInstances.map((instance) => (
-                    <MenuItem key={instance.id} value={instance.id}>
-                      {instance.workflow?.name || 'Workflow'} - {instance.document?.originalName || `Instance #${instance.id}`} ({instance.status})
-                    </MenuItem>
-                  ))}
-                </Select>
-                {loadingTenderWorkflows && (
-                  <Typography variant="caption" sx={{ mt: 1, color: 'text.secondary' }}>
-                    Loading tender workflows...
-                  </Typography>
-                )}
-                {!loadingTenderWorkflows && tenderWorkflowInstances.length === 0 && (
-                  <Typography variant="caption" sx={{ mt: 1, color: 'error.main' }}>
-                    No active tender workflows found. Please upload a Tender Notice first to create a workflow.
-                  </Typography>
-                )}
-              </FormControl>
+            {/* APP Entry Selector - Show only for Tender Notice */}
+            {uploadForm.documentType === DocumentType.TENDER_NOTICE && (
+              <Box>
+                <AppEntrySelector
+                  value={uploadForm.appEntryId}
+                  onChange={(appEntryId) => setUploadForm({ ...uploadForm, appEntryId })}
+                  required={false}
+                  disabled={uploading}
+                  showDetails={true}
+                />
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  Select an APP entry (budget entry) to link to the workflow. The workflow will be associated with this budget allocation.
+                </Alert>
+              </Box>
             )}
           </Box>
         </DialogContent>

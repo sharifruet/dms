@@ -38,9 +38,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
         
-        // Skip JWT processing for auth endpoints
+        // Skip JWT processing for auth endpoints and WebSocket endpoints
         String requestPath = request.getRequestURI();
-        if (requestPath.startsWith("/api/auth/")) {
+        if (requestPath.startsWith("/api/auth/") || requestPath.startsWith("/ws/")) {
             filterChain.doFilter(request, response);
             return;
         }

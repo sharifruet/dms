@@ -21,6 +21,7 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
@@ -64,6 +65,7 @@ public class Document {
     private String tags;
     
     @Column(name = "extracted_text", columnDefinition = "TEXT")
+    @JsonIgnore  // Exclude large text field from serialization in list views
     private String extractedText;
 
     @OneToMany(mappedBy = "document", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
@@ -76,16 +78,17 @@ public class Document {
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "uploaded_by", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "password", "role"})
     private User uploadedBy;
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "folder_id")
-    @JsonIgnoreProperties({"parentFolder", "subFolders", "documents", "hibernateLazyInitializer", "handler"})
+    @JsonIgnoreProperties({"parentFolder", "subFolders", "documents", "workflow", "hibernateLazyInitializer", "handler"})
     private Folder folder;
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_employee_id")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "password", "role"})
     private User assignedEmployee;
     
     @Column(name = "department")

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="025-001" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="workflows" columnName="folder_id"/>
+            </not>
+        </preConditions>
+        <comment>Add folder_id column to workflows table for one-to-one folder-workflow mapping</comment>
+        <addColumn tableName="workflows">
+            <column name="folder_id" type="BIGINT"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="025-002" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <foreignKeyConstraintExists foreignKeyName="fk_workflows_folder"/>
+            </not>
+        </preConditions>
+        <comment>Add foreign key constraint for workflows.folder_id</comment>
+        <addForeignKeyConstraint
+                baseTableName="workflows"
+                baseColumnNames="folder_id"
+                constraintName="fk_workflows_folder"
+                referencedTableName="folders"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+    </changeSet>
+
+    <changeSet id="025-003" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="workflows" indexName="idx_workflows_folder_unique"/>
+            </not>
+        </preConditions>
+        <comment>Create unique index on workflows.folder_id to enforce one-to-one relationship</comment>
+        <createIndex tableName="workflows" indexName="idx_workflows_folder_unique" unique="true">
+            <column name="folder_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="025-004" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="workflows" indexName="idx_workflows_folder"/>
+            </not>
+        </preConditions>
+        <comment>Create index on workflows.folder_id for performance (non-unique for queries)</comment>
+        <createIndex tableName="workflows" indexName="idx_workflows_folder">
+            <column name="folder_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

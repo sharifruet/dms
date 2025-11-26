@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="026-001" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="app_headers" columnName="allocation_type"/>
+            </not>
+        </preConditions>
+        <comment>Add new fields to app_headers table for manual entry</comment>
+        
+        <addColumn tableName="app_headers">
+            <column name="allocation_type" type="VARCHAR(50)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="budget_release_date" type="DATE">
+                <constraints nullable="true"/>
+            </column>
+            <column name="allocation_amount" type="NUMERIC(18,2)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="release_installment_no" type="INTEGER">
+                <constraints nullable="true"/>
+            </column>
+            <column name="reference_memo_number" type="VARCHAR(255)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="attachment_file_path" type="VARCHAR(1000)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="026-002" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="app_headers" indexName="idx_app_headers_fiscal_year_installment"/>
+            </not>
+        </preConditions>
+        <comment>Add index for fiscal year and installment number lookup</comment>
+        <createIndex tableName="app_headers" indexName="idx_app_headers_fiscal_year_installment">
+            <column name="fiscal_year"/>
+            <column name="release_installment_no"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="026-003" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <uniqueConstraintExists tableName="app_headers" constraintName="uk_app_headers_fiscal_year_installment"/>
+            </not>
+        </preConditions>
+        <comment>Add unique constraint on fiscal_year + release_installment_no to prevent duplicates</comment>
+        <addUniqueConstraint tableName="app_headers" 
+                             columnNames="fiscal_year, release_installment_no" 
+                             constraintName="uk_app_headers_fiscal_year_installment"
+                             deferrable="false"
+                             disabled="false"/>
+    </changeSet>
+
+    <changeSet id="026-004" author="dms">
+        <comment>Remove old unique constraint on fiscal_year + department (replaced by fiscal_year + installment_no)</comment>
+        <dropUniqueConstraint tableName="app_headers" 
+                              constraintName="uk_app_headers_fiscal_year_dept"/>
+    </changeSet>
+
+</databaseChangeLog>

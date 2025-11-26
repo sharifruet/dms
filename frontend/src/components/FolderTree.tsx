@@ -25,6 +25,7 @@ interface FolderTreeProps {
   selectedFolderId?: number | null;
   showCreateButton?: boolean;
   onCreateFolder?: (parentFolderId?: number) => void;
+  refreshTrigger?: number; // When this changes, reload the tree
 }
 
 const FolderTree: React.FC<FolderTreeProps> = ({
@@ -32,6 +33,7 @@ const FolderTree: React.FC<FolderTreeProps> = ({
   selectedFolderId,
   showCreateButton = false,
   onCreateFolder,
+  refreshTrigger,
 }) => {
   const [folders, setFolders] = useState<Folder[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<Set<number>>(new Set());
@@ -39,7 +41,7 @@ const FolderTree: React.FC<FolderTreeProps> = ({
 
   useEffect(() => {
     loadFolders();
-  }, []);
+  }, [refreshTrigger]);
 
   const loadFolders = async () => {
     setLoading(true);

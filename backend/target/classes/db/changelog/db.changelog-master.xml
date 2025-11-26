@@ -31,4 +31,10 @@
     <include file="db/changelog/021-create-finance-billing-tables.xml"/>
     <include file="db/changelog/022-update-workflows-table.xml"/>
     <include file="db/changelog/023-add-app-lines-fields.xml"/>
+    <include file="db/changelog/024-update-document-types-app-to-bill.xml"/>
+    <include file="db/changelog/025-add-folder-workflow-mapping.xml"/>
+    <include file="db/changelog/026-update-app-headers-for-manual-entry.xml"/>
+    <include file="db/changelog/027-add-watermark-templates.xml"/>
+    <include file="db/changelog/028-add-workflow-app-entry-relationship.xml"/>
+    <include file="db/changelog/029-add-bill-document-fields.xml"/>
 </databaseChangeLog>

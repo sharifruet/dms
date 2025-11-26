@@ -116,5 +116,32 @@ export const folderService = {
     const response = await api.post(`/folders/${id}/move`, request);
     return response.data.folder;
   },
+
+  /**
+   * Get workflow for a folder
+   */
+  getFolderWorkflow: async (id: number): Promise<any | null> => {
+    try {
+      const response = await api.get(`/folders/${id}/workflow`);
+      return response.data.workflow || null;
+    } catch (err: any) {
+      if (err.response?.status === 404) {
+        return null;
+      }
+      throw err;
+    }
+  },
+
+  /**
+   * Check if folder has a workflow
+   */
+  folderHasWorkflow: async (id: number): Promise<boolean> => {
+    try {
+      const response = await api.get(`/folders/${id}/has-workflow`);
+      return response.data.hasWorkflow || false;
+    } catch (err: any) {
+      return false;
+    }
+  },
 };
 

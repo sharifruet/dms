@@ -1,8 +1,13 @@
 package com.bpdb.dms.service;
 
-import com.bpdb.dms.repository.AppLineRepository;
-import com.bpdb.dms.repository.BillLineRepository;
-import com.bpdb.dms.service.FinanceReportService;
+import com.bpdb.dms.dto.AppBudgetSummaryDto;
+import com.bpdb.dms.entity.AppHeader;
+import com.bpdb.dms.entity.Document;
+import com.bpdb.dms.entity.Folder;
+import com.bpdb.dms.entity.Workflow;
+import com.bpdb.dms.repository.AppHeaderRepository;
+import com.bpdb.dms.repository.DocumentRepository;
+import com.bpdb.dms.repository.WorkflowRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -18,10 +23,16 @@ public class FinanceDashboardService {
     private FinanceReportService financeReportService;
 
     @Autowired
-    private AppLineRepository appLineRepository;
+    private AppHeaderRepository appHeaderRepository;
 
     @Autowired
-    private BillLineRepository billLineRepository;
+    private WorkflowRepository workflowRepository;
+
+    @Autowired
+    private DocumentRepository documentRepository;
+
+    @Autowired
+    private DocumentMetadataService documentMetadataService;
 
     public Map<String, Object> summary(Integer year, String department) {
         List<Map<String, Object>> rows = financeReportService.appVsBillsByYear(year, department, null);
@@ -65,33 +76,25 @@ public class FinanceDashboardService {
     }
 
     /**
-     * Get budget and billed amounts summary
-     * Budget = sum of estimated_cost_lakh from app_lines * 100000
-     * Billed = sum of amounts from bill_lines
+     * Legacy aggregate summary across all APP entries.
+     * Kept for compatibility but now delegates to per-APP summaries.
      */
     public Map<String, Object> getBudgetSummary() {
-        // Calculate total budget: sum of estimated_cost_lakh * 100000
-        BigDecimal totalBudget = appLineRepository.findAll().stream()
-            .map(line -> {
-                BigDecimal costLakh = line.getEstimatedCostLakh();
-                if (costLakh == null) {
-                    return BigDecimal.ZERO;
-                }
-                return costLakh.multiply(BigDecimal.valueOf(100000));
-            })
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        java.util.List<AppBudgetSummaryDto> perApp = getBudgetByApp();
 
-        // Calculate total billed: sum of amounts from all bill lines
-        BigDecimal totalBilled = billLineRepository.findAll().stream()
-            .map(line -> {
-                BigDecimal amount = line.getAmount() == null ? BigDecimal.ZERO : line.getAmount();
-                BigDecimal taxAmount = line.getTaxAmount() == null ? BigDecimal.ZERO : line.getTaxAmount();
-                return amount.add(taxAmount);
-            })
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalBudget = BigDecimal.ZERO;
+        BigDecimal totalBilled = BigDecimal.ZERO;
+        for (AppBudgetSummaryDto dto : perApp) {
+            if (dto.getAllocationAmount() != null) {
+                totalBudget = totalBudget.add(dto.getAllocationAmount());
+            }
+            if (dto.getTotalBilled() != null) {
+                totalBilled = totalBilled.add(dto.getTotalBilled());
+            }
+        }
 
         BigDecimal remaining = totalBudget.subtract(totalBilled);
-        BigDecimal utilizationPct = totalBudget.compareTo(BigDecimal.ZERO) == 0 
+        BigDecimal utilizationPct = totalBudget.compareTo(BigDecimal.ZERO) == 0
             ? BigDecimal.ZERO
             : totalBilled.multiply(BigDecimal.valueOf(100))
                 .divide(totalBudget, 2, java.math.RoundingMode.HALF_UP);
@@ -102,6 +105,95 @@ public class FinanceDashboardService {
         result.put("remaining", remaining);
         result.put("utilizationPct", utilizationPct);
         return result;
+    }
+
+    /**
+     * Get per-APP budget vs billed summary.
+     * Budget = allocation_amount from AppHeader.
+     * Billed = sum of bill amounts from BILL documents in workflows linked to that APP.
+     */
+    public java.util.List<AppBudgetSummaryDto> getBudgetByApp() {
+        // Load all workflows that are linked to an APP entry and group by APP ID
+        java.util.List<Workflow> workflowsWithApp = workflowRepository.findWithAppEntry();
+        Map<Long, java.util.List<Workflow>> workflowsByAppId = new HashMap<>();
+        for (Workflow workflow : workflowsWithApp) {
+            if (workflow.getAppEntry() == null) {
+                continue;
+            }
+            Long appId = workflow.getAppEntry().getId();
+            workflowsByAppId.computeIfAbsent(appId, k -> new java.util.ArrayList<>()).add(workflow);
+        }
+
+        java.util.List<AppHeader> appHeaders = appHeaderRepository.findAll();
+        java.util.List<AppBudgetSummaryDto> result = new java.util.ArrayList<>();
+
+        for (AppHeader appHeader : appHeaders) {
+            Long appId = appHeader.getId();
+
+            BigDecimal allocation = appHeader.getAllocationAmount() != null
+                ? appHeader.getAllocationAmount()
+                : BigDecimal.ZERO;
+
+            BigDecimal totalBilled = BigDecimal.ZERO;
+
+            java.util.List<Workflow> workflows = workflowsByAppId.get(appId);
+            if (workflows != null && !workflows.isEmpty()) {
+                for (Workflow workflow : workflows) {
+                    Folder folder = workflow.getFolder();
+                    if (folder == null) {
+                        continue;
+                    }
+
+                    java.util.List<Document> bills = documentRepository.findBillDocumentsByFolder(folder);
+                    for (Document billDoc : bills) {
+                        BigDecimal billAmount = extractBillAmountFromMetadata(billDoc);
+                        totalBilled = totalBilled.add(billAmount);
+                    }
+                }
+            }
+
+            BigDecimal remaining = allocation.subtract(totalBilled);
+            BigDecimal utilizationPct = allocation.compareTo(BigDecimal.ZERO) == 0
+                ? BigDecimal.ZERO
+                : totalBilled.multiply(BigDecimal.valueOf(100))
+                    .divide(allocation, 2, java.math.RoundingMode.HALF_UP);
+
+            AppBudgetSummaryDto dto = new AppBudgetSummaryDto();
+            dto.setAppId(appId);
+            dto.setFiscalYear(appHeader.getFiscalYear());
+            dto.setReleaseInstallmentNo(appHeader.getReleaseInstallmentNo());
+            dto.setAllocationType(appHeader.getAllocationType());
+            dto.setAllocationAmount(allocation);
+            dto.setTotalBilled(totalBilled);
+            dto.setRemaining(remaining);
+            dto.setUtilizationPct(utilizationPct);
+
+            result.add(dto);
+        }
+
+        return result;
+    }
+
+    /**
+     * Extract bill amount from document metadata.
+     * Prefer netAmount, then totalAmount, otherwise 0.
+     */
+    private BigDecimal extractBillAmountFromMetadata(Document document) {
+        try {
+            Map<String, String> metadata = documentMetadataService.getMetadataMap(document);
+            String netAmountStr = metadata.get("netAmount");
+            String totalAmountStr = metadata.get("totalAmount");
+
+            if (netAmountStr != null && !netAmountStr.isBlank()) {
+                return new BigDecimal(netAmountStr.trim());
+            }
+            if (totalAmountStr != null && !totalAmountStr.isBlank()) {
+                return new BigDecimal(totalAmountStr.trim());
+            }
+        } catch (Exception ignored) {
+            // Fallback to zero if anything goes wrong
+        }
+        return BigDecimal.ZERO;
     }
 }
 

@@ -354,24 +354,33 @@ This requirements specification is organized into the following major sections:
   - Note: These roles are in addition to the standard system roles (Administrator, Officer, Viewer, Auditor) defined in Section 4.5.1 and Section 6. The DD roles represent hierarchical organizational levels with specific upload permissions.
 - **FR-006**: System shall restrict upload capabilities based on user roles
 
+#### 4.1.2a Folder Selection for Workflows
+- **FR-006a**: When uploading a Tender Notice document, folder selection is mandatory. The system shall not allow Tender Notice upload without a folder selection. Users must create a folder before uploading a Tender Notice if the desired folder does not exist.
+- **FR-006b**: The folder name selected during Tender Notice upload shall be used as the workflow name for the automatically created workflow.
+- **FR-006c**: The relationship between folders and workflows is one-to-one. Each folder can be associated with only one workflow, and each workflow is associated with only one folder. If a folder already has an associated workflow (i.e., already contains a Tender Notice), the system shall prevent uploading another Tender Notice to that folder and shall display an appropriate error message.
+- **FR-006d**: For subsequent document uploads that are part of the tender workflow (Tender Document, Purchase Order, Letter of Credit, Bank Guarantee, Performance Security, Performance Guarantee, Contract Agreement, Bill), users shall select a folder instead of a workflow. The system shall automatically associate the document with the workflow linked to that folder. If the selected folder does not have an associated workflow, the system shall display an error message and require the user to select a folder that contains a Tender Notice.
+- **FR-006e**: The system shall maintain a mapping between folders and their associated workflows to enable automatic workflow association during document upload. This mapping shall be stored in the database and persisted across system sessions.
+- **FR-006f**: Each tender workflow shall support multiple documents of the same type for Performance Security (PS), Performance Guarantee (PG), Bills, and Correspondence. Other document types (Tender Notice, Tender Document, Purchase Order, Letter of Credit, Bank Guarantee, Contract Agreement) are typically single instances per workflow, though the system shall allow multiple instances if needed for business reasons. The system shall preserve upload order, status, and metadata per document instance.
+
 #### 4.1.3 Document Classification
 - **FR-007**: System shall automatically detect document types:
   - 1. Tender Notice
   - 2. Tender Document
-  - 3. Purchase Order (PO)
-  - 4. Letter of Credit (LC)
+  - 3. Purchase Order (PO) - Note: May be classified as "Other" if not separately defined
+  - 4. Letter of Credit (LC) - Note: May be classified as "Other" if not separately defined
   - 5. Bank Guarantee (BG)
   - 6. Performance Security (PS)
   - 7. Performance Guarantee (PG)
   - 8. Contract Agreement
   - 9. Correspondence
   - 10. Stationery Record
-  - 11. APP (Annual Project Plan)
+  - 11. Bill
   - 12. Other related documents
 - **FR-008**: System shall allow manual override of auto-detected document types
 - **FR-009**: System shall support custom document type definitions
-  - Note: APP is an Excel file; the system shall parse APP contents and persist them into a dedicated database table for structured reporting and retrieval.
-  - Workflow Rule: When a Tender Notice is created, the system shall automatically create a workflow. Related documents (Tender Document, Purchase Order, Letter of Credit, Bank Guarantee, Performance Security, Performance Guarantee, Contract Agreement) shall be uploaded via this workflow to ensure traceability and process compliance.
+  - Note: APP (Annual Project Plan) is NOT a document type. APP entries are entered manually through a form interface (see section 4.13.1). Bills are uploaded as image or PDF files and processed via OCR for data extraction (see section 4.13.2).
+  - Workflow Rule: When a Tender Notice is uploaded, the system shall automatically create a workflow and establish a one-to-one mapping between the selected folder and the workflow. The workflow name shall be set to the name of the folder selected during upload. Related documents (Tender Document, Purchase Order, Letter of Credit, Bank Guarantee, Performance Security, Performance Guarantee, Contract Agreement, Bill) shall be uploaded via folder selection, which automatically associates them with the appropriate workflow. For Tender Notice uploads, folder selection is mandatory. Each workflow begins with a single Tender Notice but may contain multiple Performance Securities, Performance Guarantees, Bills, and Correspondence documents over time. The system shall track workflow status and provide completion indicators when key documents (such as Contract Agreement) are uploaded.
+  - Folder-Based Workflow Selection: For all document uploads that are part of a tender workflow, users shall select a folder instead of a workflow. The system shall automatically determine the associated workflow based on the selected folder. This eliminates the need for separate workflow selection during document upload.
   - Smart Folder Rule Templates: Provide out-of-the-box Smart Folder (DMC) templates for these document types (e.g., "All Active BG", "PS expiring in 30 days", "Tenders awaiting related documents", "Contracts with missing PS/PG").
 
 #### 4.1.4 OCR-Based Metadata Extraction
@@ -1007,27 +1016,44 @@ This requirements specification is organized into the following major sections:
 ### 4.13 Finance & Billing
 
 #### 4.13.1 APP (Annual Project Plan) Budgets
-- **FR-241**: System shall parse APP Excel files to load annual project plans with per-line budgets into dedicated APP tables (header and line).
-- **FR-242**: Each APP line shall include at minimum: fiscal year, project identifier/name, department, cost center, category, budget amount, and optional vendor/contract references.
-- **FR-243**: System shall validate APP uploads for duplicate years and structural integrity; partial failures shall produce detailed row-level error feedback.
+- **FR-241**: System shall provide a manual entry form for APP (Annual Project Plan) entries. APP entries are NOT uploaded via Excel files.
+- **FR-242**: Each APP entry shall include the following fields:
+  - **Fiscal Year** (Dropdown): Select from predefined fiscal years (e.g., 2024–25, 2025–26, etc.). Indicates the budget year.
+  - **Allocation / Release Type** (Dropdown): Select from options - Annual / Revised / Additional / Emergency. Indicates the type of budget release.
+  - **Budget Release Date** (Date Picker): Official date on which BPDB released the fund.
+  - **Allocation Amount (BDT)** (Number): Total amount allocated in this installment, displayed in Bangladeshi Taka (BDT).
+  - **Release Installment No.** (Auto/Manual): Indicates the installment number (1st / 2nd / 3rd / 4th installment, etc.). System may auto-increment based on existing entries for the same fiscal year, or allow manual entry.
+  - **Reference / Memo Number** (Text): Memo or reference number of the BPDB fund release letter.
+  - **Attachment** (PDF Upload): Scanned copy of the budget release letter in PDF format.
+- **FR-243**: System shall validate APP entries for duplicate fiscal year/installment combinations and ensure required fields are provided. When a duplicate fiscal year/installment combination is detected, the system shall display a warning message and allow the user to either cancel the entry or proceed with a confirmation. All required fields (Fiscal Year, Allocation Type, Budget Release Date, Allocation Amount) must be provided before submission.
 
 #### 4.13.2 Bill Entry and Management
-- **FR-244**: System shall provide bill entry (manual and file-import) with header and line items.
-- **FR-245**: Bills shall be linked to fiscal year and optionally mapped to an APP line (project/cost center/category).
-- **FR-246**: System shall validate that bill year matches the target APP year when linkage is provided.
-- **FR-247**: System shall support vendor, invoice number, invoice date, tax, and amount fields; totals shall be auto-calculated from line items.
-- **FR-248**: Bills may optionally attach supporting documents; attachments shall be stored and indexed for search.
+- **FR-244**: System shall provide bill entry via file upload only. Bills are NOT entered manually. Users shall upload image files (JPEG, PNG, TIFF) or PDF files containing bill information.
+- **FR-245**: System shall use OCR (Optical Character Recognition) technology to extract bill information from uploaded image/PDF files. The extracted data shall include:
+  - Vendor name
+  - Invoice number
+  - Invoice date
+  - Fiscal year
+  - Line items with amounts
+  - Tax amounts
+  - Total amounts
+- **FR-246**: System shall provide a verification interface where users can review and correct OCR-extracted data before finalizing the bill entry. If OCR extraction fails completely or returns no usable data, the system shall allow manual entry of all bill fields. The verification interface shall highlight fields that were extracted with low confidence and allow users to accept, correct, or manually enter all field values.
+- **FR-247**: Bills shall be linked to fiscal year and optionally mapped to an APP line (project/cost center/category).
+- **FR-248**: System shall validate that bill year matches the target APP year when linkage is provided.
+- **FR-249**: System shall auto-calculate totals from extracted line items and validate arithmetic consistency.
+- **FR-250**: The original uploaded bill file (image/PDF) shall be stored as an attachment and indexed for search.
+- **FR-251**: System shall support manual correction of any OCR-extracted fields if the extraction is inaccurate or incomplete. Users shall be able to edit any field in the verification interface, and the system shall save both the original OCR-extracted values (for accuracy tracking) and the final corrected values (for bill processing). The system shall track OCR confidence scores and extraction accuracy metrics for continuous improvement.
 
 #### 4.13.3 APP vs Bills Reporting
-- **FR-249**: System shall provide year-wise reports comparing APP budgets vs Bills actuals with the following metrics per year and per APP line: budget amount, bill amount (actuals), remaining budget = budget − actuals, utilization percentage.
-- **FR-250**: Reports shall support filters: year, department, project, vendor, category, cost center, and date ranges.
-- **FR-251**: Reports shall support drill-down from yearly aggregates to APP line, then to underlying bills and attachments.
-- **FR-252**: Reports shall be exportable to PDF and Excel.
+- **FR-252**: System shall provide year-wise reports comparing APP budgets vs Bills actuals with the following metrics per year and per APP line: budget amount, bill amount (actuals), remaining budget = budget − actuals, utilization percentage.
+- **FR-253**: Reports shall support filters: year, department, project, vendor, category, cost center, and date ranges.
+- **FR-254**: Reports shall support drill-down from yearly aggregates to APP line, then to underlying bills and attachments.
+- **FR-255**: Reports shall be exportable to PDF and Excel.
 
 #### 4.13.4 Dashboards and Visualizations
-- **FR-253**: Dashboard shall include graphical widgets for APP vs Bills by year: bar/column charts for budget vs actual, and stacked/line charts for cumulative utilization.
-- **FR-254**: Dashboard shall include a Remaining Budget visualization showing budget, actuals, and remaining for the selected year, department, or project.
-- **FR-255**: Widgets shall support interactive filters (year, department, project) and quick links to underlying reports and Smart Folders (DMC) for the filtered data.
+- **FR-256**: Dashboard shall include graphical widgets for APP vs Bills by year: bar/column charts for budget vs actual, and stacked/line charts for cumulative utilization.
+- **FR-257**: Dashboard shall include a Remaining Budget visualization showing budget, actuals, and remaining for the selected year, department, or project.
+- **FR-258**: Widgets shall support interactive filters (year, department, project) and quick links to underlying reports and Smart Folders (DMC) for the filtered data.
 
 ### 4.14 Mobile and Offline Capabilities
 
@@ -1327,10 +1353,11 @@ This requirements specification is organized into the following major sections:
   - Metadata-based search
   - Search result filtering
   - Document preview functionality
- - **Finance & Billing (Initial)**:
-   - APP Excel parsing to database (header and line items)
-   - Bill entry (manual)
-   - Year consistency validation between APP and Bills
+- **Finance & Billing (Initial)**:
+  - APP manual entry form with all required fields (Fiscal Year, Allocation Type, Budget Release Date, Allocation Amount, Release Installment No., Reference/Memo Number, Attachment)
+  - Bill entry via file upload (image/PDF) with OCR extraction
+  - OCR verification and correction interface for bills
+  - Year consistency validation between APP and Bills
 
 #### 11.2.3 Key Features
 - Advanced file upload with progress indicators
