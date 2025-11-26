@@ -5,12 +5,6 @@ import {
   Card,
   CardContent,
   Grid,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Paper,
   Alert,
   CircularProgress,
@@ -19,90 +13,137 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  IconButton,
   Chip,
   LinearProgress,
-  FormControlLabel,
-  Checkbox,
+  Divider,
+  TextField,
+  Link,
+  Tooltip,
+  IconButton,
 } from '@mui/material';
 import {
   Upload as UploadIcon,
   Receipt as BillIcon,
-  Delete as DeleteIcon,
   Edit as EditIcon,
   CloudUpload as CloudUploadIcon,
-  Warning as WarningIcon,
-  CheckCircle as CheckCircleIcon,
+  AccountTree as WorkflowIcon,
+  TableChart as AppIcon,
+  FilterList as FilterIcon,
+  Clear as ClearIcon,
 } from '@mui/icons-material';
-import {
-  financeService,
-  BillHeader,
-  BillLine,
-  BillOCRResult,
-  BillLineItemOCR,
-} from '../services/financeService';
+import { documentService, Document, DocumentUploadRequest } from '../services/documentService';
+import { DocumentType } from '../constants/documentTypes';
+import { useAppSelector } from '../hooks/redux';
+import BillFieldsEditor from '../components/BillFieldsEditor';
+import DocumentViewer from '../components/DocumentViewer';
+import { folderService } from '../services/folderService';
+import { workflowService, Workflow, AppEntry } from '../services/workflowService';
+import { useNavigate } from 'react-router-dom';
 
 const BillEntries: React.FC = () => {
-  const [bills, setBills] = useState<BillHeader[]>([]);
-  const [selectedBill, setSelectedBill] = useState<BillHeader | null>(null);
+  const navigate = useNavigate();
+  const [bills, setBills] = useState<Document[]>([]);
+  const [selectedBill, setSelectedBill] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Filter states
   const [fiscalYearFilter, setFiscalYearFilter] = useState<number | ''>('');
   const [vendorFilter, setVendorFilter] = useState('');
+  const [invoiceNumberFilter, setInvoiceNumberFilter] = useState('');
+  const [dateFromFilter, setDateFromFilter] = useState('');
+  const [dateToFilter, setDateToFilter] = useState('');
+  const [amountMinFilter, setAmountMinFilter] = useState('');
+  const [amountMaxFilter, setAmountMaxFilter] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   
-  // Upload & OCR states
+  // Workflow and APP entry states
+  const [selectedBillWorkflow, setSelectedBillWorkflow] = useState<Workflow | null>(null);
+  const [selectedBillAppEntry, setSelectedBillAppEntry] = useState<AppEntry | null>(null);
+  const [loadingWorkflowInfo, setLoadingWorkflowInfo] = useState(false);
+  
+  // Upload states
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
-  const [verificationDialogOpen, setVerificationDialogOpen] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [extractingOCR, setExtractingOCR] = useState(false);
-  const [ocrResult, setOcrResult] = useState<BillOCRResult | null>(null);
   const [ocrError, setOcrError] = useState<string | null>(null);
-  
-  // Verified/corrected data
-  const [verifiedData, setVerifiedData] = useState<{
-    vendorName: string;
-    invoiceNumber: string;
-    invoiceDate: string;
-    fiscalYear: number;
-    totalAmount: number;
-    taxAmount: number;
-    subtotalAmount: number;
-    lineItems: Array<{
-      projectIdentifier?: string;
-      department?: string;
-      costCenter?: string;
-      category?: string;
-      description?: string;
-      amount: number;
-      taxAmount?: number;
-    }>;
-  } | null>(null);
-  
-  const [saving, setSaving] = useState(false);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const { user } = useAppSelector((state) => state.auth);
+  const [billMetadata, setBillMetadata] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadBills();
-  }, [fiscalYearFilter, vendorFilter]);
+  }, [fiscalYearFilter, vendorFilter, invoiceNumberFilter, dateFromFilter, dateToFilter, amountMinFilter, amountMaxFilter]);
 
   const loadBills = async () => {
     try {
       setLoading(true);
       setError(null);
-      const billsResponse = await financeService.getBills(
-        fiscalYearFilter ? Number(fiscalYearFilter) : undefined,
-        vendorFilter || undefined
-      );
-      const billsArray = Array.isArray(billsResponse) ? billsResponse : (billsResponse.content || []);
+      const response = await documentService.getDocuments({
+        documentType: DocumentType.BILL,
+        searchTerm: vendorFilter || invoiceNumberFilter || undefined,
+        page: 0,
+        size: 1000, // Load more to allow client-side filtering
+      });
+      let billsArray = response.content || [];
+      
+      // Apply client-side filters for metadata-based fields
+      if (fiscalYearFilter || dateFromFilter || dateToFilter || amountMinFilter || amountMaxFilter || invoiceNumberFilter) {
+        billsArray = billsArray.filter(bill => {
+          if (!bill.id) return false;
+          const metadata = billMetadataCache.get(bill.id!) || {};
+          const fiscalYear = getBillMetadataValue(metadata, 'fiscalYear');
+          const invoiceDate = getBillMetadataValue(metadata, 'invoiceDate');
+          const invoiceNumber = getBillMetadataValue(metadata, 'invoiceNumber').toLowerCase();
+          const totalAmount = getBillMetadataNumber(metadata, 'totalAmount');
+          
+          // Fiscal year filter
+          if (fiscalYearFilter && fiscalYear !== fiscalYearFilter.toString()) {
+            return false;
+          }
+          
+          // Invoice number filter
+          if (invoiceNumberFilter && !invoiceNumber.includes(invoiceNumberFilter.toLowerCase())) {
+            return false;
+          }
+          
+          // Date range filter
+          if (dateFromFilter || dateToFilter) {
+            if (!invoiceDate) return false;
+            const billDate = new Date(invoiceDate);
+            if (dateFromFilter && billDate < new Date(dateFromFilter)) {
+              return false;
+            }
+            if (dateToFilter) {
+              const toDate = new Date(dateToFilter);
+              toDate.setHours(23, 59, 59, 999); // Include full day
+              if (billDate > toDate) {
+                return false;
+              }
+            }
+          }
+          
+          // Amount range filter
+          if (amountMinFilter && totalAmount < parseFloat(amountMinFilter)) {
+            return false;
+          }
+          if (amountMaxFilter && totalAmount > parseFloat(amountMaxFilter)) {
+            return false;
+          }
+          
+          return true;
+        });
+      }
+      
       setBills(billsArray);
-      if (selectedBill) {
+      if (selectedBill && selectedBill.id) {
         const updatedBill = billsArray.find(b => b.id === selectedBill.id);
-        if (updatedBill) {
-          loadBillDetails(updatedBill.id);
+        if (updatedBill && updatedBill.id) {
+          await loadBillDetails(updatedBill.id!);
         }
       }
     } catch (err: any) {
@@ -114,11 +155,72 @@ const BillEntries: React.FC = () => {
 
   const loadBillDetails = async (billId: number) => {
     try {
-      const bill = await financeService.getBill(billId);
-      setSelectedBill(bill);
+      const bill = await documentService.getDocumentById(billId);
+      const doc = (bill as any).document || bill;
+      const metadata = (bill as any).metadata || {};
+      setSelectedBill(doc as Document);
+      setBillMetadata(metadata);
+      
+      // Load workflow and APP entry info if bill is in a folder
+      if (doc.folder?.id) {
+        await loadWorkflowAndAppEntryInfo(doc.folder.id);
+      } else {
+        setSelectedBillWorkflow(null);
+        setSelectedBillAppEntry(null);
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load bill details');
     }
+  };
+
+  const loadWorkflowAndAppEntryInfo = async (folderId: number) => {
+    try {
+      setLoadingWorkflowInfo(true);
+      const workflow = await folderService.getFolderWorkflow(folderId);
+      if (workflow) {
+        setSelectedBillWorkflow(workflow);
+        // Get APP entry for this workflow
+        if (workflow.id) {
+          const appEntryResponse = await workflowService.getAppEntryForWorkflow(workflow.id);
+          if (appEntryResponse.success && appEntryResponse.appEntry) {
+            setSelectedBillAppEntry(appEntryResponse.appEntry);
+          } else {
+            setSelectedBillAppEntry(null);
+          }
+        }
+      } else {
+        setSelectedBillWorkflow(null);
+        setSelectedBillAppEntry(null);
+      }
+    } catch (err: any) {
+      console.error('Failed to load workflow info:', err);
+      setSelectedBillWorkflow(null);
+      setSelectedBillAppEntry(null);
+    } finally {
+      setLoadingWorkflowInfo(false);
+    }
+  };
+
+  const clearAllFilters = () => {
+    setFiscalYearFilter('');
+    setVendorFilter('');
+    setInvoiceNumberFilter('');
+    setDateFromFilter('');
+    setDateToFilter('');
+    setAmountMinFilter('');
+    setAmountMaxFilter('');
+  };
+
+  const hasActiveFilters = () => {
+    return !!(
+      fiscalYearFilter ||
+      vendorFilter ||
+      invoiceNumberFilter ||
+      dateFromFilter ||
+      dateToFilter ||
+      amountMinFilter ||
+      amountMaxFilter
+    );
   };
 
   const handleFileUpload = async (file: File) => {
@@ -132,146 +234,37 @@ const BillEntries: React.FC = () => {
     setUploadFile(file);
     setOcrError(null);
     setExtractingOCR(true);
-    setOcrResult(null);
 
     try {
-      const result = await financeService.extractBillOCR(file);
-      setOcrResult(result);
-      
-      if (!result.success) {
-        setOcrError(result.errorMessage || 'OCR extraction failed. You can enter bill data manually.');
-        // Still allow manual entry
-        initializeManualEntry();
-        return;
-      }
-
-      // Initialize verified data from OCR result
-      const initialVerifiedData = {
-        vendorName: result.vendorName || '',
-        invoiceNumber: result.invoiceNumber || '',
-        invoiceDate: result.invoiceDate || new Date().toISOString().split('T')[0],
-        fiscalYear: result.fiscalYear || new Date().getFullYear(),
-        totalAmount: result.totalAmount ? Number(result.totalAmount) : 0,
-        taxAmount: result.taxAmount ? Number(result.taxAmount) : 0,
-        subtotalAmount: result.subtotalAmount ? Number(result.subtotalAmount) : 0,
-        lineItems: result.lineItems && result.lineItems.length > 0
-          ? result.lineItems.map((item: BillLineItemOCR) => ({
-              projectIdentifier: item.projectIdentifier || '',
-              department: item.department || '',
-              costCenter: item.costCenter || '',
-              category: item.category || '',
-              description: item.description || '',
-              amount: item.amount ? Number(item.amount) : 0,
-              taxAmount: item.taxAmount ? Number(item.taxAmount) : 0,
-            }))
-          : result.totalAmount
-          ? [{
-              projectIdentifier: '',
-              department: '',
-              costCenter: '',
-              category: '',
-              description: '',
-              amount: Number(result.totalAmount) - (result.taxAmount ? Number(result.taxAmount) : 0),
-              taxAmount: result.taxAmount ? Number(result.taxAmount) : 0,
-            }]
-          : [{
-              projectIdentifier: '',
-              department: '',
-              costCenter: '',
-              category: '',
-              description: '',
-              amount: 0,
-              taxAmount: 0,
-            }],
+      // Upload bill as a document - OCR extraction happens automatically on backend
+      const uploadRequest: DocumentUploadRequest = {
+        file: file,
+        title: file.name,
+        description: 'Bill/Invoice document',
+        documentType: DocumentType.BILL,
+        department: user?.department || '',
+        userId: user?.id || 0,
       };
+
+      const response = await documentService.uploadDocument(uploadRequest);
       
-      setVerifiedData(initialVerifiedData);
-      setUploadDialogOpen(false);
-      setVerificationDialogOpen(true);
+      if (response.success && response.documentId) {
+        // Load the uploaded document
+        await loadBills();
+        await loadBillDetails(response.documentId);
+        setUploadDialogOpen(false);
+        setUploadFile(null);
+        setError(null);
+      } else {
+        setOcrError(response.message || 'Failed to upload bill');
+      }
     } catch (err: any) {
-      setOcrError(err.response?.data?.error || 'Failed to extract bill information. You can enter data manually.');
-      initializeManualEntry();
+      setOcrError(err.response?.data?.error || 'Failed to upload bill document');
     } finally {
       setExtractingOCR(false);
     }
   };
 
-  const initializeManualEntry = () => {
-    setVerifiedData({
-      vendorName: '',
-      invoiceNumber: '',
-      invoiceDate: new Date().toISOString().split('T')[0],
-      fiscalYear: new Date().getFullYear(),
-      totalAmount: 0,
-      taxAmount: 0,
-      subtotalAmount: 0,
-      lineItems: [{
-        projectIdentifier: '',
-        department: '',
-        costCenter: '',
-        category: '',
-        description: '',
-        amount: 0,
-        taxAmount: 0,
-      }],
-    });
-    setUploadDialogOpen(false);
-    setVerificationDialogOpen(true);
-  };
-
-  const handleSaveVerifiedBill = async () => {
-    if (!verifiedData) return;
-
-    // Validate required fields
-    if (!verifiedData.fiscalYear || !verifiedData.invoiceDate) {
-      setError('Fiscal Year and Invoice Date are required');
-      return;
-    }
-
-    if (!verifiedData.lineItems || verifiedData.lineItems.length === 0) {
-      setError('At least one line item is required');
-      return;
-    }
-
-    if (verifiedData.lineItems.some(line => !line.amount || line.amount <= 0)) {
-      setError('All line items must have a positive amount');
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setError(null);
-
-      const billData = {
-        fiscalYear: verifiedData.fiscalYear,
-        vendor: verifiedData.vendorName || undefined,
-        invoiceNumber: verifiedData.invoiceNumber || undefined,
-        invoiceDate: verifiedData.invoiceDate,
-        lines: verifiedData.lineItems.map(line => ({
-          projectIdentifier: line.projectIdentifier || undefined,
-          department: line.department || undefined,
-          costCenter: line.costCenter || undefined,
-          category: line.category || undefined,
-          amount: line.amount,
-          taxAmount: line.taxAmount || undefined,
-        })),
-      };
-
-      const billId = await financeService.createBill(billData);
-      
-      setVerificationDialogOpen(false);
-      setUploadFile(null);
-      setOcrResult(null);
-      setVerifiedData(null);
-      
-      await loadBills();
-      await loadBillDetails(billId);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to save bill');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   const formatCurrency = (amount?: number): string => {
     if (!amount) return 'N/A';
@@ -292,14 +285,19 @@ const BillEntries: React.FC = () => {
     }
   };
 
-  const calculateTotal = (lines?: BillLine[]): number => {
-    if (!lines) return 0;
-    return lines.reduce((sum, line) => sum + (line.amount || 0), 0);
+  // Helper to extract bill metadata values
+  const getBillMetadataValue = (metadata: Record<string, string>, key: string): string => {
+    return metadata[key] || '';
   };
 
-  const calculateTaxTotal = (lines?: BillLine[]): number => {
-    if (!lines) return 0;
-    return lines.reduce((sum, line) => sum + (line.taxAmount || 0), 0);
+  const getBillMetadataNumber = (metadata: Record<string, string>, key: string): number => {
+    const value = metadata[key];
+    if (!value) return 0;
+    try {
+      return parseFloat(value);
+    } catch {
+      return 0;
+    }
   };
 
   const getConfidenceColor = (confidence?: number): 'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning' => {
@@ -316,12 +314,50 @@ const BillEntries: React.FC = () => {
     return 'Low';
   };
 
+  // Extract unique fiscal years and vendors from bill metadata
+  const [billMetadataCache, setBillMetadataCache] = useState<Map<number, Record<string, string>>>(new Map());
+
+  useEffect(() => {
+    // Load metadata for all bills in parallel
+    const loadBillMetadata = async () => {
+      const metadataMap = new Map<number, Record<string, string>>();
+      const promises = bills.map(async (bill) => {
+        if (!bill.id) return;
+        try {
+          const docData = await documentService.getDocumentById(bill.id!);
+          const metadata = (docData as any).metadata || {};
+          metadataMap.set(bill.id!, metadata);
+        } catch (err) {
+          // Ignore errors for individual bills
+          metadataMap.set(bill.id!, {});
+        }
+      });
+      await Promise.all(promises);
+      setBillMetadataCache(metadataMap);
+    };
+    
+    if (bills.length > 0) {
+      loadBillMetadata();
+    }
+  }, [bills]);
+
   const uniqueFiscalYears = Array.from(
-    new Set(bills.map(b => b.fiscalYear).filter(y => y != null))
+    new Set(
+      Array.from(billMetadataCache.values())
+        .map(meta => {
+          const fy = meta.fiscalYear;
+          return fy ? parseInt(fy) : null;
+        })
+        .filter((y): y is number => y != null)
+    )
   ).sort((a, b) => b - a);
 
   const uniqueVendors = Array.from(
-    new Set(bills.map(b => b.vendor).filter(v => v != null && v.trim() !== ''))
+    new Set(
+      Array.from(billMetadataCache.values())
+        .map(meta => meta.vendorName)
+        .filter(v => v != null && v.trim() !== '')
+    )
   ).sort();
 
   if (loading && bills.length === 0) {
@@ -344,7 +380,6 @@ const BillEntries: React.FC = () => {
           onClick={() => {
             setUploadDialogOpen(true);
             setOcrError(null);
-            setOcrResult(null);
             setUploadFile(null);
           }}
         >
@@ -363,105 +398,179 @@ const BillEntries: React.FC = () => {
         <Grid item xs={12} md={4}>
           <Card>
             <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Bills ({bills.length})
-              </Typography>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                <Typography variant="h6">
+                  Bills ({bills.length})
+                </Typography>
+                <Box display="flex" gap={1}>
+                  {hasActiveFilters() && (
+                    <Tooltip title="Clear all filters">
+                      <IconButton size="small" onClick={clearAllFilters}>
+                        <ClearIcon />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  <Tooltip title={showFilters ? 'Hide filters' : 'Show filters'}>
+                    <IconButton size="small" onClick={() => setShowFilters(!showFilters)}>
+                      <FilterIcon />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              </Box>
 
-              <Grid container spacing={2} sx={{ mb: 2 }}>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Fiscal Year</InputLabel>
-                    <Select
-                      value={fiscalYearFilter}
-                      label="Fiscal Year"
-                      onChange={(e) => setFiscalYearFilter(e.target.value as number | '')}
-                    >
-                      <MenuItem value="">All Years</MenuItem>
-                      {uniqueFiscalYears.map((year) => (
-                        <MenuItem key={year} value={year}>
-                          {year}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Vendor</InputLabel>
-                    <Select
-                      value={vendorFilter}
-                      label="Vendor"
-                      onChange={(e) => setVendorFilter(e.target.value)}
-                    >
-                      <MenuItem value="">All Vendors</MenuItem>
-                      {uniqueVendors.map((vendor) => (
-                        <MenuItem key={vendor} value={vendor}>
-                          {vendor}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-                {(fiscalYearFilter || vendorFilter) && (
-                  <Grid item xs={12}>
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      size="small"
-                      onClick={() => {
-                        setFiscalYearFilter('');
-                        setVendorFilter('');
-                      }}
-                    >
-                      Clear Filters
-                    </Button>
+              {showFilters && (
+                <Grid container spacing={2} sx={{ mb: 2 }}>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Fiscal Year</InputLabel>
+                      <Select
+                        value={fiscalYearFilter}
+                        label="Fiscal Year"
+                        onChange={(e) => setFiscalYearFilter(e.target.value as number | '')}
+                      >
+                        <MenuItem value="">All Years</MenuItem>
+                        {uniqueFiscalYears.map((year) => (
+                          <MenuItem key={year} value={year}>
+                            {year}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
                   </Grid>
-                )}
-              </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Vendor</InputLabel>
+                      <Select
+                        value={vendorFilter}
+                        label="Vendor"
+                        onChange={(e) => setVendorFilter(e.target.value)}
+                      >
+                        <MenuItem value="">All Vendors</MenuItem>
+                        {uniqueVendors.map((vendor) => (
+                          <MenuItem key={vendor} value={vendor}>
+                            {vendor}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Invoice Number"
+                      value={invoiceNumberFilter}
+                      onChange={(e) => setInvoiceNumberFilter(e.target.value)}
+                      placeholder="Search by invoice number..."
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="date"
+                      label="Date From"
+                      value={dateFromFilter}
+                      onChange={(e) => setDateFromFilter(e.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="date"
+                      label="Date To"
+                      value={dateToFilter}
+                      onChange={(e) => setDateToFilter(e.target.value)}
+                      InputLabelProps={{ shrink: true }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="number"
+                      label="Amount Min (BDT)"
+                      value={amountMinFilter}
+                      onChange={(e) => setAmountMinFilter(e.target.value)}
+                      inputProps={{ min: 0, step: 0.01 }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      type="number"
+                      label="Amount Max (BDT)"
+                      value={amountMaxFilter}
+                      onChange={(e) => setAmountMaxFilter(e.target.value)}
+                      inputProps={{ min: 0, step: 0.01 }}
+                    />
+                  </Grid>
+                </Grid>
+              )}
 
               {bills.length === 0 ? (
                 <Alert severity="info">No bills found.</Alert>
               ) : (
                 <Box sx={{ maxHeight: 600, overflow: 'auto' }}>
-                  {bills.map((bill) => (
-                    <Card
-                      key={bill.id}
-                      sx={{
-                        mb: 1,
-                        cursor: 'pointer',
-                        border: selectedBill?.id === bill.id ? 2 : 1,
-                        borderColor: selectedBill?.id === bill.id ? 'primary.main' : 'divider',
-                        '&:hover': {
-                          backgroundColor: 'action.hover',
-                        },
-                      }}
-                      onClick={() => loadBillDetails(bill.id)}
-                    >
-                      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                        <Box display="flex" alignItems="center" gap={1} mb={1}>
-                          <BillIcon color="primary" />
-                          <Typography variant="subtitle2" noWrap>
-                            {bill.invoiceNumber || `Bill #${bill.id}`}
-                          </Typography>
-                        </Box>
-                        <Box display="flex" flexDirection="column" gap={0.5}>
-                          {bill.vendor && (
-                            <Typography variant="body2" color="text.secondary">
-                              {bill.vendor}
+                  {bills.map((bill, index) => {
+                    if (!bill.id) return null;
+                    const metadata = billMetadataCache.get(bill.id!) || {};
+                    const invoiceNumber = getBillMetadataValue(metadata, 'invoiceNumber');
+                    const vendorName = getBillMetadataValue(metadata, 'vendorName');
+                    const fiscalYear = getBillMetadataValue(metadata, 'fiscalYear');
+                    const invoiceDate = getBillMetadataValue(metadata, 'invoiceDate');
+                    const totalAmount = getBillMetadataNumber(metadata, 'totalAmount');
+                    
+                    return (
+                      <Card
+                        key={bill.id ?? index}
+                        sx={{
+                          mb: 1,
+                          cursor: 'pointer',
+                          border: selectedBill?.id === bill.id ? 2 : 1,
+                          borderColor: selectedBill?.id === bill.id ? 'primary.main' : 'divider',
+                          '&:hover': {
+                            backgroundColor: 'action.hover',
+                          },
+                        }}
+                        onClick={() => bill.id && loadBillDetails(bill.id!)}
+                      >
+                        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                          <Box display="flex" alignItems="center" gap={1} mb={1}>
+                            <BillIcon color="primary" />
+                            <Typography variant="subtitle2" noWrap>
+                              {invoiceNumber || `Bill #${bill.id}`}
                             </Typography>
-                          )}
-                          <Box display="flex" gap={1} flexWrap="wrap">
-                            <Chip label={`FY ${bill.fiscalYear}`} size="small" />
-                            {bill.invoiceDate && (
-                              <Typography variant="caption" color="text.secondary">
-                                {formatDate(bill.invoiceDate)}
+                          </Box>
+                          <Box display="flex" flexDirection="column" gap={0.5}>
+                            {vendorName && (
+                              <Typography variant="body2" color="text.secondary">
+                                {vendorName}
                               </Typography>
                             )}
+                            <Box display="flex" gap={1} flexWrap="wrap" alignItems="center">
+                              {fiscalYear && (
+                                <Chip label={`FY ${fiscalYear}`} size="small" />
+                              )}
+                              {invoiceDate && (
+                                <Typography variant="caption" color="text.secondary">
+                                  {formatDate(invoiceDate)}
+                                </Typography>
+                              )}
+                              {totalAmount > 0 && (
+                                <Typography variant="caption" color="primary" fontWeight="bold">
+                                  {formatCurrency(totalAmount)}
+                                </Typography>
+                              )}
+                            </Box>
                           </Box>
-                        </Box>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </Box>
               )}
             </CardContent>
@@ -474,7 +583,7 @@ const BillEntries: React.FC = () => {
             <CardContent>
               <Typography variant="h6" gutterBottom>
                 {selectedBill
-                  ? `Bill Details: ${selectedBill.invoiceNumber || `Bill #${selectedBill.id}`}`
+                  ? `Bill Details: ${getBillMetadataValue(billMetadata, 'invoiceNumber') || `Bill #${selectedBill.id}`}`
                   : 'Select a bill to view details'}
               </Typography>
 
@@ -486,117 +595,268 @@ const BillEntries: React.FC = () => {
                 <Box display="flex" justifyContent="center" p={3}>
                   <CircularProgress />
                 </Box>
-              ) : !selectedBill.lines || selectedBill.lines.length === 0 ? (
-                <Alert severity="warning">
-                  No line items found for this bill.
-                </Alert>
               ) : (
                 <>
-                  <Box mb={2}>
+                  {/* Bill Summary Fields */}
+                  <Box mb={3}>
                     <Grid container spacing={2}>
                       <Grid item xs={12} sm={6}>
                         <Typography variant="body2" color="text.secondary">
-                          Vendor
+                          Vendor Name
                         </Typography>
-                        <Typography variant="body1">
-                          {selectedBill.vendor || '-'}
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="body2" color="text.secondary">
-                          Invoice Date
-                        </Typography>
-                        <Typography variant="body1">
-                          {formatDate(selectedBill.invoiceDate)}
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Typography variant="body2" color="text.secondary">
-                          Fiscal Year
-                        </Typography>
-                        <Typography variant="body1">
-                          {selectedBill.fiscalYear}
+                        <Typography variant="body1" fontWeight={500}>
+                          {getBillMetadataValue(billMetadata, 'vendorName') || '-'}
                         </Typography>
                       </Grid>
                       <Grid item xs={12} sm={6}>
                         <Typography variant="body2" color="text.secondary">
                           Invoice Number
                         </Typography>
-                        <Typography variant="body1">
-                          {selectedBill.invoiceNumber || '-'}
+                        <Typography variant="body1" fontWeight={500}>
+                          {getBillMetadataValue(billMetadata, 'invoiceNumber') || '-'}
                         </Typography>
                       </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <Typography variant="body2" color="text.secondary">
+                          Invoice Date
+                        </Typography>
+                        <Typography variant="body1" fontWeight={500}>
+                          {formatDate(getBillMetadataValue(billMetadata, 'invoiceDate'))}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <Typography variant="body2" color="text.secondary">
+                          Fiscal Year
+                        </Typography>
+                        <Typography variant="body1" fontWeight={500}>
+                          {getBillMetadataValue(billMetadata, 'fiscalYear') || '-'}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <Typography variant="body2" color="text.secondary">
+                          Net Amount (BDT)
+                        </Typography>
+                        <Typography variant="body1" fontWeight={600} color="primary">
+                          {formatCurrency(getBillMetadataNumber(billMetadata, 'netAmount'))}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <Typography variant="body2" color="text.secondary">
+                          Tax Amount (BDT)
+                        </Typography>
+                        <Typography variant="body1" fontWeight={600}>
+                          {formatCurrency(getBillMetadataNumber(billMetadata, 'taxAmount'))}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={4}>
+                        <Typography variant="body2" color="text.secondary">
+                          Total Amount (BDT)
+                        </Typography>
+                        <Typography variant="h6" fontWeight={700} color="success.main">
+                          {formatCurrency(getBillMetadataNumber(billMetadata, 'totalAmount'))}
+                        </Typography>
+                      </Grid>
+                      {getBillMetadataValue(billMetadata, 'description') && (
+                        <Grid item xs={12}>
+                          <Typography variant="body2" color="text.secondary">
+                            Description
+                          </Typography>
+                          <Typography variant="body1">
+                            {getBillMetadataValue(billMetadata, 'description')}
+                          </Typography>
+                        </Grid>
+                      )}
                     </Grid>
                   </Box>
 
-                  <TableContainer component={Paper} sx={{ maxHeight: 500 }}>
-                    <Table stickyHeader>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Project</TableCell>
-                          <TableCell>Department</TableCell>
-                          <TableCell>Cost Center</TableCell>
-                          <TableCell>Category</TableCell>
-                          <TableCell align="right">Amount</TableCell>
-                          <TableCell align="right">Tax</TableCell>
-                          <TableCell align="right">Total</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {selectedBill.lines.map((line) => (
-                          <TableRow key={line.id} hover>
-                            <TableCell>{line.projectIdentifier || '-'}</TableCell>
-                            <TableCell>{line.department || '-'}</TableCell>
-                            <TableCell>{line.costCenter || '-'}</TableCell>
-                            <TableCell>{line.category || '-'}</TableCell>
-                            <TableCell align="right">
-                              {formatCurrency(line.amount || 0)}
-                            </TableCell>
-                            <TableCell align="right">
-                              {formatCurrency(line.taxAmount || 0)}
-                            </TableCell>
-                            <TableCell align="right">
-                              {formatCurrency((line.amount || 0) + (line.taxAmount || 0))}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                        <TableRow sx={{ backgroundColor: 'action.selected', fontWeight: 'bold' }}>
-                          <TableCell colSpan={4}>
-                            <Typography variant="subtitle2" fontWeight="bold">
-                              Total
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            <Typography variant="subtitle2" fontWeight="bold">
-                              {formatCurrency(calculateTotal(selectedBill.lines))}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            <Typography variant="subtitle2" fontWeight="bold">
-                              {formatCurrency(calculateTaxTotal(selectedBill.lines))}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            <Typography variant="subtitle2" fontWeight="bold">
-                              {formatCurrency(
-                                calculateTotal(selectedBill.lines) + calculateTaxTotal(selectedBill.lines)
-                              )}
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  {/* Workflow and APP Entry Information */}
+                  {(selectedBillWorkflow || selectedBillAppEntry || loadingWorkflowInfo) && (
+                    <>
+                      <Divider sx={{ my: 3 }} />
+                      <Box>
+                        <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                          Workflow & Budget Information
+                        </Typography>
+                        {loadingWorkflowInfo ? (
+                          <Box display="flex" justifyContent="center" p={2}>
+                            <CircularProgress size={24} />
+                          </Box>
+                        ) : (
+                          <Grid container spacing={2}>
+                            {selectedBillWorkflow && (
+                              <Grid item xs={12}>
+                                <Card variant="outlined" sx={{ bgcolor: 'action.hover' }}>
+                                  <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                    <Box display="flex" alignItems="center" gap={1} mb={1}>
+                                      <WorkflowIcon color="primary" />
+                                      <Typography variant="subtitle2" fontWeight={600}>
+                                        Workflow: {selectedBillWorkflow.name}
+                                      </Typography>
+                                    </Box>
+                                    {selectedBillWorkflow.description && (
+                                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                        {selectedBillWorkflow.description}
+                                      </Typography>
+                                    )}
+                                    <Box display="flex" gap={1} flexWrap="wrap">
+                                      <Chip label={selectedBillWorkflow.status} size="small" />
+                                      <Chip label={selectedBillWorkflow.type} size="small" variant="outlined" />
+                                      <Button
+                                        size="small"
+                                        variant="outlined"
+                                        startIcon={<WorkflowIcon />}
+                                        onClick={() => navigate(`/workflows?selected=${selectedBillWorkflow.id}`)}
+                                      >
+                                        View Workflow
+                                      </Button>
+                                    </Box>
+                                  </CardContent>
+                                </Card>
+                              </Grid>
+                            )}
+                            {selectedBillAppEntry && (
+                              <Grid item xs={12}>
+                                <Card variant="outlined" sx={{ bgcolor: 'rgba(76, 175, 80, 0.1)' }}>
+                                  <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                                    <Box display="flex" alignItems="center" gap={1} mb={1}>
+                                      <AppIcon color="success" />
+                                      <Typography variant="subtitle2" fontWeight={600}>
+                                        Linked Budget Entry (APP)
+                                      </Typography>
+                                    </Box>
+                                    <Grid container spacing={1}>
+                                      <Grid item xs={12} sm={6}>
+                                        <Typography variant="body2" color="text.secondary">
+                                          Fiscal Year
+                                        </Typography>
+                                        <Typography variant="body1" fontWeight={500}>
+                                          FY {selectedBillAppEntry.fiscalYear}-{((selectedBillAppEntry.fiscalYear + 1) % 100).toString().padStart(2, '0')}
+                                        </Typography>
+                                      </Grid>
+                                      <Grid item xs={12} sm={6}>
+                                        <Typography variant="body2" color="text.secondary">
+                                          Allocation Type
+                                        </Typography>
+                                        <Typography variant="body1" fontWeight={500}>
+                                          {selectedBillAppEntry.allocationType || '-'}
+                                        </Typography>
+                                      </Grid>
+                                      {selectedBillAppEntry.releaseInstallmentNo && (
+                                        <Grid item xs={12} sm={6}>
+                                          <Typography variant="body2" color="text.secondary">
+                                            Installment
+                                          </Typography>
+                                          <Typography variant="body1" fontWeight={500}>
+                                            {selectedBillAppEntry.releaseInstallmentNo}
+                                          </Typography>
+                                        </Grid>
+                                      )}
+                                      {selectedBillAppEntry.allocationAmount && (
+                                        <Grid item xs={12} sm={6}>
+                                          <Typography variant="body2" color="text.secondary">
+                                            Allocation Amount
+                                          </Typography>
+                                          <Typography variant="body1" fontWeight={600} color="success.main">
+                                            {formatCurrency(selectedBillAppEntry.allocationAmount)}
+                                          </Typography>
+                                        </Grid>
+                                      )}
+                                      {selectedBillAppEntry.referenceMemoNumber && (
+                                        <Grid item xs={12}>
+                                          <Typography variant="body2" color="text.secondary">
+                                            Reference/Memo Number
+                                          </Typography>
+                                          <Typography variant="body1">
+                                            {selectedBillAppEntry.referenceMemoNumber}
+                                          </Typography>
+                                        </Grid>
+                                      )}
+                                    </Grid>
+                                    <Box mt={2}>
+                                      <Button
+                                        size="small"
+                                        variant="outlined"
+                                        color="success"
+                                        startIcon={<AppIcon />}
+                                        onClick={() => navigate(`/app-entries?selected=${selectedBillAppEntry.id}`)}
+                                      >
+                                        View APP Entry
+                                      </Button>
+                                    </Box>
+                                  </CardContent>
+                                </Card>
+                              </Grid>
+                            )}
+                            {!selectedBillWorkflow && !selectedBillAppEntry && (
+                              <Grid item xs={12}>
+                                <Alert severity="info">
+                                  This bill is not part of a workflow or linked to a budget entry.
+                                </Alert>
+                              </Grid>
+                            )}
+                          </Grid>
+                        )}
+                      </Box>
+                    </>
+                  )}
 
-                  <Box mt={2} display="flex" justifyContent="space-between" alignItems="center">
-                    <Typography variant="body2" color="text.secondary">
-                      {selectedBill.lines.length} line items
+                  <Divider sx={{ my: 3 }} />
+
+                  {/* Bill Fields Editor */}
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight={600} gutterBottom>
+                      Edit Bill Fields
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Grand Total: {formatCurrency(
-                        calculateTotal(selectedBill.lines) + calculateTaxTotal(selectedBill.lines)
-                      )}
-                    </Typography>
+                    <Alert severity="info" sx={{ mb: 2 }}>
+                      Edit the bill fields below. Fields extracted from OCR will show confidence scores.
+                      You can verify and correct any extracted values.
+                    </Alert>
+                    <BillFieldsEditor
+                      documentId={selectedBill.id!}
+                      documentType={selectedBill.documentType}
+                      metadata={billMetadata}
+                      onSave={async (updatedMetadata) => {
+                        if (!selectedBill.id) return;
+                        try {
+                          setError(null);
+                          
+                          // Save metadata to backend
+                          await documentService.updateDocumentMetadata(selectedBill.id!, updatedMetadata);
+                          
+                          // Update local state immediately for responsive UI
+                          setBillMetadata(updatedMetadata);
+                          
+                          // Update the metadata cache for this bill
+                          setBillMetadataCache(prev => {
+                            const updated = new Map(prev);
+                            updated.set(selectedBill.id!, updatedMetadata);
+                            return updated;
+                          });
+                          
+                          // Reload document to refresh metadata and ensure consistency
+                          await loadBillDetails(selectedBill.id!);
+                          
+                          // Reload bills list to refresh any filtered data
+                          await loadBills();
+                        } catch (err: any) {
+                          const errorMessage = err.response?.data?.error || 'Failed to save bill fields';
+                          setError(errorMessage);
+                          throw err; // Re-throw so BillFieldsEditor can handle it and show its own error
+                        }
+                      }}
+                    />
+                  </Box>
+
+                  {/* View Document Button */}
+                  <Box mt={3}>
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      onClick={() => setViewerOpen(true)}
+                      startIcon={<EditIcon />}
+                    >
+                      View Full Document
+                    </Button>
                   </Box>
                 </>
               )}
@@ -683,438 +943,13 @@ const BillEntries: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Verification Dialog - This will be shown after OCR extraction or for manual entry */}
-      {verificationDialogOpen && verifiedData && (
-        <BillVerificationDialog
-          open={verificationDialogOpen}
-          onClose={() => {
-            setVerificationDialogOpen(false);
-            setVerifiedData(null);
-            setOcrResult(null);
-            setUploadFile(null);
-          }}
-          ocrResult={ocrResult}
-          verifiedData={verifiedData}
-          onVerifiedDataChange={setVerifiedData}
-          onSave={handleSaveVerifiedBill}
-          saving={saving}
-        />
-      )}
+      {/* Document Viewer */}
+      <DocumentViewer
+        open={viewerOpen}
+        onClose={() => setViewerOpen(false)}
+        document={selectedBill}
+      />
     </Box>
-  );
-};
-
-// Verified Bill Data Type
-type VerifiedBillData = {
-  vendorName: string;
-  invoiceNumber: string;
-  invoiceDate: string;
-  fiscalYear: number;
-  totalAmount: number;
-  taxAmount: number;
-  subtotalAmount: number;
-  lineItems: Array<{
-    projectIdentifier?: string;
-    department?: string;
-    costCenter?: string;
-    category?: string;
-    description?: string;
-    amount: number;
-    taxAmount?: number;
-  }>;
-};
-
-// Bill Verification Dialog Component
-interface BillVerificationDialogProps {
-  open: boolean;
-  onClose: () => void;
-  ocrResult: BillOCRResult | null;
-  verifiedData: VerifiedBillData;
-  onVerifiedDataChange: (data: VerifiedBillData) => void;
-  onSave: () => void;
-  saving: boolean;
-}
-
-const BillVerificationDialog: React.FC<BillVerificationDialogProps> = ({
-  open,
-  onClose,
-  ocrResult,
-  verifiedData,
-  onVerifiedDataChange,
-  saving,
-  onSave,
-}) => {
-  const [showOriginalValues, setShowOriginalValues] = useState(false);
-
-  const getConfidenceLabel = (confidence?: number): string => {
-    if (!confidence) return 'Unknown';
-    if (confidence >= 0.8) return 'High';
-    if (confidence >= 0.6) return 'Medium';
-    return 'Low';
-  };
-
-  const getFieldConfidence = (fieldName: string): number | undefined => {
-    if (!ocrResult) return undefined;
-    switch (fieldName) {
-      case 'vendorName':
-        return ocrResult.vendorNameConfidence;
-      case 'invoiceNumber':
-        return ocrResult.invoiceNumberConfidence;
-      case 'invoiceDate':
-        return ocrResult.invoiceDateConfidence;
-      case 'fiscalYear':
-        return ocrResult.fiscalYearConfidence;
-      case 'totalAmount':
-        return ocrResult.totalAmountConfidence;
-      case 'taxAmount':
-        return ocrResult.taxAmountConfidence;
-      default:
-        return undefined;
-    }
-  };
-
-  const getOriginalValue = (fieldName: string): string | number | undefined => {
-    if (!ocrResult || !ocrResult.originalValues) return undefined;
-    const values = ocrResult.originalValues as Record<string, string | number | undefined>;
-    return values[fieldName];
-  };
-
-  const isFieldModified = (fieldName: string): boolean => {
-    if (!ocrResult) return false;
-    const original = getOriginalValue(fieldName);
-    if (original === undefined) return false;
-    
-    switch (fieldName) {
-      case 'vendorName':
-        return verifiedData.vendorName !== original;
-      case 'invoiceNumber':
-        return verifiedData.invoiceNumber !== original;
-      case 'invoiceDate':
-        return verifiedData.invoiceDate !== original?.toString();
-      case 'fiscalYear':
-        return verifiedData.fiscalYear !== original;
-      case 'totalAmount':
-        return verifiedData.totalAmount !== original;
-      case 'taxAmount':
-        return verifiedData.taxAmount !== original;
-      default:
-        return false;
-    }
-  };
-
-  const updateLineItem = (index: number, field: string, value: any) => {
-    const updatedLineItems = [...verifiedData.lineItems];
-    updatedLineItems[index] = { ...updatedLineItems[index], [field]: value };
-    onVerifiedDataChange({ ...verifiedData, lineItems: updatedLineItems });
-  };
-
-  const addLineItem = () => {
-    onVerifiedDataChange({
-      ...verifiedData,
-      lineItems: [
-        ...verifiedData.lineItems,
-        {
-          projectIdentifier: '',
-          department: '',
-          costCenter: '',
-          category: '',
-          description: '',
-          amount: 0,
-          taxAmount: 0,
-        },
-      ],
-    });
-  };
-
-  const removeLineItem = (index: number) => {
-    if (verifiedData.lineItems.length > 1) {
-      const updatedLineItems = verifiedData.lineItems.filter((_, i) => i !== index);
-      onVerifiedDataChange({ ...verifiedData, lineItems: updatedLineItems });
-    }
-  };
-
-  const calculateLineItemTotal = (index: number): number => {
-    const line = verifiedData.lineItems[index];
-    return (line.amount || 0) + (line.taxAmount || 0);
-  };
-
-  const calculateGrandTotal = (): number => {
-    return verifiedData.lineItems.reduce((sum, line) => sum + calculateLineItemTotal(verifiedData.lineItems.indexOf(line)), 0);
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
-      <DialogTitle>
-        {ocrResult ? 'Verify & Correct Bill Information' : 'Enter Bill Information Manually'}
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ mt: 2 }}>
-          {ocrResult && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              OCR extraction completed with {Math.round((ocrResult.overallConfidence || 0) * 100)}% overall confidence.
-              Please review and correct the extracted information below.
-            </Alert>
-          )}
-
-          {ocrResult && (
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={showOriginalValues}
-                  onChange={(e) => setShowOriginalValues(e.target.checked)}
-                />
-              }
-              label="Show original OCR values"
-              sx={{ mb: 2 }}
-            />
-          )}
-
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Vendor Name"
-                value={verifiedData.vendorName}
-                onChange={(e) => onVerifiedDataChange({ ...verifiedData, vendorName: e.target.value })}
-                error={ocrResult ? ((getFieldConfidence('vendorName') ?? 0) < 0.6) : false}
-                helperText={
-                  ocrResult && getFieldConfidence('vendorName') !== undefined
-                    ? `Confidence: ${getConfidenceLabel(getFieldConfidence('vendorName'))} (${Math.round((getFieldConfidence('vendorName') || 0) * 100)}%)`
-                    : ''
-                }
-                InputProps={{
-                  endAdornment: ocrResult && isFieldModified('vendorName') && (
-                    <Chip label="Modified" size="small" color="warning" />
-                  ),
-                }}
-              />
-              {showOriginalValues && getOriginalValue('vendorName') && (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                  Original: {getOriginalValue('vendorName')}
-                </Typography>
-              )}
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                label="Invoice Number"
-                value={verifiedData.invoiceNumber}
-                onChange={(e) => onVerifiedDataChange({ ...verifiedData, invoiceNumber: e.target.value })}
-                error={ocrResult ? ((getFieldConfidence('invoiceNumber') ?? 0) < 0.6) : false}
-                helperText={
-                  ocrResult && getFieldConfidence('invoiceNumber') !== undefined
-                    ? `Confidence: ${getConfidenceLabel(getFieldConfidence('invoiceNumber'))} (${Math.round((getFieldConfidence('invoiceNumber') || 0) * 100)}%)`
-                    : ''
-                }
-                InputProps={{
-                  endAdornment: ocrResult && isFieldModified('invoiceNumber') && (
-                    <Chip label="Modified" size="small" color="warning" />
-                  ),
-                }}
-              />
-              {showOriginalValues && getOriginalValue('invoiceNumber') && (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                  Original: {getOriginalValue('invoiceNumber')}
-                </Typography>
-              )}
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                required
-                label="Invoice Date"
-                type="date"
-                value={verifiedData.invoiceDate}
-                onChange={(e) => onVerifiedDataChange({ ...verifiedData, invoiceDate: e.target.value })}
-                InputLabelProps={{ shrink: true }}
-                error={ocrResult ? ((getFieldConfidence('invoiceDate') ?? 0) < 0.6) : false}
-                helperText={
-                  ocrResult && getFieldConfidence('invoiceDate') !== undefined
-                    ? `Confidence: ${getConfidenceLabel(getFieldConfidence('invoiceDate'))} (${Math.round((getFieldConfidence('invoiceDate') || 0) * 100)}%)`
-                    : ''
-                }
-                InputProps={{
-                  endAdornment: ocrResult && isFieldModified('invoiceDate') && (
-                    <Chip label="Modified" size="small" color="warning" />
-                  ),
-                }}
-              />
-              {showOriginalValues && getOriginalValue('invoiceDate') && (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                  Original: {getOriginalValue('invoiceDate')}
-                </Typography>
-              )}
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <TextField
-                fullWidth
-                required
-                label="Fiscal Year"
-                type="number"
-                value={verifiedData.fiscalYear}
-                onChange={(e) => onVerifiedDataChange({ ...verifiedData, fiscalYear: parseInt(e.target.value) || new Date().getFullYear() })}
-                error={ocrResult ? ((getFieldConfidence('fiscalYear') ?? 0) < 0.6) : false}
-                helperText={
-                  ocrResult && getFieldConfidence('fiscalYear') !== undefined
-                    ? `Confidence: ${getConfidenceLabel(getFieldConfidence('fiscalYear'))} (${Math.round((getFieldConfidence('fiscalYear') || 0) * 100)}%)`
-                    : ''
-                }
-                InputProps={{
-                  endAdornment: ocrResult && isFieldModified('fiscalYear') && (
-                    <Chip label="Modified" size="small" color="warning" />
-                  ),
-                }}
-              />
-              {showOriginalValues && getOriginalValue('fiscalYear') && (
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-                  Original: {getOriginalValue('fiscalYear')}
-                </Typography>
-              )}
-            </Grid>
-
-            <Grid item xs={12}>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                <Typography variant="h6">Line Items</Typography>
-                <Button size="small" onClick={addLineItem} startIcon={<UploadIcon />}>
-                  Add Line
-                </Button>
-              </Box>
-            </Grid>
-
-            {verifiedData.lineItems.map((line, index) => (
-              <Grid item xs={12} key={index}>
-                <Card variant="outlined">
-                  <CardContent>
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                      <Typography variant="subtitle2">Line Item {index + 1}</Typography>
-                      {verifiedData.lineItems.length > 1 && (
-                        <IconButton
-                          size="small"
-                          color="error"
-                          onClick={() => removeLineItem(index)}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      )}
-                    </Box>
-                    <Grid container spacing={2}>
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          size="small"
-                          label="Project Identifier"
-                          value={line.projectIdentifier || ''}
-                          onChange={(e) => updateLineItem(index, 'projectIdentifier', e.target.value)}
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          size="small"
-                          label="Department"
-                          value={line.department || ''}
-                          onChange={(e) => updateLineItem(index, 'department', e.target.value)}
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          size="small"
-                          label="Cost Center"
-                          value={line.costCenter || ''}
-                          onChange={(e) => updateLineItem(index, 'costCenter', e.target.value)}
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          size="small"
-                          label="Category"
-                          value={line.category || ''}
-                          onChange={(e) => updateLineItem(index, 'category', e.target.value)}
-                        />
-                      </Grid>
-                      <Grid item xs={12}>
-                        <TextField
-                          fullWidth
-                          size="small"
-                          label="Description"
-                          value={line.description || ''}
-                          onChange={(e) => updateLineItem(index, 'description', e.target.value)}
-                          multiline
-                          rows={2}
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          required
-                          size="small"
-                          label="Amount"
-                          type="number"
-                          value={line.amount || ''}
-                          onChange={(e) => updateLineItem(index, 'amount', parseFloat(e.target.value) || 0)}
-                          inputProps={{ min: 0, step: 0.01 }}
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <TextField
-                          fullWidth
-                          size="small"
-                          label="Tax Amount"
-                          type="number"
-                          value={line.taxAmount || ''}
-                          onChange={(e) => updateLineItem(index, 'taxAmount', parseFloat(e.target.value) || 0)}
-                          inputProps={{ min: 0, step: 0.01 }}
-                        />
-                      </Grid>
-                      <Grid item xs={12}>
-                        <Typography variant="body2" color="text.secondary">
-                          Line Total: {new Intl.NumberFormat('en-US', {
-                            style: 'currency',
-                            currency: 'BDT',
-                          }).format(calculateLineItemTotal(index))}
-                        </Typography>
-                      </Grid>
-                    </Grid>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-
-            <Grid item xs={12}>
-              <Box display="flex" justifyContent="space-between" alignItems="center" p={2} sx={{ bgcolor: 'action.selected', borderRadius: 1 }}>
-                <Typography variant="subtitle1" fontWeight="bold">
-                  Grand Total
-                </Typography>
-                <Typography variant="h6" fontWeight="bold">
-                  {new Intl.NumberFormat('en-US', {
-                    style: 'currency',
-                    currency: 'BDT',
-                  }).format(calculateGrandTotal())}
-                </Typography>
-              </Box>
-            </Grid>
-          </Grid>
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose} disabled={saving}>
-          Cancel
-        </Button>
-        <Button
-          onClick={onSave}
-          variant="contained"
-          disabled={saving}
-          startIcon={saving ? <CircularProgress size={20} /> : <CheckCircleIcon />}
-        >
-          {saving ? 'Saving...' : 'Save Bill'}
-        </Button>
-      </DialogActions>
-    </Dialog>
   );
 };
 
