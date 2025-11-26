@@ -20,7 +20,7 @@ interface AppEntrySelectorProps {
 }
 
 /**
- * Component for selecting an APP entry (budget entry)
+ * Component for selecting a yearly budget (APP entry)
  * Shows fiscal year and installment number in a readable format
  */
 const AppEntrySelector: React.FC<AppEntrySelectorProps> = ({
@@ -52,8 +52,8 @@ const AppEntrySelector: React.FC<AppEntrySelectorProps> = ({
       });
       setAppEntries(sorted);
     } catch (err: any) {
-      console.error('Failed to load APP entries:', err);
-      setError('Failed to load APP entries');
+      console.error('Failed to load yearly budgets:', err);
+      setError('Failed to load yearly budgets');
     } finally {
       setLoading(false);
     }
@@ -108,10 +108,10 @@ const AppEntrySelector: React.FC<AppEntrySelectorProps> = ({
   return (
     <Box>
       <FormControl fullWidth required={required} disabled={disabled}>
-        <InputLabel>APP Entry (Budget Entry)</InputLabel>
+        <InputLabel>Yearly Budget</InputLabel>
         <Select
           value={value || ''}
-          label="APP Entry (Budget Entry)"
+          label="Yearly Budget"
           onChange={(e) => {
             const newValue = e.target.value === '' ? null : Number(e.target.value);
             onChange(newValue);

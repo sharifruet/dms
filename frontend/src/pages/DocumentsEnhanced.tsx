@@ -197,10 +197,28 @@ const DocumentsEnhanced: React.FC = () => {
     const fetchCategories = async () => {
       try {
         const data = await documentService.getDocumentCategories();
-        const normalized = (data && data.length > 0) ? data : DEFAULT_CATEGORIES;
+
+        // Normalize API categories; fall back to defaults if empty
+        const baseCategories = (data && data.length > 0) ? data : [];
+
         if (!data || data.length === 0) {
-          console.warn('[DocumentsEnhanced] No categories returned from API; using defaults');
+          console.warn('[DocumentsEnhanced] No categories returned from API; starting from defaults');
         }
+
+        // Ensure all enum-based document types (including BILL) are available
+        const existingNames = new Set(baseCategories.map((c: DocumentCategory) => c.name));
+        const missingFromApi = ALL_DOCUMENT_TYPES
+          .filter((type) => !existingNames.has(type))
+          .map((type, idx) => ({
+            id: -(idx + 1),
+            name: type,
+            displayName: getDocumentTypeLabel(type),
+            description: getDocumentTypeLabel(type),
+            isActive: true,
+          }));
+
+        const normalized = baseCategories.concat(missingFromApi);
+
         setCategories(normalized);
         setUploadForm((prev) => ({
           ...prev,

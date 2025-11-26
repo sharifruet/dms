@@ -1,22 +1,28 @@
 package com.bpdb.dms.service;
 
-import com.bpdb.dms.entity.Document;
-import com.bpdb.dms.entity.DocumentMetadata;
-import com.bpdb.dms.entity.DocumentMetadata.MetadataSource;
-import com.bpdb.dms.repository.DocumentRepository;
-import com.bpdb.dms.service.DocumentTypeFieldService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.bpdb.dms.entity.Document;
+import com.bpdb.dms.entity.DocumentMetadata;
+import com.bpdb.dms.entity.DocumentMetadata.MetadataSource;
+import com.bpdb.dms.repository.DocumentRepository;
 
 @Service
 @Transactional
@@ -45,6 +51,8 @@ public class DocumentMetadataService {
         Map.entry("totalamount", "amount"),
         Map.entry("total", "amount"),
         Map.entry("billamount", "amount"),
+        // BILL-specific aliases: treat invoiceDate as the required date field
+        Map.entry("invoicedate", "date"),
         Map.entry("billdate", "date"),
         Map.entry("documentdate", "date")
     );

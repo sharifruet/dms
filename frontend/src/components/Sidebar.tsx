@@ -54,9 +54,7 @@ const Sidebar: React.FC = () => {
   const navItems: NavItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: <DashboardIcon /> },
     { label: 'Documents', path: '/documents', icon: <DocumentsIcon /> },
-    { label: 'Archive', path: '/archive', icon: <ArchiveIcon /> },
-    { label: 'Stationery', path: '/stationery', icon: <StationeryIcon /> },
-    { label: 'APP Entries', path: '/app-entries', icon: <AppIcon /> },
+    { label: 'Yearly Budgets', path: '/app-entries', icon: <AppIcon /> },
     { label: 'Bill Entries', path: '/bill-entries', icon: <BillIcon /> },
     { label: 'Search', path: '/search', icon: <SearchIcon /> },
     { label: 'Notifications', path: '/notifications', icon: <NotificationsIcon /> },
@@ -71,6 +69,9 @@ const Sidebar: React.FC = () => {
     { label: 'Integrations', path: '/integrations', icon: <IntegrationsIcon /> },
     { label: 'ML Models', path: '/ml', icon: <MlIcon /> },
     { label: 'Health', path: '/health', icon: <HealthIcon /> },
+    // Place Archive and Stationery near the bottom as requested
+    { label: 'Archive', path: '/archive', icon: <ArchiveIcon /> },
+    { label: 'Stationery', path: '/stationery', icon: <StationeryIcon /> },
     { label: 'Users', path: '/users', icon: <UsersIcon />, role: 'ADMIN' },
     { label: 'Document Fields', path: '/document-type-fields', icon: <FieldsIcon />, role: 'ADMIN' },
   ];

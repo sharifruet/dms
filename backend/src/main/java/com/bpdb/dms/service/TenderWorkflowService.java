@@ -155,29 +155,14 @@ public class TenderWorkflowService {
     }
     
     /**
-     * Validate that folder doesn't already have a Tender Notice document
-     * This ensures only one Tender Notice per folder/workflow
+     * Validate that folder doesn't already have a Tender Notice document.
      * 
-     * @param folder The folder to validate
-     * @throws IllegalArgumentException if folder already has a Tender Notice
+     * NOTE: Business requirement has changed – multiple Tender Notices
+     * are now allowed per folder/workflow. This method is kept for
+     * backward compatibility but no longer enforces a restriction.
      */
     public void validateNoExistingTenderNotice(Folder folder) {
-        // Get all documents in the folder (using pagination with large page size)
-        Page<Document> documentsPage = documentRepository.findByFolderId(
-            folder.getId(), 
-            org.springframework.data.domain.PageRequest.of(0, 1000)
-        );
-        List<Document> documents = documentsPage.getContent();
-        
-        for (Document doc : documents) {
-            if (DocumentType.TENDER_NOTICE.name().equals(doc.getDocumentType()) && 
-                Boolean.TRUE.equals(doc.getIsActive())) {
-                throw new IllegalArgumentException(
-                    "Folder already contains a Tender Notice. " +
-                    "Only one Tender Notice is allowed per folder/workflow."
-                );
-            }
-        }
+        // Intentionally no-op: multiple Tender Notices per folder are allowed.
     }
     
     /**

@@ -88,7 +88,7 @@ public class BillService {
      * Extract bill information from uploaded file using OCR
      */
     public BillOCRResult extractBillFromFile(MultipartFile file) {
-        return billOCRService.extractBillInformation(file);
+        return billOCRService.extractBillData(file);
     }
 
     /**

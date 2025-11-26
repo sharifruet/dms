@@ -465,16 +465,15 @@ public class FileUploadService {
         if (file.isEmpty()) {
             return "File is empty";
         }
-        
+
         if (file.getSize() > maxFileSize) {
             return "File size exceeds maximum allowed size of " + (maxFileSize / 1024 / 1024) + "MB";
         }
-        
-        String contentType = file.getContentType();
-        if (contentType == null || !ALLOWED_MIME_TYPES.contains(contentType)) {
-            return "File type not supported. Allowed types: PDF, DOC, DOCX, XLS, XLSX, JPEG, PNG, TIFF, TXT";
-        }
-        
+
+        // Allow any file type for uploads (including APP entry attachments and
+        // other supporting documents). Downstream OCR/processing components
+        // will handle unsupported formats as needed.
+
         return null;
     }
     

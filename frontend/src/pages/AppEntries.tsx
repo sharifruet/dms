@@ -213,14 +213,14 @@ const AppEntries: React.FC = () => {
       handleCloseDialog();
       await loadData();
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to save APP entry');
+      setError(err.response?.data?.error || 'Failed to save yearly budget');
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDelete = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this APP entry?')) {
+    if (!window.confirm('Are you sure you want to delete this yearly budget?')) {
       return;
     }
 
@@ -228,7 +228,7 @@ const AppEntries: React.FC = () => {
       await appEntryService.deleteAppEntry(id);
       await loadData();
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to delete APP entry');
+      setError(err.response?.data?.error || 'Failed to delete yearly budget');
     }
   };
 
@@ -272,14 +272,14 @@ const AppEntries: React.FC = () => {
     <Box sx={{ p: 3 }}>
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
         <Typography variant="h4" component="h1">
-          APP Entries
+          Yearly Budgets
         </Typography>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => handleOpenDialog()}
         >
-          New APP Entry
+          New Yearly Budget
         </Button>
       </Box>
 
@@ -310,7 +310,7 @@ const AppEntries: React.FC = () => {
                 {entries.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} align="center">
-                      <Alert severity="info">No APP entries found. Create your first entry above.</Alert>
+                      <Alert severity="info">No yearly budgets found. Create your first entry above.</Alert>
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -383,7 +383,7 @@ const AppEntries: React.FC = () => {
 
       {/* Create/Edit Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>
-        <DialogTitle>{editingEntry ? 'Edit APP Entry' : 'Create New APP Entry'}</DialogTitle>
+        <DialogTitle>{editingEntry ? 'Edit Yearly Budget' : 'Create New Yearly Budget'}</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={12} sm={6}>
@@ -526,18 +526,13 @@ const AppEntries: React.FC = () => {
                 startIcon={<AttachFileIcon />}
                 fullWidth
               >
-                {attachmentFile ? attachmentFile.name : 'Upload Attachment (PDF)'}
+                {attachmentFile ? attachmentFile.name : 'Upload Attachment'}
                 <input
                   type="file"
                   hidden
-                  accept="application/pdf"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) {
-                      if (file.type !== 'application/pdf') {
-                        setError('Only PDF files are allowed');
-                        return;
-                      }
                       setAttachmentFile(file);
                     }
                   }}
@@ -553,7 +548,7 @@ const AppEntries: React.FC = () => {
             {duplicateWarning.show && (
               <Grid item xs={12}>
                 <Alert severity="warning">
-                  An APP entry already exists for Fiscal Year {formatFiscalYear(formData.fiscalYear)} and Installment No{' '}
+                  A yearly budget already exists for Fiscal Year {formatFiscalYear(formData.fiscalYear)} and Installment No{' '}
                   {formData.releaseInstallmentNo}. Do you want to proceed anyway?
                 </Alert>
               </Grid>
