@@ -34,9 +34,22 @@ public interface DocumentRepository extends JpaRepository<Document, Long> {
     Page<Document> findByDepartment(String department, Pageable pageable);
     
     /**
-     * Find documents by folder
+     * Find documents by folder (active, not deleted)
      */
-    Page<Document> findByFolderId(Long folderId, Pageable pageable);
+    @Query("SELECT d FROM Document d WHERE d.folder.id = :folderId AND d.isActive = true AND (d.deletedAt IS NULL)")
+    Page<Document> findByFolderId(@Param("folderId") Long folderId, Pageable pageable);
+    
+    /**
+     * Find documents by folder and document type (active, not deleted)
+     */
+    @Query("SELECT d FROM Document d WHERE d.folder.id = :folderId AND d.documentType = :documentType AND d.isActive = true AND (d.deletedAt IS NULL)")
+    Page<Document> findByFolderIdAndDocumentType(@Param("folderId") Long folderId, @Param("documentType") String documentType, Pageable pageable);
+    
+    /**
+     * Find documents by document type (active, not deleted)
+     */
+    @Query("SELECT d FROM Document d WHERE d.documentType = :documentType AND d.isActive = true AND (d.deletedAt IS NULL)")
+    Page<Document> findByDocumentTypeAndIsActiveTrueAndDeletedAtIsNull(@Param("documentType") String documentType, Pageable pageable);
     
     /**
      * Search documents by filename

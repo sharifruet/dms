@@ -104,6 +104,9 @@ public class FileUploadService {
     
     @Autowired(required = false)
     private BillOCRService billOCRService;
+    
+    @Autowired(required = false)
+    private DatabaseMetadataExtractionService databaseMetadataExtractionService;
 
     /**
      * Upload a single file
@@ -574,6 +577,17 @@ public class FileUploadService {
                 ocrResult = ocrService.extractText(file);
                 managedDocument.setExtractedText(ocrResult.getExtractedText());
                 documentRepository.save(managedDocument);
+                
+                // Extract metadata using database regex after extracted_text is saved
+                if (ocrResult.getExtractedText() != null && !ocrResult.getExtractedText().trim().isEmpty()) {
+                    try {
+                        databaseMetadataExtractionService.extractMetadataForDocument(documentId);
+                    } catch (Exception dbExtractError) {
+                        logger.warn("Database metadata extraction failed for document {}: {}", 
+                            documentId, dbExtractError.getMessage());
+                        // Continue processing even if DB extraction fails
+                    }
+                }
             } catch (Throwable ocrError) {
                 logger.error("OCR extraction threw an error for document {}: {}", documentId, ocrError.getMessage());
                 combinedMetadata.put("ocrStatus", "failed");

@@ -31,6 +31,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -43,6 +45,8 @@ import java.util.Optional;
 @RequestMapping("/api/documents")
 @CrossOrigin(origins = "*")
 public class DocumentController {
+
+    private static final Logger logger = LoggerFactory.getLogger(DocumentController.class);
 
     @Autowired
     private DocumentRepository documentRepository;
@@ -87,15 +91,26 @@ public class DocumentController {
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(defaultValue = "createdAt") String sortBy,
             @RequestParam(defaultValue = "desc") String sortDir,
-            @RequestParam(required = false) Long folderId
+            @RequestParam(required = false) Long folderId,
+            @RequestParam(required = false) String documentType
     ) {
         Sort sort = sortDir.equalsIgnoreCase("desc") ? Sort.by(sortBy).descending() : Sort.by(sortBy).ascending();
         Pageable pageable = PageRequest.of(page, size, sort);
         Page<Document> result;
-        if (folderId != null) {
+        
+        // Filter by folder and/or document type
+        if (folderId != null && documentType != null && !documentType.isBlank()) {
+            // Both folder and document type filters
+            result = documentRepository.findByFolderIdAndDocumentType(folderId, documentType, pageable);
+        } else if (folderId != null) {
+            // Only folder filter
             result = documentRepository.findByFolderId(folderId, pageable);
+        } else if (documentType != null && !documentType.isBlank()) {
+            // Only document type filter - filter by active and non-deleted documents
+            result = documentRepository.findByDocumentTypeAndIsActiveTrueAndDeletedAtIsNull(documentType, pageable);
         } else {
-            result = documentRepository.findAll(pageable);
+            // No filters - get all active, non-deleted documents
+            result = documentRepository.findActiveNonArchivedDocuments(pageable);
         }
         return ResponseEntity.ok(result);
     }
@@ -112,41 +127,66 @@ public class DocumentController {
             Map<String, Object> response = new HashMap<>();
             response.put("document", document);
 
-            // Get OCR text from Elasticsearch (with error handling)
-            try {
-                Optional<DocumentIndex> indexOpt = documentIndexRepository.findById(id.toString());
-                if (indexOpt.isPresent()) {
-                    DocumentIndex index = indexOpt.get();
-                    String ocrText = index.getExtractedText() != null ? index.getExtractedText() : "";
-                    response.put("ocrText", ocrText);
-                    response.put("ocrConfidence", index.getOcrConfidence() != null ? index.getOcrConfidence() : 0.0);
-                    
-                    // Check if there's an OCR error in metadata
-                    if (ocrText.isEmpty() && index.getMetadata() != null) {
-                        String ocrError = index.getMetadata().get("ocrError");
-                        if (ocrError != null && !ocrError.isEmpty()) {
-                            response.put("ocrError", ocrError);
-                            response.put("ocrProcessing", false); // Not processing, it failed
-                        } else {
-                            response.put("ocrProcessing", true); // Still processing or no text
-                        }
-                    } else if (ocrText.isEmpty()) {
-                        response.put("ocrProcessing", true);
-                    } else {
-                        response.put("ocrProcessing", false);
-                    }
-                } else {
-                    // Document not yet indexed (OCR may still be processing)
-                    response.put("ocrText", "");
-                    response.put("ocrConfidence", 0.0);
-                    response.put("ocrProcessing", true);
-                }
-            } catch (Exception e) {
-                // Elasticsearch might be unavailable or document not indexed yet
-                response.put("ocrText", "");
-                response.put("ocrConfidence", 0.0);
-                response.put("ocrProcessing", true);
+            // Get OCR text - prioritize database extractedText over Elasticsearch
+            String ocrText = null;
+            Double ocrConfidence = 0.0;
+            
+            // 1. First, try to get extractedText from database (primary source)
+            String dbExtractedText = document.getExtractedText();
+            if (dbExtractedText != null && !dbExtractedText.trim().isEmpty()) {
+                ocrText = dbExtractedText;
+                // Set OCR as completed since we have text from database
+                response.put("ocrProcessing", false);
+                logger.debug("Found extracted text in database for document {}", id);
             }
+            
+            // 2. Fallback to Elasticsearch if database doesn't have text
+            if (ocrText == null || ocrText.trim().isEmpty()) {
+                try {
+                    Optional<DocumentIndex> indexOpt = documentIndexRepository.findById(id.toString());
+                    if (indexOpt.isPresent()) {
+                        DocumentIndex index = indexOpt.get();
+                        String esOcrText = index.getExtractedText() != null ? index.getExtractedText() : "";
+                        if (!esOcrText.trim().isEmpty()) {
+                            ocrText = esOcrText;
+                            ocrConfidence = index.getOcrConfidence() != null ? index.getOcrConfidence() : 0.0;
+                            logger.debug("Found extracted text in Elasticsearch for document {}", id);
+                        }
+                        
+                        // Check if there's an OCR error in metadata
+                        if ((ocrText == null || ocrText.isEmpty()) && index.getMetadata() != null) {
+                            String ocrError = index.getMetadata().get("ocrError");
+                            if (ocrError != null && !ocrError.isEmpty()) {
+                                response.put("ocrError", ocrError);
+                                response.put("ocrProcessing", false); // Not processing, it failed
+                            } else {
+                                response.put("ocrProcessing", true); // Still processing or no text
+                            }
+                        } else if (ocrText != null && !ocrText.isEmpty()) {
+                            response.put("ocrProcessing", false);
+                        } else {
+                            response.put("ocrProcessing", true);
+                        }
+                    } else {
+                        // Document not yet indexed (OCR may still be processing)
+                        response.put("ocrProcessing", true);
+                    }
+                } catch (Exception e) {
+                    // Elasticsearch might be unavailable or document not indexed yet
+                    logger.debug("Elasticsearch unavailable or document not indexed for document {}: {}", id, e.getMessage());
+                    if (ocrText == null || ocrText.trim().isEmpty()) {
+                        response.put("ocrProcessing", true);
+                    }
+                }
+            }
+            
+            // Set OCR text and confidence in response
+            response.put("ocrText", ocrText != null ? ocrText : "");
+            response.put("ocrConfidence", ocrConfidence);
+            
+            // Add extractedText to the response for frontend compatibility
+            // Since @JsonIgnore on Document entity excludes it, we add it separately
+            response.put("extractedText", dbExtractedText != null ? dbExtractedText : "");
 
             // Get document type fields and their values
             if (document.getDocumentType() != null) {

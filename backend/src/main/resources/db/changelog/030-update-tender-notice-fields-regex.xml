@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="030-001" author="dms">
+        <comment>Update Tender Notice fields with PostgreSQL-compatible regex patterns for database-level extraction</comment>
+        <sql>
+            -- Update existing tenderId field with correct regex pattern
+            UPDATE document_type_fields 
+            SET ocr_pattern = 'Tender/Proposal ID\s*:\s*([0-9]+)',
+                is_ocr_mappable = true,
+                description = 'Tender/Proposal ID extracted from OCR text'
+            WHERE document_type = 'TENDER_NOTICE' 
+            AND field_key = 'tenderId';
+
+            -- Update existing tenderDate field with publication date pattern
+            UPDATE document_type_fields 
+            SET ocr_pattern = '(?:Scheduled\s+)?(?:Tender|Proposal)\s+(?:Document\s+)?(?:last\s+selling\s*/\s*downloading|Publication|last\s+selling|downloading)\s+(?:Date\s+and\s+Time|Date)\s*:\s*(\d{1,2}[\-/]\w+[\-/]\d{4}\s+\d{1,2}:\d{2})',
+                description = 'Tender publication/scheduled date (when tender was published)'
+            WHERE document_type = 'TENDER_NOTICE' 
+            AND field_key = 'tenderDate';
+
+            -- Update existing closingDate field with correct regex pattern
+            UPDATE document_type_fields 
+            SET ocr_pattern = '(?:Tender|Proposal)\s+(?:Closing|Submission)\s+(?:Date\s+and\s+Time|Date)\s*:\s*(\d{1,2}[\-/]\w+[\-/]\d{4}\s+\d{1,2}:\d{2})',
+                description = 'Tender closing date (last date for submission)'
+            WHERE document_type = 'TENDER_NOTICE' 
+            AND field_key = 'closingDate';
+        </sql>
+    </changeSet>
+
+    <changeSet id="030-002" author="dms">
+        <comment>Add new Tender Notice fields with PostgreSQL regex patterns</comment>
+        <sql>
+            INSERT INTO document_type_fields (document_type, field_key, field_label, field_type, is_required, is_ocr_mappable, ocr_pattern, display_order, description)
+            VALUES 
+            -- Invitation Reference No
+            ('TENDER_NOTICE', 'invitationReferenceNo', 'Invitation Reference No', 'text', false, true, 'Invitation Reference\s+No\.?\s*:\s*([0-9.]+)', 6, 'Invitation Reference Number'),
+            
+            -- App ID
+            ('TENDER_NOTICE', 'appId', 'App ID', 'text', false, true, 'App ID\s*:\s*([0-9]+)', 7, 'Application/APP ID'),
+            
+            -- Ministry
+            ('TENDER_NOTICE', 'ministry', 'Ministry', 'text', false, true, 'Ministry\s*:\s*([^\n:]+?)(?:\s*Division|$)', 8, 'Ministry name'),
+            
+            -- Organization
+            ('TENDER_NOTICE', 'organization', 'Organization', 'text', false, true, 'Organization\s*:\s*([^\n:]+?)(?:\s*Procuring|$)', 9, 'Organization name'),
+            
+            -- Procuring Entity
+            ('TENDER_NOTICE', 'procuringEntity', 'Procuring Entity', 'text', false, true, 'Procuring Entity\s+(?:Name\s*)?:\s*([^\n:]+?)(?:\s*Procuring Entity Code|$)', 10, 'Procuring Entity name'),
+            
+            -- Document Price
+            ('TENDER_NOTICE', 'documentPrice', 'Document Price (BDT)', 'number', false, true, '(?:Tender|Proposal)\s+(?:Document\s+)?(?:Price|Fees?)\s*\([^)]*\)\s*:\s*([0-9,]+)', 11, 'Tender document price in BDT'),
+            
+            -- Publication Date
+            ('TENDER_NOTICE', 'publicationDate', 'Publication Date', 'date', false, true, '(?:Scheduled\s+)?(?:Tender|Proposal)\s+(?:Document\s+)?(?:last\s+selling\s*/\s*downloading|Publication|last\s+selling|downloading)\s+(?:Date\s+and\s+Time|Date)\s*:\s*(\d{1,2}[\-/]\w+[\-/]\d{4}\s+\d{1,2}:\d{2})', 12, 'Date when tender document was published/available for download'),
+            
+            -- Opening Date
+            ('TENDER_NOTICE', 'openingDate', 'Opening Date', 'date', false, true, '(?:Tender|Proposal)\s+Opening\s+(?:Date\s+and\s+Time|Date)\s*:\s*(\d{1,2}[\-/]\w+[\-/]\d{4}\s+\d{1,2}:\d{2})', 13, 'Date when tender will be opened'),
+            
+            -- Pre-Tender Meeting Start Date
+            ('TENDER_NOTICE', 'preTenderMeetingStart', 'Pre-Tender Meeting Start', 'date', false, true, 'Pre\s*-\s*(?:Tender|Proposal)\s+(?:meeting|Meeting)\s+Start\s+(?:Date\s+and\s+Time|Date)\s*:\s*(\d{1,2}[\-/]\w+[\-/]\d{4}\s+\d{1,2}:\d{2})', 14, 'Pre-tender meeting start date'),
+            
+            -- Pre-Tender Meeting End Date
+            ('TENDER_NOTICE', 'preTenderMeetingEnd', 'Pre-Tender Meeting End', 'date', false, true, 'Pre\s*-\s*(?:Tender|Proposal)\s+(?:meeting|Meeting)\s+End\s+(?:Date\s+and\s+Time|Date)\s*:\s*(\d{1,2}[\-/]\w+[\-/]\d{4}\s+\d{1,2}:\d{2})', 15, 'Pre-tender meeting end date'),
+            
+            -- Tender Security Valid Up To
+            ('TENDER_NOTICE', 'tenderSecurityValidUpTo', 'Tender Security Valid Up To', 'date', false, true, 'Tender/Proposal\s+Security\s+Valid\s+Up\s+to\s*:\s*(\d{1,2}[\-/]\w+[\-/]\d{4})', 16, 'Tender security validity date'),
+            
+            -- Tender Valid Up To
+            ('TENDER_NOTICE', 'tenderValidUpTo', 'Tender Valid Up To', 'date', false, true, 'Tender/Proposal\s+Valid\s+Up\s+to\s*:\s*(\d{1,2}[\-/]\w+[\-/]\d{4})', 17, 'Tender validity date')
+            
+            ON CONFLICT (document_type, field_key) DO UPDATE 
+            SET field_label = EXCLUDED.field_label,
+                field_type = EXCLUDED.field_type,
+                is_required = EXCLUDED.is_required,
+                is_ocr_mappable = EXCLUDED.is_ocr_mappable,
+                ocr_pattern = EXCLUDED.ocr_pattern,
+                display_order = EXCLUDED.display_order,
+                description = EXCLUDED.description;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
+

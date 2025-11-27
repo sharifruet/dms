@@ -353,14 +353,16 @@ public class OCRService {
             tmp = File.createTempFile("ocr_img_", ".png");
             ImageIO.write(image, "png", tmp);
 
-            // TESSDATA_PREFIX should point to the parent folder that contains 'tessdata'
+            // TESSDATA_PREFIX should point directly to the 'tessdata' directory
             String tessPrefix = tesseractDataPath;
             if (tessPrefix != null) {
                 Path p = Paths.get(tessPrefix);
-                if (p.getFileName() != null && "tessdata".equalsIgnoreCase(p.getFileName().toString())) {
-                    Path parent = p.getParent();
-                    if (parent != null) {
-                        tessPrefix = parent.toString();
+                // If path doesn't end with tessdata, append it
+                if (p.getFileName() == null || !"tessdata".equalsIgnoreCase(p.getFileName().toString())) {
+                    // Check if tessdata subdirectory exists
+                    Path tessdataPath = Paths.get(tessPrefix, "tessdata");
+                    if (Files.exists(tessdataPath)) {
+                        tessPrefix = tessdataPath.toString();
                     }
                 }
             }
@@ -407,34 +409,86 @@ public class OCRService {
      */
 	private String processPDFWithOCR(MultipartFile file) throws IOException, TesseractException {
 
-		// 1. Try Tika extraction first
+		// Read PDF bytes once (MultipartFile streams can only be read once)
+		byte[] pdfBytes = file.getBytes();
+		
+		// 1. Try Tika extraction first (for text-based PDFs)
 		try {
-			String text = tika.parseToString(file.getInputStream());
+			String text = tika.parseToString(new java.io.ByteArrayInputStream(pdfBytes));
 			if (text != null && !text.trim().isEmpty()) {
+				logger.info("Tika successfully extracted text from PDF");
 				return text;
 			}
 		} catch (Exception e) {
 			logger.warn("Tika failed, falling back to OCR", e);
 		}
+		
+		// 2. Load PDF and process with OCR
+		PDDocument document = null;
 		try {
-			// 2. Load PDF properly (PDFBox 3.x)
-			byte[] pdfBytes = file.getBytes();
-			PDDocument document = PDDocument.load(pdfBytes);
-
+			document = PDDocument.load(pdfBytes);
 			PDFRenderer renderer = new PDFRenderer(document);
 			StringBuilder sb = new StringBuilder();
 
-			// 3. OCR each page
+			// 3. OCR each page with fallback mechanism
 			for (int i = 0; i < document.getNumberOfPages(); i++) {
-				BufferedImage image = renderer.renderImageWithDPI(i, 300);
-				sb.append(tesseract.doOCR(image)).append("\n");
+				try {
+					BufferedImage image = renderer.renderImageWithDPI(i, 300);
+					try {
+						// Try native tess4j OCR first
+						String pageText = tesseract.doOCR(image);
+						sb.append(pageText).append("\n");
+					} catch (UnsatisfiedLinkError | NoClassDefFoundError | TesseractException ex) {
+						// Native library errors - use external fallback
+						logger.warn("Native OCR failed for PDF page {}, using external fallback", i + 1);
+						String fb = runExternalTesseract(image);
+						if (fb != null && !fb.trim().isEmpty()) {
+							sb.append(fb).append("\n");
+							logger.info("External tesseract fallback succeeded for page {}", i + 1);
+						} else {
+							logger.warn("External tesseract fallback also failed for page {}", i + 1);
+						}
+					} catch (Error err) {
+						// Native library errors - use external fallback
+						logger.warn("Native OCR error for PDF page {}, using external fallback: {}", i + 1, err.getMessage());
+						String fb = runExternalTesseract(image);
+						if (fb != null && !fb.trim().isEmpty()) {
+							sb.append(fb).append("\n");
+							logger.info("External tesseract fallback succeeded for page {}", i + 1);
+						} else {
+							logger.warn("External tesseract fallback also failed for page {}", i + 1);
+						}
+					}
+				} catch (IOException e) {
+					logger.error("Error rendering PDF page {}: {}", i + 1, e.getMessage());
+					// Continue with next page
+				}
 			}
 
-			document.close();
-			return sb.toString();
-		} catch (Error err) {
-			logger.error("Native OCR error: {}", err.getMessage());
-			throw new TesseractException("Native OCR error: " + err.getMessage());
+			if (document != null) {
+				document.close();
+			}
+			
+			String result = sb.toString();
+			if (result.trim().isEmpty()) {
+				logger.warn("No text extracted from PDF after OCR processing");
+				throw new TesseractException("Failed to extract text from PDF");
+			}
+			return result;
+		} catch (TesseractException e) {
+			// Re-throw TesseractException
+			throw e;
+		} catch (Exception e) {
+			logger.error("Error processing PDF with OCR: {}", e.getMessage());
+			throw new TesseractException("PDF OCR processing failed: " + e.getMessage(), e);
+		} finally {
+			if (document != null) {
+				try {
+					document.close();
+				} catch (IOException e) {
+					logger.warn("Error closing PDF document: {}", e.getMessage());
+				}
+			}
 		}
 	}
 

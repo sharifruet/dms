@@ -55,6 +55,9 @@ import expiryTrackingService, {
   CreateExpiryTrackingRequest,
   RenewExpiryTrackingRequest 
 } from '../services/expiryTrackingService';
+import { workflowService, WorkflowInstance } from '../services/workflowService';
+import { documentService, Document } from '../services/documentService';
+import { folderService } from '../services/folderService';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -103,6 +106,16 @@ const ExpiryTrackingPage: React.FC = () => {
     expiryDate: '',
     notes: ''
   });
+
+  // Workflow and document selection states
+  const [workflows, setWorkflows] = useState<WorkflowInstance[]>([]);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<number | ''>('');
+  const [workflowDocuments, setWorkflowDocuments] = useState<Document[]>([]);
+  const [selectedDocumentId, setSelectedDocumentId] = useState<number | ''>('');
+  const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+  const [loadingWorkflows, setLoadingWorkflows] = useState(false);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
+  const [existingExpiryDate, setExistingExpiryDate] = useState<string>('');
 
   const [renewRequest, setRenewRequest] = useState<RenewExpiryTrackingRequest>({
     newExpiryDate: '',
@@ -194,9 +207,169 @@ const ExpiryTrackingPage: React.FC = () => {
     }
   };
 
+  // Load workflows when dialog opens
+  const loadWorkflows = async () => {
+    try {
+      setLoadingWorkflows(true);
+      const response = await workflowService.getWorkflowInstances(0, 100);
+      setWorkflows(response.content || []);
+    } catch (error) {
+      console.error('Failed to load workflows:', error);
+      setError('Failed to load workflows');
+    } finally {
+      setLoadingWorkflows(false);
+    }
+  };
+
+  // Load documents from selected workflow
+  const loadDocumentsFromWorkflow = async (workflowId: number) => {
+    try {
+      setLoadingDocuments(true);
+      setWorkflowDocuments([]);
+      setSelectedDocumentId('');
+      setSelectedDocument(null);
+      setExistingExpiryDate('');
+
+      // Find the workflow instance
+      const workflowInstance = workflows.find(w => w.id === workflowId);
+      if (!workflowInstance || !workflowInstance.workflow) {
+        setError('Workflow not found');
+        return;
+      }
+
+      // Get all workflow instances for this workflow to find documents
+      const allInstances = await workflowService.getWorkflowInstances(0, 1000);
+      const instancesForWorkflow = allInstances.content.filter(
+        wi => wi.workflow.id === workflowInstance.workflow.id
+      );
+
+      // Collect unique documents from all instances
+      const documentIds = new Set<number>();
+      const documents: Document[] = [];
+
+      for (const instance of instancesForWorkflow) {
+        if (instance.document?.id && !documentIds.has(instance.document.id)) {
+          documentIds.add(instance.document.id);
+          try {
+            const docResponse = await documentService.getDocumentById(instance.document.id);
+            const doc = (docResponse as any).document || docResponse;
+            documents.push(doc);
+          } catch (err) {
+            console.error(`Failed to load document ${instance.document.id}:`, err);
+          }
+        }
+      }
+
+      // If no documents from instances, try to get documents from workflow's folder
+      if (documents.length === 0) {
+        // Try to get folder from workflow - workflows have a folder relationship
+        // For now, we'll use the workflow instance's document's folder as fallback
+        if (workflowInstance.document?.id) {
+          const docResponse = await documentService.getDocumentById(workflowInstance.document.id);
+          const doc = (docResponse as any).document || docResponse;
+          
+          if (doc.folder?.id) {
+            // Get all documents from this folder
+            const docsResponse = await documentService.getDocuments({
+              folderId: doc.folder.id,
+              page: 0,
+              size: 1000
+            });
+            setWorkflowDocuments(docsResponse.content || []);
+            return;
+          }
+        }
+        setError('No documents found for this workflow');
+      } else {
+        setWorkflowDocuments(documents);
+      }
+    } catch (error) {
+      console.error('Failed to load documents from workflow:', error);
+      setError('Failed to load documents');
+    } finally {
+      setLoadingDocuments(false);
+    }
+  };
+
+  // Handle workflow selection
+  const handleWorkflowChange = async (workflowId: number | '') => {
+    setSelectedWorkflowId(workflowId);
+    if (workflowId) {
+      await loadDocumentsFromWorkflow(workflowId);
+    } else {
+      setWorkflowDocuments([]);
+      setSelectedDocumentId('');
+      setSelectedDocument(null);
+      setExistingExpiryDate('');
+    }
+  };
+
+  // Handle document selection
+  const handleDocumentChange = async (documentId: number | '') => {
+    setSelectedDocumentId(documentId);
+    if (documentId) {
+      try {
+        const docResponse = await documentService.getDocumentById(documentId);
+        const doc = (docResponse as any).document || docResponse;
+        setSelectedDocument(doc);
+        
+        // Check for existing expiry date in metadata
+        const metadata = (docResponse as any).metadata || {};
+        const expiryDateFromMetadata = metadata.expiryDate || metadata.expiry_date || '';
+        setExistingExpiryDate(expiryDateFromMetadata);
+        
+        // Pre-fill expiry date if it exists
+        if (expiryDateFromMetadata) {
+          setNewTracking({
+            ...newTracking,
+            documentId: documentId,
+            expiryDate: expiryDateFromMetadata.split('T')[0] // Convert to date format
+          });
+        } else {
+          setNewTracking({
+            ...newTracking,
+            documentId: documentId,
+            expiryDate: ''
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load document:', error);
+        setError('Failed to load document details');
+      }
+    } else {
+      setSelectedDocument(null);
+      setExistingExpiryDate('');
+      setNewTracking({
+        ...newTracking,
+        documentId: 0,
+        expiryDate: ''
+      });
+    }
+  };
+
   const handleCreateTracking = async () => {
     try {
-      await expiryTrackingService.createExpiryTracking(newTracking);
+      if (!selectedDocumentId || !newTracking.expiryDate) {
+        setError('Please select a document and enter an expiry date');
+        return;
+      }
+
+      // First, update document metadata with expiry date
+      try {
+        await documentService.updateDocumentMetadata(selectedDocumentId as number, {
+          expiryDate: newTracking.expiryDate
+        });
+      } catch (metadataError) {
+        console.error('Failed to update document metadata:', metadataError);
+        // Continue anyway - metadata update is optional
+      }
+
+      // Then create expiry tracking
+      await expiryTrackingService.createExpiryTracking({
+        ...newTracking,
+        documentId: selectedDocumentId as number
+      });
+      
       setCreateDialogOpen(false);
       setNewTracking({
         documentId: 0,
@@ -204,6 +377,11 @@ const ExpiryTrackingPage: React.FC = () => {
         expiryDate: '',
         notes: ''
       });
+      setSelectedWorkflowId('');
+      setSelectedDocumentId('');
+      setSelectedDocument(null);
+      setWorkflowDocuments([]);
+      setExistingExpiryDate('');
       await loadTrackingData();
       await loadStatistics();
     } catch (error) {
@@ -690,19 +868,91 @@ const ExpiryTrackingPage: React.FC = () => {
       </Menu>
 
       {/* Create Tracking Dialog */}
-      <Dialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} maxWidth="md" fullWidth>
+      <Dialog 
+        open={createDialogOpen} 
+        onClose={() => {
+          setCreateDialogOpen(false);
+          setSelectedWorkflowId('');
+          setSelectedDocumentId('');
+          setSelectedDocument(null);
+          setWorkflowDocuments([]);
+          setExistingExpiryDate('');
+        }} 
+        maxWidth="md" 
+        fullWidth
+      >
         <DialogTitle>Add Expiry Tracking</DialogTitle>
         <DialogContent>
           <Grid container spacing={2} sx={{ mt: 1 }}>
+            {/* Step 1: Select Workflow */}
             <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Document ID"
-                type="number"
-                value={newTracking.documentId}
-                onChange={(e) => setNewTracking({ ...newTracking, documentId: parseInt(e.target.value) })}
-              />
+              <FormControl fullWidth>
+                <InputLabel>Select Workflow</InputLabel>
+                <Select
+                  value={selectedWorkflowId}
+                  onChange={(e) => handleWorkflowChange(e.target.value as number | '')}
+                  onOpen={() => {
+                    if (workflows.length === 0) {
+                      loadWorkflows();
+                    }
+                  }}
+                  disabled={loadingWorkflows}
+                >
+                  {loadingWorkflows && (
+                    <MenuItem disabled>
+                      <CircularProgress size={20} sx={{ mr: 1 }} />
+                      Loading workflows...
+                    </MenuItem>
+                  )}
+                  {!loadingWorkflows && workflows.length === 0 && (
+                    <MenuItem disabled>No workflows available</MenuItem>
+                  )}
+                  {workflows.map((workflow) => (
+                    <MenuItem key={workflow.id} value={workflow.id}>
+                      {workflow.workflow.name} - {workflow.workflow.type}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
+
+            {/* Step 2: Select Document from Workflow */}
+            {selectedWorkflowId && (
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel>Select Document</InputLabel>
+                  <Select
+                    value={selectedDocumentId}
+                    onChange={(e) => handleDocumentChange(e.target.value as number | '')}
+                    disabled={loadingDocuments || workflowDocuments.length === 0}
+                  >
+                    {loadingDocuments && (
+                      <MenuItem disabled>
+                        <CircularProgress size={20} sx={{ mr: 1 }} />
+                        Loading documents...
+                      </MenuItem>
+                    )}
+                    {!loadingDocuments && workflowDocuments.length === 0 && (
+                      <MenuItem disabled>No documents found in this workflow</MenuItem>
+                    )}
+                    {workflowDocuments.map((doc) => (
+                      <MenuItem key={doc.id} value={doc.id}>
+                        {doc.originalName || doc.fileName}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            )}
+
+            {/* Show existing expiry date if present */}
+            {existingExpiryDate && (
+              <Grid item xs={12}>
+                <Alert severity="info">
+                  Existing expiry date: {existingExpiryDate.split('T')[0]}
+                </Alert>
+              </Grid>
+            )}
             <Grid item xs={6}>
               <FormControl fullWidth>
                 <InputLabel>Expiry Type</InputLabel>
@@ -726,6 +976,9 @@ const ExpiryTrackingPage: React.FC = () => {
                 value={newTracking.expiryDate}
                 onChange={(e) => setNewTracking({ ...newTracking, expiryDate: e.target.value })}
                 InputLabelProps={{ shrink: true }}
+                required
+                disabled={!selectedDocumentId}
+                helperText={!selectedDocumentId ? 'Please select a document first' : existingExpiryDate ? 'Updating existing expiry date' : 'Add expiry date'}
               />
             </Grid>
             <Grid item xs={12}>
@@ -741,9 +994,20 @@ const ExpiryTrackingPage: React.FC = () => {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleCreateTracking} variant="contained">
-            Create
+          <Button onClick={() => {
+            setCreateDialogOpen(false);
+            setSelectedWorkflowId('');
+            setSelectedDocumentId('');
+            setSelectedDocument(null);
+            setWorkflowDocuments([]);
+            setExistingExpiryDate('');
+          }}>Cancel</Button>
+          <Button 
+            onClick={handleCreateTracking} 
+            variant="contained"
+            disabled={!selectedDocumentId || !newTracking.expiryDate}
+          >
+            {existingExpiryDate ? 'Update' : 'Create'}
           </Button>
         </DialogActions>
       </Dialog>

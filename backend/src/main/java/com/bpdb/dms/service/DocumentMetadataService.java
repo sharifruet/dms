@@ -72,6 +72,49 @@ public class DocumentMetadataService {
     private static final Pattern AMOUNT_PATTERN = Pattern.compile(
         "(?i)(amount|total|due)\\s*[:\\-]?\\s*([$€£]?\\s*[0-9]{1,3}(?:[.,][0-9]{3})*(?:[.,][0-9]{2})?)"
     );
+    
+    // Tender Notice specific patterns
+    // Matches: "Tender/Proposal ID : 1156325"
+    private static final Pattern TENDER_ID_PATTERN = Pattern.compile(
+        "(?i)(?:tender|proposal)\\s*/\\s*(?:tender|proposal)?\\s*(?:id|number|no\\.?|#)\\s*[:\\-]?\\s*([0-9]+)"
+    );
+    
+    private static final Pattern INVITATION_REF_PATTERN = Pattern.compile(
+        "(?i)invitation\\s+reference\\s*(?:no\\.?|number|#)?\\s*[:\\-]?\\s*([0-9.]+)"
+    );
+    
+    private static final Pattern APP_ID_PATTERN = Pattern.compile(
+        "(?i)app\\s+id\\s*[:\\-]?\\s*([0-9]+)"
+    );
+    
+    private static final Pattern MINISTRY_PATTERN = Pattern.compile(
+        "(?i)ministry\\s*[:\\-]?\\s*([^\\n:]+?)(?:\\s*division|$)"
+    );
+    
+    private static final Pattern ORGANIZATION_PATTERN = Pattern.compile(
+        "(?i)organization\\s*[:\\-]?\\s*([^\\n:]+?)(?:\\s*procuring|$)"
+    );
+    
+    private static final Pattern PROCURING_ENTITY_PATTERN = Pattern.compile(
+        "(?i)procuring\\s+entity\\s*(?:name)?\\s*[:\\-]?\\s*([^\\n:]+?)(?:\\s*procuring\\s+entity\\s+code|$)"
+    );
+    
+    private static final Pattern DOCUMENT_PRICE_PATTERN = Pattern.compile(
+        "(?i)(?:tender|proposal)\\s*(?:document\\s*)?(?:price|fees?)\\s*\\([^)]*\\)\\s*[:\\-]?\\s*([0-9,]+)"
+    );
+    
+    private static final Pattern CLOSING_DATE_TIME_PATTERN = Pattern.compile(
+        "(?i)(?:tender|proposal)\\s*(?:closing|submission)\\s*(?:date\\s+and\\s+time|date)?\\s*[:\\-]?\\s*(\\d{1,2}[\\-/]\\w+[\\-/]\\d{4}\\s+\\d{1,2}:\\d{2})"
+    );
+    
+    private static final Pattern OPENING_DATE_TIME_PATTERN = Pattern.compile(
+        "(?i)(?:tender|proposal)\\s*(?:opening)\\s*(?:date\\s+and\\s+time|date)?\\s*[:\\-]?\\s*(\\d{1,2}[\\-/]\\w+[\\-/]\\d{4}\\s+\\d{1,2}:\\d{2})"
+    );
+    
+    // Matches: "Scheduled Tender/Proposal Document last selling / downloading Date and Time : 24-Sep-2025 13:00"
+    private static final Pattern PUBLICATION_DATE_TIME_PATTERN = Pattern.compile(
+        "(?i)(?:scheduled\\s+)?(?:tender|proposal)\\s*(?:document\\s+)?(?:publication|last\\s+selling\\s*/\\s*downloading|last\\s+selling|downloading)\\s*(?:date\\s+and\\s+time|date)?\\s*[:\\-]?\\s*(\\d{1,2}[\\-/]\\w+[\\-/]\\d{4}\\s+\\d{1,2}:\\d{2})"
+    );
 
     private static final DateTimeFormatter[] SUPPORTED_DATE_FORMATS = new DateTimeFormatter[] {
         DateTimeFormatter.ofPattern("d/M/uuuu"),
@@ -148,11 +191,86 @@ public class DocumentMetadataService {
             }
             case "TENDER", "TENDER_NOTICE", "TENDER_DOCUMENT" -> {
                 inferred.putIfAbsent("title", fallbackTitle);
-                if (!inferred.containsKey("expiryDate") && !inferred.containsKey("closingDate")) {
-                    extractExpiryDate(extractedText).ifPresent(value -> inferred.put("closingDate", value));
+                
+                // Extract Tender/Proposal ID
+                if (!inferred.containsKey("tenderId") && !inferred.containsKey("proposalId")) {
+                    extractFirstMatch(TENDER_ID_PATTERN, extractedText, 1)
+                        .ifPresent(value -> inferred.put("tenderId", value));
                 }
+                
+                // Extract Invitation Reference No
+                if (!inferred.containsKey("invitationReferenceNo")) {
+                    extractFirstMatch(INVITATION_REF_PATTERN, extractedText, 1)
+                        .ifPresent(value -> inferred.put("invitationReferenceNo", value.trim()));
+                }
+                
+                // Extract App ID
+                if (!inferred.containsKey("appId")) {
+                    extractFirstMatch(APP_ID_PATTERN, extractedText, 1)
+                        .ifPresent(value -> inferred.put("appId", value));
+                }
+                
+                // Extract Ministry
+                if (!inferred.containsKey("ministry")) {
+                    extractFirstMatch(MINISTRY_PATTERN, extractedText, 1)
+                        .ifPresent(value -> inferred.put("ministry", value.trim()));
+                }
+                
+                // Extract Organization
+                if (!inferred.containsKey("organization")) {
+                    extractFirstMatch(ORGANIZATION_PATTERN, extractedText, 1)
+                        .ifPresent(value -> inferred.put("organization", value.trim()));
+                }
+                
+                // Extract Procuring Entity
+                if (!inferred.containsKey("procuringEntity")) {
+                    extractFirstMatch(PROCURING_ENTITY_PATTERN, extractedText, 1)
+                        .ifPresent(value -> inferred.put("procuringEntity", value.trim()));
+                }
+                
+                // Extract Document Price
+                if (!inferred.containsKey("documentPrice")) {
+                    extractFirstMatch(DOCUMENT_PRICE_PATTERN, extractedText, 1)
+                        .ifPresent(value -> inferred.put("documentPrice", value.replace(",", "")));
+                }
+                
+                // Extract Publication Date and Time (this is the tenderDate - when tender was published/issued)
+                String publicationDate = null;
+                if (!inferred.containsKey("publicationDate")) {
+                    Optional<String> pubDate = extractFirstMatch(PUBLICATION_DATE_TIME_PATTERN, extractedText, 1)
+                        .map(this::normalizeDateTime);
+                    if (pubDate.isPresent()) {
+                        publicationDate = pubDate.get();
+                        inferred.put("publicationDate", publicationDate);
+                    }
+                }
+                
+                // Extract Closing Date and Time (this is when tender closes)
+                if (!inferred.containsKey("closingDate") && !inferred.containsKey("expiryDate")) {
+                    extractFirstMatch(CLOSING_DATE_TIME_PATTERN, extractedText, 1)
+                        .map(this::normalizeDateTime)
+                        .ifPresent(value -> inferred.put("closingDate", value));
+                    // Fallback to expiry pattern if not found
+                    if (!inferred.containsKey("closingDate")) {
+                        extractExpiryDate(extractedText).ifPresent(val -> inferred.put("closingDate", val));
+                    }
+                }
+                
+                // Extract Opening Date and Time
+                if (!inferred.containsKey("openingDate")) {
+                    extractFirstMatch(OPENING_DATE_TIME_PATTERN, extractedText, 1)
+                        .map(this::normalizeDateTime)
+                        .ifPresent(value -> inferred.put("openingDate", value));
+                }
+                
+                // Set tenderDate to publicationDate (the date when tender was published)
                 if (!inferred.containsKey("tenderDate") && !inferred.containsKey("date")) {
-                    extractDate(extractedText).ifPresent(date -> inferred.put("tenderDate", date));
+                    if (publicationDate != null) {
+                        inferred.put("tenderDate", publicationDate);
+                    } else {
+                        // Fallback: extract first date found
+                        extractDate(extractedText).ifPresent(date -> inferred.put("tenderDate", date));
+                    }
                 }
             }
             case "BILL" -> {
@@ -365,6 +483,52 @@ public class DocumentMetadataService {
             return document.getOriginalName();
         }
         return document.getFileName();
+    }
+    
+    /**
+     * Normalize date-time string from OCR (e.g., "22-Oct-2025 14:00" -> "2025-10-22 14:00")
+     */
+    private String normalizeDateTime(String dateTimeStr) {
+        if (dateTimeStr == null || dateTimeStr.isBlank()) {
+            return dateTimeStr;
+        }
+        
+        try {
+            // Try to parse common date-time formats
+            String[] monthNames = {"jan", "feb", "mar", "apr", "may", "jun", 
+                                   "jul", "aug", "sep", "oct", "nov", "dec"};
+            
+            // Pattern: "22-Oct-2025 14:00" or "22/Oct/2025 14:00"
+            Pattern dtPattern = Pattern.compile(
+                "(\\d{1,2})[\\-/](\\w+)[\\-/](\\d{4})\\s+(\\d{1,2}:\\d{2})"
+            );
+            Matcher matcher = dtPattern.matcher(dateTimeStr.trim());
+            if (matcher.find()) {
+                String day = matcher.group(1);
+                String monthStr = matcher.group(2).toLowerCase();
+                String year = matcher.group(3);
+                String time = matcher.group(4);
+                
+                // Find month index
+                int month = -1;
+                for (int i = 0; i < monthNames.length; i++) {
+                    if (monthStr.startsWith(monthNames[i])) {
+                        month = i + 1;
+                        break;
+                    }
+                }
+                
+                if (month > 0) {
+                    return String.format("%s-%02d-%02d %s", year, month, Integer.parseInt(day), time);
+                }
+            }
+            
+            // If parsing fails, return as-is (might be in a different format)
+            return dateTimeStr.trim();
+        } catch (Exception e) {
+            // If normalization fails, return original
+            return dateTimeStr.trim();
+        }
     }
 }
 
