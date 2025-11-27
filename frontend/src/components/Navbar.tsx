@@ -69,26 +69,8 @@ const Navbar: React.FC = () => {
           <Button color="inherit" onClick={() => navigate('/expiry-tracking')}>
             Expiry Tracking
           </Button>
-          <Button color="inherit" onClick={() => navigate('/reports')}>
-            Reports
-          </Button>
-          <Button color="inherit" onClick={() => navigate('/analytics')}>
-            Analytics
-          </Button>
           <Button color="inherit" onClick={() => navigate('/workflows')}>
             Workflows
-          </Button>
-          <Button color="inherit" onClick={() => navigate('/versioning')}>
-            Versioning
-          </Button>
-          <Button color="inherit" onClick={() => navigate('/integrations')}>
-            Integrations
-          </Button>
-          <Button color="inherit" onClick={() => navigate('/analytics')}>
-            Analytics
-          </Button>
-          <Button color="inherit" onClick={() => navigate('/ml')}>
-            ML Models
           </Button>
           <Button color="inherit" onClick={() => navigate('/health')}>
             Health
@@ -141,26 +123,8 @@ const Navbar: React.FC = () => {
             <MenuItem onClick={() => handleNavigation('/expiry-tracking')}>
               Expiry Tracking
             </MenuItem>
-            <MenuItem onClick={() => handleNavigation('/reports')}>
-              Reports
-            </MenuItem>
-            <MenuItem onClick={() => handleNavigation('/analytics')}>
-              Analytics
-            </MenuItem>
             <MenuItem onClick={() => handleNavigation('/workflows')}>
               Workflows
-            </MenuItem>
-            <MenuItem onClick={() => handleNavigation('/versioning')}>
-              Versioning
-            </MenuItem>
-            <MenuItem onClick={() => handleNavigation('/integrations')}>
-              Integrations
-            </MenuItem>
-            <MenuItem onClick={() => handleNavigation('/analytics')}>
-              Analytics
-            </MenuItem>
-            <MenuItem onClick={() => handleNavigation('/ml')}>
-              ML Models
             </MenuItem>
             <MenuItem onClick={() => handleNavigation('/health')}>
               Health

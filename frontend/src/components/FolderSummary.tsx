@@ -116,17 +116,7 @@ const FolderSummary: React.FC<FolderSummaryProps> = ({ folderId }) => {
               </Typography>
             </Box>
           </Grid>
-          <Grid item xs={4}>
-            <Box sx={{ textAlign: 'center' }}>
-              <UploadIcon sx={{ fontSize: 32, color: 'warning.main', mb: 1 }} />
-              <Typography variant="h4" color="warning.main">
-                {summary.remainingUploads}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                Remaining
-              </Typography>
-            </Box>
-          </Grid>
+          {/* Remaining in folder metric hidden as requested */}
         </Grid>
       </CardContent>
     </Card>

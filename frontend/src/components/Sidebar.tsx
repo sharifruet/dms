@@ -62,12 +62,6 @@ const Sidebar: React.FC = () => {
     { label: 'Assets', path: '/assets', icon: <AssetsIcon /> },
     { label: 'Assignments', path: '/asset-assignments', icon: <AssignmentsIcon /> },
     { label: 'Workflows', path: '/workflows', icon: <WorkflowsIcon /> },
-    { label: 'Versioning', path: '/versioning', icon: <VersioningIcon /> },
-    { label: 'Reports', path: '/reports', icon: <ReportsIcon /> },
-    { label: 'Analytics', path: '/analytics', icon: <AnalyticsIcon /> },
-    { label: 'Dashboard Management', path: '/dashboard-management', icon: <AnalyticsIcon /> },
-    { label: 'Integrations', path: '/integrations', icon: <IntegrationsIcon /> },
-    { label: 'ML Models', path: '/ml', icon: <MlIcon /> },
     { label: 'Health', path: '/health', icon: <HealthIcon /> },
     // Place Archive and Stationery near the bottom as requested
     { label: 'Archive', path: '/archive', icon: <ArchiveIcon /> },
