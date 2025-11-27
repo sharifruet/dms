@@ -145,9 +145,17 @@ public class DatabaseMetadataExtractionService {
      */
     private String extractFieldUsingPostgreSQLRegex(String extractedText, String regexPattern, String fieldKey) {
         try {
-            // Use PostgreSQL regexp_matches function
-            // regexp_matches returns a text array, we extract the first capture group [1]
-            String sql = "SELECT (regexp_matches(:extractedText, :regexPattern, 'i'))[1]";
+            String sql;
+            
+            // For procurementDescription field, apply regexp_replace to normalize whitespace
+            if ("procurementDescription".equals(fieldKey)) {
+                // Apply regexp_replace to normalize multiple spaces to single space
+                sql = "SELECT regexp_replace((regexp_matches(:extractedText, :regexPattern, 'is'))[1], '\\s+', ' ', 'g')";
+            } else {
+                // Use PostgreSQL regexp_matches function
+                // regexp_matches returns a text array, we extract the first capture group [1]
+                sql = "SELECT (regexp_matches(:extractedText, :regexPattern, 'i'))[1]";
+            }
             
             Query query = entityManager.createNativeQuery(sql);
             query.setParameter("extractedText", extractedText);
