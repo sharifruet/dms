@@ -15,6 +15,7 @@ import com.bpdb.dms.service.DocumentMetadataService;
 import com.bpdb.dms.service.DocumentTypeFieldService;
 import com.bpdb.dms.entity.DocumentTypeField;
 import com.bpdb.dms.service.FileUploadService;
+import com.bpdb.dms.service.DatabaseMetadataExtractionService;
 import com.bpdb.dms.service.StationeryTrackingService;
 import com.bpdb.dms.entity.AppDocumentEntry;
 import com.bpdb.dms.repository.AppDocumentEntryRepository;
@@ -83,6 +84,9 @@ public class DocumentController {
 
     @Autowired
     private FolderRepository folderRepository;
+
+    @Autowired(required = false)
+    private DatabaseMetadataExtractionService databaseMetadataExtractionService;
 
     @GetMapping
     @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
@@ -407,6 +411,82 @@ public class DocumentController {
                 .map(dt -> java.util.Map.of("value", dt.name(), "label", dt.getLabel()))
                 .toList();
         return ResponseEntity.ok(types);
+    }
+
+    @PostMapping("/{id}/extract-metadata")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_EDIT')")
+    public ResponseEntity<Map<String, Object>> extractMetadata(
+            @PathVariable Long id,
+            Authentication authentication
+    ) {
+        try {
+            Optional<Document> documentOpt = documentRepository.findById(id);
+            if (documentOpt.isEmpty()) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("error", "Document not found");
+                return ResponseEntity.notFound().build();
+            }
+
+            if (databaseMetadataExtractionService == null) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("error", "Database metadata extraction service not available");
+                return ResponseEntity.internalServerError().body(error);
+            }
+
+            Document document = documentOpt.get();
+            if (document.getExtractedText() == null || document.getExtractedText().trim().isEmpty()) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("error", "No extracted text found for document. Please run OCR first.");
+                return ResponseEntity.badRequest().body(error);
+            }
+
+            // Get metadata before extraction
+            Map<String, String> metadataBefore = documentMetadataService.getMetadataMap(document);
+            String procurementDescBefore = metadataBefore.get("procurementDescription");
+
+            // Trigger metadata extraction
+            logger.info("Manual metadata extraction triggered for document {}", id);
+            databaseMetadataExtractionService.extractMetadataForDocument(id);
+
+            // Reload document to get updated metadata
+            document = documentRepository.findById(id).orElse(null);
+            if (document == null) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("error", "Document not found after extraction");
+                return ResponseEntity.internalServerError().body(error);
+            }
+
+            // Get updated metadata
+            Map<String, String> metadataAfter = documentMetadataService.getMetadataMap(document);
+            String procurementDescAfter = metadataAfter.get("procurementDescription");
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Metadata extraction completed");
+            response.put("metadata", metadataAfter);
+            response.put("documentId", id);
+            response.put("documentType", document.getDocumentType());
+            
+            // Add diagnostic information
+            Map<String, Object> diagnostics = new HashMap<>();
+            diagnostics.put("extractedTextLength", document.getExtractedText() != null ? document.getExtractedText().length() : 0);
+            diagnostics.put("procurementDescriptionBefore", procurementDescBefore != null ? "EXISTS (" + procurementDescBefore.length() + " chars)" : "NULL");
+            diagnostics.put("procurementDescriptionAfter", procurementDescAfter != null ? "EXISTS (" + procurementDescAfter.length() + " chars)" : "NULL");
+            diagnostics.put("procurementDescriptionExtracted", procurementDescAfter != null && !procurementDescAfter.trim().isEmpty());
+            if (procurementDescAfter != null && !procurementDescAfter.trim().isEmpty()) {
+                diagnostics.put("procurementDescriptionPreview", 
+                    procurementDescAfter.length() > 300 ? procurementDescAfter.substring(0, 300) + "..." : procurementDescAfter);
+            }
+            response.put("diagnostics", diagnostics);
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            logger.error("Error extracting metadata for document {}: {}", id, e.getMessage(), e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("error", e.getMessage());
+            error.put("stackTrace", e.getStackTrace());
+            return ResponseEntity.internalServerError().body(error);
+        }
     }
 
     @PostMapping("/{id}/reprocess-ocr")

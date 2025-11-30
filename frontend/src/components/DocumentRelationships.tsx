@@ -81,8 +81,11 @@ const DocumentRelationships: React.FC<DocumentRelationshipsProps> = ({
   const loadAvailableDocuments = async () => {
     setLoadingDocuments(true);
     try {
-      // Load documents that can be linked (excluding current document)
-      const response = await documentService.getDocuments({ size: 1000 });
+      // Prefer documents from the same folder (same workflow) as the current document
+      const folderId = document.folder?.id;
+      const response = await documentService.getDocuments(
+        folderId ? { folderId, size: 1000 } : { size: 1000 }
+      );
       const filtered = (response.content || []).filter(
         (doc: Document) => doc.id !== document.id
       );

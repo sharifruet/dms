@@ -611,10 +611,12 @@ public class FileUploadService {
             
             if (ocrResult != null && ocrResult.isSuccess()) {
                 // Update document with OCR results if needed
+                boolean documentTypeChanged = false;
                 if (ocrResult.getDocumentType() != null && managedDocument.getDocumentType() == null) {
                     try {
                         managedDocument.setDocumentType(ocrResult.getDocumentType());
                         documentRepository.save(managedDocument);
+                        documentTypeChanged = true;
                     } catch (IllegalArgumentException e) {
                         logger.warn("Invalid document type from OCR: {}", ocrResult.getDocumentType());
                     }
@@ -625,6 +627,23 @@ public class FileUploadService {
                 }
 
                 combinedMetadata.putAll(documentMetadataService.extractMetadataFromText(managedDocument, ocrResult.getExtractedText()));
+                
+                // Re-run database metadata extraction if document type was changed or if it's a TENDER_NOTICE
+                // This ensures procurementDescription and other fields are extracted correctly
+                if (documentTypeChanged || DocumentType.TENDER_NOTICE.name().equals(managedDocument.getDocumentType())) {
+                    if (databaseMetadataExtractionService != null && 
+                        ocrResult.getExtractedText() != null && !ocrResult.getExtractedText().trim().isEmpty()) {
+                        try {
+                            logger.info("Re-running database metadata extraction for document {} (type: {})", 
+                                documentId, managedDocument.getDocumentType());
+                            databaseMetadataExtractionService.extractMetadataForDocument(documentId);
+                        } catch (Exception dbExtractError) {
+                            logger.warn("Database metadata extraction failed for document {}: {}", 
+                                documentId, dbExtractError.getMessage());
+                            // Continue processing even if DB extraction fails
+                        }
+                    }
+                }
                 
                 // Index document for search
                 documentIndexingService.indexDocument(

@@ -221,7 +221,7 @@ const ExpiryTrackingPage: React.FC = () => {
     }
   };
 
-  // Load documents from selected workflow
+  // Load documents from selected workflow (all documents in the workflow's folder)
   const loadDocumentsFromWorkflow = async (workflowId: number) => {
     try {
       setLoadingDocuments(true);
@@ -231,57 +231,25 @@ const ExpiryTrackingPage: React.FC = () => {
       setExistingExpiryDate('');
 
       // Find the workflow instance
-      const workflowInstance = workflows.find(w => w.id === workflowId);
-      if (!workflowInstance || !workflowInstance.workflow) {
-        setError('Workflow not found');
+      const workflowInstance = workflows.find((w) => w.id === workflowId);
+      if (!workflowInstance || !workflowInstance.document?.id) {
+        setError('Workflow or base document not found');
         return;
       }
 
-      // Get all workflow instances for this workflow to find documents
-      const allInstances = await workflowService.getWorkflowInstances(0, 1000);
-      const instancesForWorkflow = allInstances.content.filter(
-        wi => wi.workflow.id === workflowInstance.workflow.id
-      );
+      // Use the workflow's folder (via the instance's document) to list all documents in this workflow
+      const docResponse = await documentService.getDocumentById(workflowInstance.document.id);
+      const baseDoc = (docResponse as any).document || docResponse;
 
-      // Collect unique documents from all instances
-      const documentIds = new Set<number>();
-      const documents: Document[] = [];
-
-      for (const instance of instancesForWorkflow) {
-        if (instance.document?.id && !documentIds.has(instance.document.id)) {
-          documentIds.add(instance.document.id);
-          try {
-            const docResponse = await documentService.getDocumentById(instance.document.id);
-            const doc = (docResponse as any).document || docResponse;
-            documents.push(doc);
-          } catch (err) {
-            console.error(`Failed to load document ${instance.document.id}:`, err);
-          }
-        }
-      }
-
-      // If no documents from instances, try to get documents from workflow's folder
-      if (documents.length === 0) {
-        // Try to get folder from workflow - workflows have a folder relationship
-        // For now, we'll use the workflow instance's document's folder as fallback
-        if (workflowInstance.document?.id) {
-          const docResponse = await documentService.getDocumentById(workflowInstance.document.id);
-          const doc = (docResponse as any).document || docResponse;
-          
-          if (doc.folder?.id) {
-            // Get all documents from this folder
-            const docsResponse = await documentService.getDocuments({
-              folderId: doc.folder.id,
-              page: 0,
-              size: 1000
-            });
-            setWorkflowDocuments(docsResponse.content || []);
-            return;
-          }
-        }
-        setError('No documents found for this workflow');
+      if (baseDoc.folder?.id) {
+        const docsResponse = await documentService.getDocuments({
+          folderId: baseDoc.folder.id,
+          page: 0,
+          size: 1000,
+        });
+        setWorkflowDocuments(docsResponse.content || []);
       } else {
-        setWorkflowDocuments(documents);
+        setError('No folder found for this workflow');
       }
     } catch (error) {
       console.error('Failed to load documents from workflow:', error);
