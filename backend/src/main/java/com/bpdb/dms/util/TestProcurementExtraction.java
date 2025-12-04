@@ -8,20 +8,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.ComponentScan;
+import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.Map;
 
 /**
  * Utility class to test procurement description extraction
- * Run with: java -cp ... com.bpdb.dms.util.TestProcurementExtraction
- * Or use Spring Boot: mvn spring-boot:run -Dspring-boot.run.arguments=--test-procurement-extraction
+ * This component is automatically loaded when running the application
+ * Add --test-procurement-extraction argument to execute the test
  */
-@SpringBootApplication
-@ComponentScan(basePackages = "com.bpdb.dms")
+@Component
 public class TestProcurementExtraction implements CommandLineRunner {
     
     private static final Logger logger = LoggerFactory.getLogger(TestProcurementExtraction.class);
@@ -34,10 +31,6 @@ public class TestProcurementExtraction implements CommandLineRunner {
     
     @Autowired
     private DocumentMetadataService documentMetadataService;
-    
-    public static void main(String[] args) {
-        SpringApplication.run(TestProcurementExtraction.class, args);
-    }
     
     @Override
     public void run(String... args) {

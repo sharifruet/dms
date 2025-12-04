@@ -11,7 +11,7 @@ services:
       POSTGRES_PASSWORD: dms_password
       POSTGRES_HOST_AUTH_METHOD: trust
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/src/main/resources/db/migration:/docker-entrypoint-initdb.d
@@ -62,35 +62,35 @@ services:
 
   # Spring Boot Backend
   
-  #backend:
-   # build:
-   #   context: ./backend
-   #   dockerfile: Dockerfile
-   # container_name: dms-backend
-   # environment:
-    #  - SPRING_PROFILES_ACTIVE=docker
-     # - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/dms_db
-      #- SPRING_DATASOURCE_USERNAME=dms_user
-#      - SPRING_DATASOURCE_PASSWORD=dms_password
- #     - SPRING_REDIS_HOST=redis
-#      - SPRING_REDIS_PORT=6379
-##      - SPRING_ELASTICSEARCH_HOSTS=http://elasticsearch:9200
- #   ports:
-#      - "8080:8080"
-#    depends_on:
-#      postgres:
-#        condition: service_healthy
-#      redis:
-#        condition: service_healthy
-#      elasticsearch:
-#        condition: service_healthy
-#    networks:
-#      - dms-network
-#    healthcheck:
-#      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
-#      interval: 30s
-#      timeout: 10s
-#      retries: 5
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dms-backend
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/dms_db
+      - SPRING_DATASOURCE_USERNAME=dms_user
+      - SPRING_DATASOURCE_PASSWORD=dms_password
+      - SPRING_REDIS_HOST=redis
+      - SPRING_REDIS_PORT=6379
+      - SPRING_ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+     - "8080:8080"
+    depends_on:
+     postgres:
+       condition: service_healthy
+     redis:
+       condition: service_healthy
+     elasticsearch:
+       condition: service_healthy
+    networks:
+     - dms-network
+    healthcheck:
+     test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+     interval: 30s
+     timeout: 10s
+     retries: 5
 
   # React Frontend
   frontend:
