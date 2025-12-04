@@ -37,6 +37,9 @@ WORKDIR /app
 # Copy built jar
 COPY --from=build /app/target/*.jar app.jar
 
+# Copy tessdata files
+COPY tessdata/ /app/tessdata/
+
 # Create upload directory
 RUN mkdir -p /app/uploads
 

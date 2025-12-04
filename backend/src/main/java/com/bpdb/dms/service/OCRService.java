@@ -39,7 +39,7 @@ public class OCRService {
     
     private static final Logger logger = LoggerFactory.getLogger(OCRService.class);
     
-    @Value("${app.tesseract.data.path:/usr/share/tesseract-ocr/4.00/tessdata}")
+    @Value("${app.tesseract.data.path:./tessdata}")
     private String tesseractDataPath;
     
     @Value("${app.tesseract.language:eng}")
@@ -87,9 +87,19 @@ public class OCRService {
         try {
             Path dataPath = Paths.get(tesseractDataPath);
             if (!Files.exists(dataPath)) {
-                logger.warn("Tesseract data path not found at {}. OCR will be disabled.", tesseractDataPath);
-                ocrAvailable = false;
-                return;
+            	String findedPath = resolveTessdataPathFallback();
+            	if (findedPath != null) {
+            		logger.info("Tesseract data path resolved automatically to {}", findedPath);
+            		dataPath = Paths.get(findedPath);
+            	}
+            	
+				if (!Files.exists(dataPath) && findedPath != null) {
+					logger.warn("Tesseract data path not found at {}. OCR will be disabled.", tesseractDataPath);
+	                ocrAvailable = false;
+	                return;
+				}
+				tesseractDataPath = findedPath;
+				dataPath = Paths.get(tesseractDataPath);
             }
             
             tesseract.setDatapath(tesseractDataPath);
@@ -134,14 +144,16 @@ public class OCRService {
                         }
                     }
                 }
-            } catch (Exception ignored) {
-                // Ignore - binary may not be on PATH
+            } catch (Exception e) {
+                e.printStackTrace();
             }
 
             // 3) Common Homebrew paths (Apple Silicon / Intel)
             String[] brewCandidates = new String[] {
                 "/opt/homebrew/share/tessdata",
-                "/usr/local/share/tessdata"
+                "/usr/local/share/tessdata",
+                "/app/tessdata",
+                "./tessdata"
             };
             for (String candidate : brewCandidates) {
                 if (Files.exists(Paths.get(candidate))) {

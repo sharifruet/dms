@@ -67,6 +67,7 @@ build/
 
 # Java
 *.class
+**/*.class
 *.log
 *.jar
 *.war
@@ -100,6 +101,19 @@ application-local.properties
 *.temp
 temp/
 tmp/
+
+# Include tessdata files (OCR language data)
+!backend/tessdata/
+backend/target/*.*
+backend/target/*/*.*
+backend/target/*/*/*.*
+backend/target/*/*/*/*.*
+backend/target/*/*/*/*/*.*
+backend/target/*/*/*/*/*/*.*
+backend/target/*/*/*/*/*/*/*.*
+backend/target/*/*/*/*/*/*/*/*.*
+backend/target/*/*/*/*/*/*/*/*/*.*
+backend/target/classes/*.class
 
 # Docker
 .docker/
