@@ -69,8 +69,11 @@
             -- Tender Security Valid Up To
             ('TENDER_NOTICE', 'tenderSecurityValidUpTo', 'Tender Security Valid Up To', 'date', false, true, 'Tender/Proposal\s+Security\s+Valid\s+Up\s+to\s*:\s*(\d{1,2}[\-/]\w+[\-/]\d{4})', 16, 'Tender security validity date'),
             
+            -- Procurement package no
+            ('TENDER_NOTICE', 'procurementPackageNo', 'Procurement Package No', 'date', false, true, 'Tender/ Proposal\\s+(.*?)(?:\\n|$)', 17, 'Procurement Package No'),
+            
             -- Tender Valid Up To
-            ('TENDER_NOTICE', 'tenderValidUpTo', 'Tender Valid Up To', 'date', false, true, 'Tender/Proposal\s+Valid\s+Up\s+to\s*:\s*(\d{1,2}[\-/]\w+[\-/]\d{4})', 17, 'Tender validity date')
+            ('TENDER_NOTICE', 'tenderValidUpTo', 'Tender Valid Up To', 'date', false, true, 'Tender/Proposal\s+Valid\s+Up\s+to\s*:\s*(\d{1,2}[\-/]\w+[\-/]\d{4})', 18, 'Tender validity date')
             
             ON CONFLICT (document_type, field_key) DO UPDATE 
             SET field_label = EXCLUDED.field_label,

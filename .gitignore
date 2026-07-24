@@ -59,6 +59,9 @@ backend/target/
 backend/.mvn/
 backend/mvnw*
 backend/.mvn/wrapper/maven-wrapper.jar
+backend/liquibase-db/target/
+backend/liquibase-db/target/classes/db/changelog/*
+
 
 # Gradle
 .gradle/

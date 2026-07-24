@@ -10,7 +10,6 @@ import com.bpdb.dms.repository.FolderRepository;
 import com.bpdb.dms.entity.Workflow;
 import com.bpdb.dms.entity.WorkflowInstance;
 import com.bpdb.dms.entity.WorkflowInstanceStatus;
-import com.bpdb.dms.entity.WorkflowType;
 import com.bpdb.dms.repository.WorkflowInstanceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
