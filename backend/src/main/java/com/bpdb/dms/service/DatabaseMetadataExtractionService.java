@@ -1,24 +1,27 @@
 package com.bpdb.dms.service;
 
-import com.bpdb.dms.entity.Document;
-import com.bpdb.dms.entity.DocumentTypeField;
-import com.bpdb.dms.repository.DocumentRepository;
-import com.bpdb.dms.repository.DocumentTypeFieldRepository;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
-import jakarta.persistence.Query;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.regex.Pattern;
-import java.util.regex.Matcher;
+import com.bpdb.dms.entity.Document;
+import com.bpdb.dms.entity.DocumentTypeField;
+import com.bpdb.dms.repository.DocumentRepository;
+import com.bpdb.dms.repository.DocumentTypeFieldRepository;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
 
 /**
  * Service for extracting metadata from documents using PostgreSQL regex patterns
@@ -187,6 +190,12 @@ public class DatabaseMetadataExtractionService {
                             logger.warn("✗ FAILED: No procurement description extracted for document {}. Check logs above for pattern matching details.", 
                                 document.getId());
                         }
+                    } else if ("procurementPackageNo".equals(fieldKey)) {
+                    	List<String> possiblePackageNo = extractAllTenderCodes(document.getExtractedText());
+                    	value = String.join("|", possiblePackageNo);
+                    	if (value.length() != 0) {
+                    		fields.put(fieldKey, value);
+                    	}
                     } else {
                         // Extract field value using PostgreSQL regex
                         value = extractFieldUsingPostgreSQLRegex(extractedText, regexPattern, fieldKey);
@@ -582,6 +591,30 @@ public class DatabaseMetadataExtractionService {
             logger.error("Error in batch metadata extraction: {}", e.getMessage(), e);
             return 0;
         }
+    }
+    
+    // If you want to extract only the code (without "Tender/ Proposal")
+    public List<String> extractAllTenderCodes(String input) {
+        List<String> results = new ArrayList<>();
+        
+        if (input == null || input.isEmpty()) {
+            return results;
+        }
+        
+        // This pattern captures everything after "Tender/ Proposal" 
+        // until the end of line or a newline
+        String regex = "Tender/ Proposal\\s+(.+?)(?:\\n|$)";
+        Pattern pattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
+        Matcher matcher = pattern.matcher(input);
+        
+        while (matcher.find()) {
+            String value = matcher.group(1).trim();
+            if (!value.isEmpty()) {
+                results.add(value);
+            }
+        }
+        
+        return results;
     }
 }
 
