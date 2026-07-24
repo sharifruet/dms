@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="011-create-procurement-package" author="bpdb">
+        <createTable tableName="procurement_packages">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="document_id" type="BIGINT"/>
+            <column name="status" type="VARCHAR(255)"/>
+            <column name="package_no" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="lot_no" type="VARCHAR(255)"/>
+            <column name="description" type="TEXT"/>
+            <column name="unit" type="VARCHAR(255)"/>
+            <column name="quantity" type="INTEGER"/>
+            <column name="procurement_method" type="VARCHAR(255)"/>
+            <column name="contract_approving_authority" type="VARCHAR(255)"/>
+            <column name="source_of_fund" type="VARCHAR(255)"/>
+            <column name="unit_cost" type="DOUBLE"/>
+            <column name="total_cost" type="DOUBLE"/>
+            <column name="planned_dates_id" type="BIGINT"/>
+            <column name="planned_days_id" type="BIGINT"/>
+            <column name="actual_dates_id" type="BIGINT"/>
+        </createTable>
+
+        <createTable tableName="stage_timelines">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="advertise_tender" type="VARCHAR(255)"/>
+            <column name="tender_opening" type="VARCHAR(255)"/>
+            <column name="tender_evaluation" type="VARCHAR(255)"/>
+            <column name="approval_to_award" type="VARCHAR(255)"/>
+            <column name="notification_of_award" type="VARCHAR(255)"/>
+            <column name="signing_of_contract" type="VARCHAR(255)"/>
+            <column name="completion_of_contract" type="VARCHAR(255)"/>
+            <column name="total_time" type="VARCHAR(255)"/>
+        </createTable>
+
+        <createTable tableName="stage_durations">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="advertise_tender_days" type="INTEGER"/>
+            <column name="tender_opening_days" type="INTEGER"/>
+            <column name="tender_evaluation_days" type="INTEGER"/>
+            <column name="approval_to_award_days" type="INTEGER"/>
+            <column name="notification_of_award_days" type="INTEGER"/>
+            <column name="signing_of_contract_days" type="INTEGER"/>
+            <column name="completion_of_contract_days" type="INTEGER"/>
+            <column name="total_time_days" type="INTEGER"/>
+        </createTable>
+
+        <addUniqueConstraint columnNames="package_no" constraintName="uk_procurement_packages_package_no"
+                             tableName="procurement_packages"/>
+
+        <addForeignKeyConstraint baseColumnNames="planned_dates_id"
+                                 baseTableName="procurement_packages"
+                                 constraintName="fk_procurement_package_planned_dates"
+                                 referencedColumnNames="id"
+                                 referencedTableName="stage_timelines"/>
+
+        <addForeignKeyConstraint baseColumnNames="planned_days_id"
+                                 baseTableName="procurement_packages"
+                                 constraintName="fk_procurement_package_planned_days"
+                                 referencedColumnNames="id"
+                                 referencedTableName="stage_durations"/>
+
+        <addForeignKeyConstraint baseColumnNames="actual_dates_id"
+                                 baseTableName="procurement_packages"
+                                 constraintName="fk_procurement_package_actual_dates"
+                                 referencedColumnNames="id"
+                                 referencedTableName="stage_timelines"/>
+
+        <createIndex indexName="idx_procurement_packages_package_no" tableName="procurement_packages">
+            <column name="package_no"/>
+        </createIndex>
+
+        <createIndex indexName="idx_procurement_packages_document_id" tableName="procurement_packages">
+            <column name="document_id"/>
+        </createIndex>
+
+        <createIndex indexName="idx_procurement_packages_status" tableName="procurement_packages">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

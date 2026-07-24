@@ -38,4 +38,5 @@
     <include file="db/changelog/028-add-workflow-app-entry-relationship.xml"/>
     <include file="db/changelog/029-add-bill-document-fields.xml"/>
     <include file="db/changelog/030-update-tender-notice-fields-regex.xml"/>
+    <include file="db/changelog/011-create-procurement-package.xml"/>
 </databaseChangeLog>

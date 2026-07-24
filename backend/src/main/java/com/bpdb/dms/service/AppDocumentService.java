@@ -2,7 +2,12 @@ package com.bpdb.dms.service;
 
 import com.bpdb.dms.entity.AppDocumentEntry;
 import com.bpdb.dms.entity.Document;
+import com.bpdb.dms.entity.ProcurementPackage;
 import com.bpdb.dms.repository.AppDocumentEntryRepository;
+import com.bpdb.dms.repository.ProcurementPackageRepository;
+
+import lombok.RequiredArgsConstructor;
+
 import org.apache.poi.ss.usermodel.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,17 +22,16 @@ import java.time.format.DateTimeParseException;
 import java.util.*;
 
 @Service
+@RequiredArgsConstructor
 public class AppDocumentService {
 
     private static final Logger logger = LoggerFactory.getLogger(AppDocumentService.class);
     private static final List<String> EXPECTED_HEADERS = List.of("DATE", "TITLE", "AMOUNT");
 
     private final AppDocumentEntryRepository appDocumentEntryRepository;
-
-    public AppDocumentService(AppDocumentEntryRepository appDocumentEntryRepository) {
-        this.appDocumentEntryRepository = appDocumentEntryRepository;
-    }
-
+    private final ProcurementPlanParserService procurementPlanParserService;
+    private final ProcurementPackageRepository packageRepository;
+    
     /**
      * Process an uploaded APP Excel file, persist structured entries, and return summary metadata.
      * Supports two formats:
@@ -67,7 +71,7 @@ public class AppDocumentService {
                 Map<String, Integer> nextHeaderIndex = extractHeaderIndices(nextRow, formatter);
                 if (nextHeaderIndex.size() > headerIndex.size()) {
                     headerRow = nextRow;
-                    headerIndex = nextHeaderIndex;
+                    headerIndex.putAll(nextHeaderIndex);
                     logger.info("Using row 2 as header row for APP document {}", document.getId());
                 }
             }
@@ -93,6 +97,8 @@ public class AppDocumentService {
                                  // Also check for common variations
                                  headerIndex.keySet().stream().anyMatch(h -> h.matches(".*PROJECT.*NAME.*")) ||
                                  headerIndex.keySet().stream().anyMatch(h -> h.matches(".*PROJECT.*IDENTIFIER.*"));
+            
+            boolean isAnnualProcurementPlan = headerIndex.keySet().stream().anyMatch(key -> key.equals("ANNUAL PROCUREMENT PLAN (APP)"));
             
             logger.info("APP document {} - isSimpleFormat: {}, isAppFormat: {}", document.getId(), isSimpleFormat, isAppFormat);
 
@@ -217,6 +223,18 @@ public class AppDocumentService {
                 
                 logger.info("APP document {} - processed {} rows, created {} entries", 
                     document.getId(), rowCount, entries.size());
+            } if (isAnnualProcurementPlan) {
+            	// parse and save in db the whole plan
+            	List<ProcurementPackage> packages = procurementPlanParserService.parse(file);
+            	
+            	// save all packages to db 
+            	packages.stream().forEach(pack -> {
+            		pack.setDocumentId(document.getId());
+            		packageRepository.save(pack);
+            	});
+            	metadata.put("appStatus", "parsed_successfully");
+                metadata.put("appHeadersDetected", "ANNUAL PROCUREMENT PLAN (APP)");
+                metadata.put("appEntryCount", String.valueOf(packages.size()));
             } else {
                 // If neither format matches, log all headers and try to process anyway with best guess
                 logger.warn("APP document {} - Unsupported format detected. Headers: {}", 
@@ -318,7 +336,7 @@ public class AppDocumentService {
         for (Cell cell : headerRow) {
             String header = formatter.formatCellValue(cell);
             if (header != null) {
-                headerIndex.put(header.trim().toUpperCase(Locale.ROOT), cell.getColumnIndex());
+                headerIndex.put(normalizeSpaces(header.trim().toUpperCase(Locale.ROOT)), cell.getColumnIndex());
             }
         }
         return headerIndex;
@@ -380,6 +398,15 @@ public class AppDocumentService {
             }
         }
         return null;
+    }
+    
+    public static String normalizeSpaces(String input) {
+        if (input == null) {
+            return null;
+        }
+
+        // Remove leading/trailing spaces and replace multiple spaces with a single space
+        return input.trim().replaceAll("\\s+", " ");
     }
 }
 
