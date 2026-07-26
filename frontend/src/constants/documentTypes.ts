@@ -13,6 +13,7 @@ export enum DocumentType {
   CORRESPONDENCE = 'CORRESPONDENCE',
   STATIONERY_RECORD = 'STATIONERY_RECORD',
   OTHER = 'OTHER',
+  ANNUAL_PROCUREMENT_PLAN = 'ANNUAL_PROCUREMENT_PLAN',
 }
 
 /**
@@ -29,6 +30,7 @@ export const DocumentTypeLabels: Record<DocumentType, string> = {
   [DocumentType.CORRESPONDENCE]: 'Correspondence',
   [DocumentType.STATIONERY_RECORD]: 'Stationery Record',
   [DocumentType.OTHER]: 'Other',
+  [DocumentType.ANNUAL_PROCUREMENT_PLAN]: 'Annual Procurement Plan',
 };
 
 /**

@@ -143,14 +143,15 @@ const Documents: React.FC = () => {
       const allowed = new Set(ALL_DOCUMENT_TYPES);
       const filtered = types.filter((t: any) => allowed.has(t.value));
       const order: Record<string, number> = {
-        [DocumentType.TENDER_NOTICE]: 1,
-        [DocumentType.TENDER_DOCUMENT]: 2,
-        [DocumentType.CONTRACT_AGREEMENT]: 3,
-        [DocumentType.BANK_GUARANTEE_BG]: 4,
-        [DocumentType.PERFORMANCE_SECURITY_PS]: 5,
-        [DocumentType.PERFORMANCE_GUARANTEE_PG]: 6,
-        [DocumentType.BILL]: 7,
-        [DocumentType.STATIONERY_RECORD]: 8,
+        [DocumentType.ANNUAL_PROCUREMENT_PLAN]: 1,
+        [DocumentType.TENDER_NOTICE]: 2,
+        [DocumentType.TENDER_DOCUMENT]: 3,
+        [DocumentType.CONTRACT_AGREEMENT]: 4,
+        [DocumentType.BANK_GUARANTEE_BG]: 5,
+        [DocumentType.PERFORMANCE_SECURITY_PS]: 6,
+        [DocumentType.PERFORMANCE_GUARANTEE_PG]: 7,
+        [DocumentType.BILL]: 8,
+        [DocumentType.STATIONERY_RECORD]: 9,
         [DocumentType.OTHER]: 99,
       };
       const mapped: DocumentCategory[] = filtered.map((t, idx) => ({

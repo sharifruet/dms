@@ -19,7 +19,8 @@ public enum DocumentType {
     BILL("Bill"),
     CORRESPONDENCE("Correspondence"),
     STATIONERY_RECORD("Stationery Record"),
-    OTHER("Other");
+    OTHER("Other"),
+    ANNUAL_PROCUREMENT_PLAN("Annual Procurement Plan");
 
     private final String label;
 

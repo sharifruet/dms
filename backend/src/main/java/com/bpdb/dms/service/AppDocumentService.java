@@ -8,6 +8,7 @@ import com.bpdb.dms.repository.ProcurementPackageRepository;
 
 import lombok.RequiredArgsConstructor;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.poi.ss.usermodel.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -229,8 +230,14 @@ public class AppDocumentService {
             	
             	// save all packages to db 
             	packages.stream().forEach(pack -> {
-            		pack.setDocumentId(document.getId());
-            		packageRepository.save(pack);
+                    if (StringUtils.isNotBlank(pack.getStatus()) 
+                        && StringUtils.isNotBlank(pack.getPackageNo()) 
+                        && StringUtils.isNotBlank(pack.getDescription())
+                        && StringUtils.isNotBlank(pack.getProcurementMethod())
+                        && !pack.getPackageNo().trim().equals("(1)")) {
+                        pack.setDocumentId(document.getId());
+                        packageRepository.save(pack);
+                    }
             	});
             	metadata.put("appStatus", "parsed_successfully");
                 metadata.put("appHeadersDetected", "ANNUAL PROCUREMENT PLAN (APP)");
