@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!-- Tender Notice -->
+    <changeSet id="031-001-create-tender-notices" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="tender_notices"/></not>
+        </preConditions>
+        <comment>Create tender_notices table for TENDER_NOTICE typed documents</comment>
+        <createTable tableName="tender_notices">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_tender_notices"/>
+            </column>
+            <column name="document_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_tender_notices_document_id"
+                             foreignKeyName="fk_tender_notices_document"
+                             referencedTableName="documents" referencedColumnNames="id"/>
+            </column>
+            <column name="tender_id" type="VARCHAR(100)"/>
+            <column name="tender_type" type="VARCHAR(50)"/>
+            <column name="tender_date" type="DATE"/>
+            <column name="closing_date" type="DATE"/>
+            <column name="publication_date" type="DATE"/>
+            <column name="procurement_package_no" type="VARCHAR(255)"/>
+            <column name="tender_valid_up_to" type="DATE"/>
+            <column name="procurement_nature" type="VARCHAR(100)"/>
+            <column name="procurement_type" type="VARCHAR(100)"/>
+            <column name="procurement_description" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <createIndex tableName="tender_notices" indexName="idx_tender_notices_tender_id">
+            <column name="tender_id"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- Tender Document -->
+    <changeSet id="031-002-create-tender-documents" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="tender_documents"/></not>
+        </preConditions>
+        <comment>Create tender_documents table for TENDER_DOCUMENT typed documents</comment>
+        <createTable tableName="tender_documents">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_tender_documents"/>
+            </column>
+            <column name="document_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_tender_documents_document_id"
+                             foreignKeyName="fk_tender_documents_document"
+                             referencedTableName="documents" referencedColumnNames="id"/>
+            </column>
+            <column name="tender_id" type="VARCHAR(100)"/>
+            <column name="document_category" type="VARCHAR(100)"/>
+            <column name="tender_type" type="VARCHAR(50)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <createIndex tableName="tender_documents" indexName="idx_tender_documents_tender_id">
+            <column name="tender_id"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- Contract Agreement -->
+    <changeSet id="031-003-create-contract-agreements" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="contract_agreements"/></not>
+        </preConditions>
+        <comment>Create contract_agreements table for CONTRACT_AGREEMENT typed documents</comment>
+        <createTable tableName="contract_agreements">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_contract_agreements"/>
+            </column>
+            <column name="document_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_contract_agreements_document_id"
+                             foreignKeyName="fk_contract_agreements_document"
+                             referencedTableName="documents" referencedColumnNames="id"/>
+            </column>
+            <column name="contract_number" type="VARCHAR(100)"/>
+            <column name="vendor_name" type="VARCHAR(255)"/>
+            <column name="contract_date" type="DATE"/>
+            <column name="contract_amount" type="NUMERIC(18,2)"/>
+            <column name="validity_period" type="VARCHAR(100)"/>
+            <column name="expiry_date" type="DATE"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <createIndex tableName="contract_agreements" indexName="idx_contract_agreements_contract_number">
+            <column name="contract_number"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- Bank Guarantee -->
+    <changeSet id="031-004-create-bank-guarantees" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="bank_guarantees"/></not>
+        </preConditions>
+        <comment>Create bank_guarantees table for BANK_GUARANTEE_BG typed documents</comment>
+        <createTable tableName="bank_guarantees">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_bank_guarantees"/>
+            </column>
+            <column name="document_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_bank_guarantees_document_id"
+                             foreignKeyName="fk_bank_guarantees_document"
+                             referencedTableName="documents" referencedColumnNames="id"/>
+            </column>
+            <column name="bg_number" type="VARCHAR(100)"/>
+            <column name="bank_name" type="VARCHAR(255)"/>
+            <column name="bg_amount" type="NUMERIC(18,2)"/>
+            <column name="issue_date" type="DATE"/>
+            <column name="expiry_date" type="DATE"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <createIndex tableName="bank_guarantees" indexName="idx_bank_guarantees_bg_number">
+            <column name="bg_number"/>
+        </createIndex>
+        <createIndex tableName="bank_guarantees" indexName="idx_bank_guarantees_expiry_date">
+            <column name="expiry_date"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- Performance Security -->
+    <changeSet id="031-005-create-performance-securities" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="performance_securities"/></not>
+        </preConditions>
+        <comment>Create performance_securities table for PERFORMANCE_SECURITY_PS typed documents</comment>
+        <createTable tableName="performance_securities">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_performance_securities"/>
+            </column>
+            <column name="document_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_performance_securities_document_id"
+                             foreignKeyName="fk_performance_securities_document"
+                             referencedTableName="documents" referencedColumnNames="id"/>
+            </column>
+            <column name="ps_number" type="VARCHAR(100)"/>
+            <column name="ps_amount" type="NUMERIC(18,2)"/>
+            <column name="expiry_date" type="DATE"/>
+            <column name="bank_name" type="VARCHAR(255)"/>
+            <column name="issue_date" type="DATE"/>
+            <column name="contract_number" type="VARCHAR(100)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <createIndex tableName="performance_securities" indexName="idx_performance_securities_ps_number">
+            <column name="ps_number"/>
+        </createIndex>
+        <createIndex tableName="performance_securities" indexName="idx_performance_securities_expiry_date">
+            <column name="expiry_date"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- Performance Guarantee -->
+    <changeSet id="031-006-create-performance-guarantees" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="performance_guarantees"/></not>
+        </preConditions>
+        <comment>Create performance_guarantees table for PERFORMANCE_GUARANTEE_PG typed documents</comment>
+        <createTable tableName="performance_guarantees">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_performance_guarantees"/>
+            </column>
+            <column name="document_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_performance_guarantees_document_id"
+                             foreignKeyName="fk_performance_guarantees_document"
+                             referencedTableName="documents" referencedColumnNames="id"/>
+            </column>
+            <column name="pg_number" type="VARCHAR(100)"/>
+            <column name="pg_amount" type="NUMERIC(18,2)"/>
+            <column name="expiry_date" type="DATE"/>
+            <column name="bank_name" type="VARCHAR(255)"/>
+            <column name="issue_date" type="DATE"/>
+            <column name="contract_number" type="VARCHAR(100)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <createIndex tableName="performance_guarantees" indexName="idx_performance_guarantees_pg_number">
+            <column name="pg_number"/>
+        </createIndex>
+        <createIndex tableName="performance_guarantees" indexName="idx_performance_guarantees_expiry_date">
+            <column name="expiry_date"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- Bill Document (type-specific; separate from bill_headers) -->
+    <changeSet id="031-007-create-bill-documents" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="bill_documents"/></not>
+        </preConditions>
+        <comment>Create bill_documents table for BILL typed documents</comment>
+        <createTable tableName="bill_documents">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_bill_documents"/>
+            </column>
+            <column name="document_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_bill_documents_document_id"
+                             foreignKeyName="fk_bill_documents_document"
+                             referencedTableName="documents" referencedColumnNames="id"/>
+            </column>
+            <column name="vendor_name" type="VARCHAR(255)"/>
+            <column name="invoice_number" type="VARCHAR(100)"/>
+            <column name="invoice_date" type="DATE"/>
+            <column name="fiscal_year" type="VARCHAR(20)"/>
+            <column name="total_amount" type="NUMERIC(18,2)"/>
+            <column name="tax_amount" type="NUMERIC(18,2)"/>
+            <column name="net_amount" type="NUMERIC(18,2)"/>
+            <column name="description" type="VARCHAR(1000)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <createIndex tableName="bill_documents" indexName="idx_bill_documents_invoice_number">
+            <column name="invoice_number"/>
+        </createIndex>
+        <createIndex tableName="bill_documents" indexName="idx_bill_documents_fiscal_year">
+            <column name="fiscal_year"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- Correspondence -->
+    <changeSet id="031-008-create-correspondences" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="correspondences"/></not>
+        </preConditions>
+        <comment>Create correspondences table for CORRESPONDENCE typed documents</comment>
+        <createTable tableName="correspondences">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_correspondences"/>
+            </column>
+            <column name="document_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_correspondences_document_id"
+                             foreignKeyName="fk_correspondences_document"
+                             referencedTableName="documents" referencedColumnNames="id"/>
+            </column>
+            <column name="reference_no" type="VARCHAR(100)"/>
+            <column name="subject" type="VARCHAR(500)"/>
+            <column name="letter_date" type="DATE"/>
+            <column name="from_party" type="VARCHAR(255)"/>
+            <column name="to_party" type="VARCHAR(255)"/>
+            <column name="related_tender_id" type="VARCHAR(100)"/>
+            <column name="contract_number" type="VARCHAR(100)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <createIndex tableName="correspondences" indexName="idx_correspondences_reference_no">
+            <column name="reference_no"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- Stationery Record -->
+    <changeSet id="031-009-create-stationery-records" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="stationery_records"/></not>
+        </preConditions>
+        <comment>Create stationery_records table for STATIONERY_RECORD typed documents</comment>
+        <createTable tableName="stationery_records">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_stationery_records"/>
+            </column>
+            <column name="document_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_stationery_records_document_id"
+                             foreignKeyName="fk_stationery_records_document"
+                             referencedTableName="documents" referencedColumnNames="id"/>
+            </column>
+            <column name="item_name" type="VARCHAR(255)"/>
+            <column name="quantity" type="NUMERIC(18,2)"/>
+            <column name="unit" type="VARCHAR(50)"/>
+            <column name="issue_date" type="DATE"/>
+            <column name="employee_id" type="BIGINT">
+                <constraints foreignKeyName="fk_stationery_records_employee"
+                             referencedTableName="users" referencedColumnNames="id"/>
+            </column>
+            <column name="department" type="VARCHAR(255)"/>
+            <column name="remarks" type="VARCHAR(1000)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <createIndex tableName="stationery_records" indexName="idx_stationery_records_employee_id">
+            <column name="employee_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
