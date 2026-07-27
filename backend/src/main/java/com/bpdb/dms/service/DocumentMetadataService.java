@@ -174,7 +174,9 @@ public class DocumentMetadataService {
         // First, try to use configured field mappings if available
         if (documentTypeFieldService != null) {
             Map<String, String> mappedFields = documentTypeFieldService.mapOcrDataToFields(documentType, extractedText);
-            inferred.putAll(mappedFields);
+            if (mappedFields != null && !mappedFields.isEmpty()) {
+                inferred.putAll(mappedFields);
+            }
         }
 
         // Fallback to legacy extraction patterns

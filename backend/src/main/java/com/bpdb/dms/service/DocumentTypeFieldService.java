@@ -7,11 +7,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -85,14 +85,18 @@ public class DocumentTypeFieldService {
         List<DocumentTypeField> fields = repository
             .findByDocumentTypeAndIsActiveTrueOrderByDisplayOrderAsc(documentType);
         
-        return fields.stream()
+        // Collectors.toMap does not allow null values — skip unmatched OCR fields
+        Map<String, String> mapped = new LinkedHashMap<>();
+        fields.stream()
             .filter(DocumentTypeField::getIsOcrMappable)
             .filter(field -> field.getOcrPattern() != null && !field.getOcrPattern().isBlank())
-            .collect(Collectors.toMap(
-                DocumentTypeField::getFieldKey,
-                field -> extractValueFromOcr(ocrText, field.getOcrPattern()),
-                (existing, replacement) -> existing // Keep first match
-            ));
+            .forEach(field -> {
+                String value = extractValueFromOcr(ocrText, field.getOcrPattern());
+                if (value != null && !value.isBlank()) {
+                    mapped.putIfAbsent(field.getFieldKey(), value);
+                }
+            });
+        return mapped;
     }
 
     /**

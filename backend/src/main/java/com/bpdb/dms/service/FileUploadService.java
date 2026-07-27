@@ -107,6 +107,9 @@ public class FileUploadService {
     @Autowired(required = false)
     private DatabaseMetadataExtractionService databaseMetadataExtractionService;
 
+    @Autowired
+    private DocumentTypeEntityService documentTypeEntityService;
+
     /**
      * Upload a single file
      */
@@ -411,6 +414,11 @@ public class FileUploadService {
                     
                     logger.info("Bill OCR extraction completed for document: {} with status: {}", 
                                savedDocument.getId(), billMetadata.get("bill_ocr_status"));
+
+                    // Populate bill_documents entity from extracted metadata
+                    if (documentTypeEntityService != null) {
+                        documentTypeEntityService.populateFromDocument(savedDocument);
+                    }
                 } catch (Exception e) {
                     logger.error("Error during bill OCR extraction for document {}: {}", 
                                 savedDocument.getId(), e.getMessage(), e);
@@ -561,6 +569,11 @@ public class FileUploadService {
             if (!ocrService.isOcrAvailable()) {
                 logger.warn("Skipping OCR processing for document {} because OCR service is unavailable", documentId);
                 combinedMetadata.put("ocrStatus", "unavailable");
+                // Still populate type entity (e.g. correspondence/stationery with documentId only,
+                // or other types from any manual metadata already stored)
+                if (documentTypeEntityService != null) {
+                    documentTypeEntityService.populateFromDocument(managedDocument);
+                }
                 documentIndexingService.indexDocument(
                     managedDocument,
                     "",
@@ -578,7 +591,9 @@ public class FileUploadService {
                 documentRepository.save(managedDocument);
                 
                 // Extract metadata using database regex after extracted_text is saved
-                if (ocrResult.getExtractedText() != null && !ocrResult.getExtractedText().trim().isEmpty()) {
+                if (databaseMetadataExtractionService != null
+                        && ocrResult.getExtractedText() != null
+                        && !ocrResult.getExtractedText().trim().isEmpty()) {
                     try {
                         databaseMetadataExtractionService.extractMetadataForDocument(documentId);
                     } catch (Exception dbExtractError) {
@@ -598,6 +613,9 @@ public class FileUploadService {
                               "Error: " + errorMsg;
                 }
                 combinedMetadata.put("error", errorMsg != null ? errorMsg : "unknown");
+                if (documentTypeEntityService != null) {
+                    documentTypeEntityService.populateFromDocument(managedDocument);
+                }
                 documentIndexingService.indexDocument(
                     managedDocument,
                     "",
@@ -643,6 +661,11 @@ public class FileUploadService {
                         }
                     }
                 }
+
+                // Populate type-specific entity tables from extracted metadata
+                if (documentTypeEntityService != null) {
+                    documentTypeEntityService.populateFromDocument(managedDocument);
+                }
                 
                 // Index document for search
                 documentIndexingService.indexDocument(
@@ -669,6 +692,9 @@ public class FileUploadService {
                 if (errorMsg != null && !errorMsg.isEmpty()) {
                     combinedMetadata.put("ocrError", errorMsg);
                 }
+                if (documentTypeEntityService != null) {
+                    documentTypeEntityService.populateFromDocument(managedDocument);
+                }
                 documentIndexingService.indexDocument(
                     managedDocument,
                     "",
@@ -681,15 +707,18 @@ public class FileUploadService {
         } catch (Throwable e) {
             // Catch any remaining errors to prevent async task from crashing
             logger.error("Async processing failed for document: {} - Error type: {}, Message: {}", 
-                        documentId, e.getClass().getName(), e.getMessage());
+                        documentId, e.getClass().getName(), e.getMessage(), e);
             
-            // Still try to index the document even if OCR failed
+            // Still try to populate type entity + index even if mid-pipeline failed
+            // (e.g. DB metadata may already be saved before a later NPE)
             try {
-                // Refetch document for indexing in case of error
                 Document docForIndex = documentRepository.findById(documentId)
                     .orElseThrow(() -> new RuntimeException("Document not found: " + documentId));
                 if (docForIndex.getUploadedBy() != null) {
                     docForIndex.getUploadedBy().getId();
+                }
+                if (documentTypeEntityService != null) {
+                    documentTypeEntityService.populateFromDocument(docForIndex);
                 }
                 documentIndexingService.indexDocument(
                     docForIndex,
