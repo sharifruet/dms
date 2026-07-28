@@ -205,24 +205,37 @@ const DocumentsEnhanced: React.FC = () => {
           console.warn('[DocumentsEnhanced] No categories returned from API; starting from defaults');
         }
 
-        // Ensure all enum-based document types (including BILL) are available
-        const existingNames = new Set(baseCategories.map((c: DocumentCategory) => c.name));
-        const missingFromApi = ALL_DOCUMENT_TYPES
-          .filter((type) => !existingNames.has(type))
-          .map((type, idx) => ({
+        // Build categories strictly in ALL_DOCUMENT_TYPES display order,
+        // preferring API labels when present
+        const byName = new Map<string, DocumentCategory>();
+        baseCategories.forEach((c: DocumentCategory) => {
+          if (c?.name) byName.set(c.name, c);
+        });
+
+        const normalized: DocumentCategory[] = ALL_DOCUMENT_TYPES.map((type, idx) => {
+          const fromApi = byName.get(type);
+          if (fromApi) {
+            return {
+              ...fromApi,
+              displayName: fromApi.displayName || getDocumentTypeLabel(type),
+            };
+          }
+          return {
             id: -(idx + 1),
             name: type,
             displayName: getDocumentTypeLabel(type),
             description: getDocumentTypeLabel(type),
             isActive: true,
-          }));
-
-        const normalized = baseCategories.concat(missingFromApi);
+          };
+        });
 
         setCategories(normalized);
         setUploadForm((prev) => ({
           ...prev,
-          documentType: prev.documentType || (normalized[0]?.name ?? ''),
+          // Prefer first item in display order when current value is empty/stale
+          documentType: ALL_DOCUMENT_TYPES.includes(prev.documentType as DocumentType)
+            ? prev.documentType
+            : (normalized[0]?.name ?? ''),
         }));
       } catch (err: any) {
         console.error('Error fetching document categories:', err);

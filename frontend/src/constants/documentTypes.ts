@@ -3,6 +3,7 @@
  * @see backend/src/main/java/com/bpdb/dms/model/DocumentType.java
  */
 export enum DocumentType {
+  ANNUAL_PROCUREMENT_PLAN = 'ANNUAL_PROCUREMENT_PLAN',
   TENDER_NOTICE = 'TENDER_NOTICE',
   TENDER_DOCUMENT = 'TENDER_DOCUMENT',
   CONTRACT_AGREEMENT = 'CONTRACT_AGREEMENT',
@@ -10,10 +11,10 @@ export enum DocumentType {
   PERFORMANCE_SECURITY_PS = 'PERFORMANCE_SECURITY_PS',
   PERFORMANCE_GUARANTEE_PG = 'PERFORMANCE_GUARANTEE_PG',
   BILL = 'BILL',
+  WORK_COMPLETION_CERTIFICATE = 'WORK_COMPLETION_CERTIFICATE',
   CORRESPONDENCE = 'CORRESPONDENCE',
   STATIONERY_RECORD = 'STATIONERY_RECORD',
   OTHER = 'OTHER',
-  ANNUAL_PROCUREMENT_PLAN = 'ANNUAL_PROCUREMENT_PLAN',
 }
 
 /**
@@ -31,6 +32,7 @@ export const DocumentTypeLabels: Record<DocumentType, string> = {
   [DocumentType.STATIONERY_RECORD]: 'Stationery Record',
   [DocumentType.OTHER]: 'Other',
   [DocumentType.ANNUAL_PROCUREMENT_PLAN]: 'Annual Procurement Plan',
+  [DocumentType.WORK_COMPLETION_CERTIFICATE]: 'Work Completion Certificate',
 };
 
 /**
@@ -76,9 +78,22 @@ export const getDocumentTypeColor = (type: string): 'default' | 'primary' | 'sec
 };
 
 /**
- * All document types as array for dropdowns
+ * All document types in display order for dropdowns
  */
-export const ALL_DOCUMENT_TYPES = Object.values(DocumentType);
+export const ALL_DOCUMENT_TYPES: DocumentType[] = [
+  DocumentType.ANNUAL_PROCUREMENT_PLAN,
+  DocumentType.TENDER_NOTICE,
+  DocumentType.TENDER_DOCUMENT,
+  DocumentType.CONTRACT_AGREEMENT,
+  DocumentType.BANK_GUARANTEE_BG,
+  DocumentType.PERFORMANCE_SECURITY_PS,
+  DocumentType.PERFORMANCE_GUARANTEE_PG,
+  DocumentType.BILL,
+  DocumentType.WORK_COMPLETION_CERTIFICATE,
+  DocumentType.CORRESPONDENCE,
+  DocumentType.STATIONERY_RECORD,
+  DocumentType.OTHER,
+];
 
 /**
  * Document types as options for select components

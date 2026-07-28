@@ -38,7 +38,7 @@ import {
   Save as SaveIcon,
   Cancel as CancelIcon,
 } from '@mui/icons-material';
-import { DocumentType } from '../constants/documentTypes';
+import { DocumentType, ALL_DOCUMENT_TYPES } from '../constants/documentTypes';
 import documentTypeFieldService, { DocumentTypeField, FieldOption } from '../services/documentTypeFieldService';
 
 interface TabPanelProps {
@@ -177,7 +177,7 @@ const DocumentTypeFields: React.FC = () => {
     }
   };
 
-  const documentTypes = Object.values(DocumentType);
+  const documentTypes = ALL_DOCUMENT_TYPES;
 
   return (
     <Box sx={{ p: 3 }}>

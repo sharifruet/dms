@@ -10,6 +10,7 @@ import java.util.stream.Collectors;
  * Canonical document types supported by the system.
  */
 public enum DocumentType {
+    ANNUAL_PROCUREMENT_PLAN("Annual Procurement Plan"),
     TENDER_NOTICE("Tender Notice"),
     TENDER_DOCUMENT("Tender Document"),
     CONTRACT_AGREEMENT("Contract Agreement"),
@@ -17,10 +18,10 @@ public enum DocumentType {
     PERFORMANCE_SECURITY_PS("Performance Security (PS)"),
     PERFORMANCE_GUARANTEE_PG("Performance Guarantee (PG)"),
     BILL("Bill"),
+    WORK_COMPLETION_CERTIFICATE("Work Completion Certificate"),
     CORRESPONDENCE("Correspondence"),
     STATIONERY_RECORD("Stationery Record"),
-    OTHER("Other"),
-    ANNUAL_PROCUREMENT_PLAN("Annual Procurement Plan");
+    OTHER("Other");
 
     private final String label;
 

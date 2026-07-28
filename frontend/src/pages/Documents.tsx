@@ -141,26 +141,15 @@ const Documents: React.FC = () => {
     try {
       const types = await documentService.getDocumentTypes();
       const allowed = new Set(ALL_DOCUMENT_TYPES);
+      const order = new Map(ALL_DOCUMENT_TYPES.map((type, idx) => [type, idx]));
       const filtered = types.filter((t: any) => allowed.has(t.value));
-      const order: Record<string, number> = {
-        [DocumentType.ANNUAL_PROCUREMENT_PLAN]: 1,
-        [DocumentType.TENDER_NOTICE]: 2,
-        [DocumentType.TENDER_DOCUMENT]: 3,
-        [DocumentType.CONTRACT_AGREEMENT]: 4,
-        [DocumentType.BANK_GUARANTEE_BG]: 5,
-        [DocumentType.PERFORMANCE_SECURITY_PS]: 6,
-        [DocumentType.PERFORMANCE_GUARANTEE_PG]: 7,
-        [DocumentType.BILL]: 8,
-        [DocumentType.STATIONERY_RECORD]: 9,
-        [DocumentType.OTHER]: 99,
-      };
       const mapped: DocumentCategory[] = filtered.map((t, idx) => ({
         id: -(idx + 1),
         name: t.value,
         displayName: t.label,
         description: t.label,
         isActive: true
-      })).sort((a, b) => (order[a.name] ?? 100) - (order[b.name] ?? 100));
+      })).sort((a, b) => (order.get(a.name as DocumentType) ?? 999) - (order.get(b.name as DocumentType) ?? 999));
       setFormData((prev) => ({
         ...prev,
         documentType: prev.documentType || (mapped[0]?.name ?? '')
@@ -169,7 +158,7 @@ const Documents: React.FC = () => {
     } catch (err: any) {
       console.error('Failed to load document types', err);
       setError(err.response?.data?.message || 'Failed to load document types');
-      // Hard fallback using constants
+      // Hard fallback using constants (already in display order)
       const fallback: DocumentCategory[] = ALL_DOCUMENT_TYPES.map((type, idx) => ({
         id: -(idx + 1),
         name: type,
