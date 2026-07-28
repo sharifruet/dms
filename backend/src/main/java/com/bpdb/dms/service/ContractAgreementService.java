@@ -37,6 +37,11 @@ public class ContractAgreementService {
         return contractAgreementRepository.findByDocumentId(documentId).map(ContractAgreementDto::fromEntity);
     }
 
+    @Transactional(readOnly = true)
+    public long count() {
+        return contractAgreementRepository.count();
+    }
+
     public ContractAgreementDto create(ContractAgreementDto dto) {
         throw new UnsupportedOperationException("ContractAgreementService.create is not implemented yet");
     }

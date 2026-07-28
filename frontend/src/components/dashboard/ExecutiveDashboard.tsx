@@ -58,6 +58,7 @@ import {
   SEARCH_STATS,
   RECENT_ALERTS,
 } from '../../constants/executiveDashboardData';
+import { contractAgreementService } from '../../services/contractAgreementService';
 import '../../styles/executive-dashboard.css';
 
 interface ChartItem {
@@ -244,14 +245,36 @@ const ExecutiveDashboard: React.FC = () => {
   const [spinning, setSpinning] = useState(false);
   const [animateCounters, setAnimateCounters] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [totalContracts, setTotalContracts] = useState<number | null>(null);
+
+  const loadTotalContracts = useCallback(async () => {
+    try {
+      const count = await contractAgreementService.getTotalCount();
+      setTotalContracts(count);
+    } catch (error) {
+      console.error('Failed to load total contracts count:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTotalContracts();
+  }, [loadTotalContracts]);
 
   const handleRefresh = useCallback(() => {
     setSpinning(true);
     setLastUpdated(formatTimestamp(new Date()));
     setAnimateCounters(false);
-    requestAnimationFrame(() => setAnimateCounters(true));
-    setTimeout(() => setSpinning(false), 650);
-  }, []);
+    loadTotalContracts().finally(() => {
+      requestAnimationFrame(() => setAnimateCounters(true));
+      setTimeout(() => setSpinning(false), 650);
+    });
+  }, [loadTotalContracts]);
+
+  const kpiCards = EXECUTIVE_KPI_CARDS.map((kpi) =>
+    kpi.label === 'Total Contracts' && totalContracts !== null
+      ? { ...kpi, value: totalContracts }
+      : kpi
+  );
 
   const tenderTotal = TENDER_STATS.reduce((s, d) => s + d.value, 0);
   const procurementTotal = PROCUREMENT_METHODS.reduce((s, d) => s + d.value, 0);
@@ -289,7 +312,7 @@ const ExecutiveDashboard: React.FC = () => {
       <main className="content">
         {/* KPI Row */}
         <section className="kpi-grid">
-          {EXECUTIVE_KPI_CARDS.map((kpi) => (
+          {kpiCards.map((kpi) => (
             <div key={kpi.label} className="kpi-card" style={{ '--accent': kpi.accent } as React.CSSProperties}>
               <div className="kpi-icon">{KPI_ICONS[kpi.icon]}</div>
               <div className="kpi-info">

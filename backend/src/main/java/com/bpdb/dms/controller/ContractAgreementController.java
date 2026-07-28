@@ -29,6 +29,12 @@ public class ContractAgreementController {
         return ResponseEntity.ok(contractAgreementService.findAll());
     }
 
+    @GetMapping("/count")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<Long> getTotalCount() {
+        return ResponseEntity.ok(contractAgreementService.count());
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
     public ResponseEntity<ContractAgreementDto> getById(@PathVariable Long id) {
