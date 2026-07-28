@@ -6,13 +6,17 @@ import com.bpdb.dms.repository.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -42,6 +46,9 @@ public class TenderWorkflowService {
     
     @Autowired
     private AppHeaderRepository appHeaderRepository;
+
+    @Autowired
+    private TenderNoticeRepository tenderNoticeRepository;
     
     /**
      * Create or get workflow for a folder
@@ -316,6 +323,62 @@ public class TenderWorkflowService {
         
         AppHeader appEntry = workflow.getAppEntry();
         return Optional.ofNullable(appEntry);
+    }
+
+    /**
+     * Get workflow status details using a procurement package number.
+     * Resolves the Tender Notice first, then follows Document -> Folder -> Workflow -> latest Workflow Instance.
+     *
+     * @param packageNo The procurement package number from APP Management / Tender Notice
+     * @return A response map with workflow and workflow instance status details
+     */
+    public Map<String, Object> getWorkflowStatusByPackageNo(String packageNo) {
+        if (packageNo == null || packageNo.trim().isEmpty()) {
+            throw new IllegalArgumentException("Package number is required");
+        }
+
+        String normalizedPackageNo = packageNo.trim();
+        List<TenderNotice> tenderNotices =
+            tenderNoticeRepository.findAllByProcurementPackageNoOrderByCreatedAtDesc(normalizedPackageNo);
+
+        if (tenderNotices.isEmpty()) {
+            throw new IllegalArgumentException("No Tender Notice found for package number: " + normalizedPackageNo);
+        }
+
+        TenderNotice tenderNotice = tenderNotices.get(0);
+        Document document = documentRepository.findById(tenderNotice.getDocumentId())
+            .orElseThrow(() -> new IllegalArgumentException(
+                "Tender Notice document not found for package number: " + normalizedPackageNo));
+
+        Folder folder = document.getFolder();
+        if (folder == null) {
+            throw new IllegalArgumentException(
+                "Tender Notice document is not assigned to a folder for package number: " + normalizedPackageNo);
+        }
+
+        Workflow workflow = workflowRepository.findByFolder(folder)
+            .orElseThrow(() -> new IllegalArgumentException(
+                "No workflow found for package number: " + normalizedPackageNo));
+
+        List<WorkflowInstance> instances = workflowInstanceRepository.findByWorkflow(
+            workflow,
+            PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "createdAt"))
+        ).getContent();
+
+        WorkflowInstance latestInstance = instances.isEmpty() ? null : instances.get(0);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("packageNo", normalizedPackageNo);
+        response.put("tenderNoticeId", tenderNotice.getId());
+        response.put("documentId", document.getId());
+        response.put("folderId", folder.getId());
+        response.put("workflowId", workflow.getId());
+        response.put("workflowStatus", workflow.getStatus());
+        response.put("workflowInstanceId", latestInstance != null ? latestInstance.getId() : null);
+        response.put("workflowInstanceStatus", latestInstance != null ? latestInstance.getStatus() : null);
+        response.put("hasWorkflowInstance", latestInstance != null);
+
+        return response;
     }
     
     /**

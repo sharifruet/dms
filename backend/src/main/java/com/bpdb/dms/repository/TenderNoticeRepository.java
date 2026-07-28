@@ -7,11 +7,13 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 @Repository
 public interface TenderNoticeRepository extends JpaRepository<TenderNotice, Long> {
     Optional<TenderNotice> findByDocumentId(Long documentId);
+    List<TenderNotice> findAllByProcurementPackageNoOrderByCreatedAtDesc(String procurementPackageNo);
     boolean existsByDocumentId(Long documentId);
     void deleteByDocumentId(Long documentId);
 

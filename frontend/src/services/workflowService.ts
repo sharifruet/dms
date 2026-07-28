@@ -99,6 +99,20 @@ export interface RejectStepRequest {
   reason: string;
 }
 
+export interface WorkflowStatusByPackageResponse {
+  success: boolean;
+  packageNo: string;
+  tenderNoticeId?: number;
+  documentId?: number;
+  folderId?: number;
+  workflowId?: number;
+  workflowStatus?: string;
+  workflowInstanceId?: number;
+  workflowInstanceStatus?: string;
+  hasWorkflowInstance?: boolean;
+  message?: string;
+}
+
 export const workflowService = {
   // Create a new workflow
   createWorkflow: async (request: CreateWorkflowRequest): Promise<Workflow> => {
@@ -163,6 +177,14 @@ export const workflowService = {
     rejectedInstances: number;
   }> => {
     const response = await api.get('/workflows/statistics');
+    return response.data;
+  },
+
+  // Get workflow status by procurement package number
+  getWorkflowStatusByPackageNo: async (packageNo: string): Promise<WorkflowStatusByPackageResponse> => {
+    const response = await api.get('/workflows/status-by-package', {
+      params: { packageNo }
+    });
     return response.data;
   },
 

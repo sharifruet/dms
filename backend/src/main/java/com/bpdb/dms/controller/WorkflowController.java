@@ -210,6 +210,32 @@ public class WorkflowController {
             return ResponseEntity.internalServerError().build();
         }
     }
+
+    /**
+     * Get workflow status details by procurement package number.
+     */
+    @GetMapping("/status-by-package")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<Map<String, Object>> getWorkflowStatusByPackage(
+            @RequestParam String packageNo) {
+        try {
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("success", true);
+            response.putAll(tenderWorkflowService.getWorkflowStatusByPackageNo(packageNo));
+
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new java.util.HashMap<>();
+            response.put("success", false);
+            response.put("message", "Failed to get workflow status by package number: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
     
     /**
      * Get active tender workflow instances (for document upload)

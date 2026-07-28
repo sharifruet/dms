@@ -46,6 +46,7 @@ import {
   LinkOff as LinkOffIcon,
   AccountBalance as BudgetIcon,
 } from '@mui/icons-material';
+import { useSearchParams } from 'react-router-dom';
 import { workflowService, WorkflowInstance, WorkflowStep, AppEntry } from '../services/workflowService';
 import AppEntrySelector from '../components/AppEntrySelector';
 
@@ -72,6 +73,7 @@ function TabPanel(props: TabPanelProps) {
 }
 
 const Workflows: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(0);
   const [instances, setInstances] = useState<WorkflowInstance[]>([]);
   const [steps, setSteps] = useState<WorkflowStep[]>([]);
@@ -99,6 +101,26 @@ const Workflows: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    const selectedWorkflowId = searchParams.get('selected');
+    if (!selectedWorkflowId || instances.length === 0) {
+      return;
+    }
+
+    const matchingInstance = instances.find(
+      (instance) => instance.workflow.id === Number(selectedWorkflowId)
+    );
+
+    if (matchingInstance) {
+      setActiveTab(0);
+      handleViewDetails(matchingInstance);
+
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('selected');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [instances, searchParams, setSearchParams]);
 
   const loadData = async () => {
     try {

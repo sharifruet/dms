@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Box,
+  Button,
   Card,
   CardContent,
   Chip,
@@ -19,13 +20,23 @@ import {
   BusinessCenter as AppManagementIcon,
   Inventory2 as PackageIcon,
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import {
   procurementPackageService,
   ProcurementPackage,
 } from '../services/procurementPackageService';
+import { workflowService } from '../services/workflowService';
+
+interface ProcurementPackageWithWorkflow extends ProcurementPackage {
+  workflowId?: number | null;
+  workflowStatus?: string | null;
+  workflowInstanceId?: number | null;
+  workflowInstanceStatus?: string | null;
+}
 
 const AppManagement: React.FC = () => {
-  const [packages, setPackages] = useState<ProcurementPackage[]>([]);
+  const navigate = useNavigate();
+  const [packages, setPackages] = useState<ProcurementPackageWithWorkflow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,7 +46,34 @@ const AppManagement: React.FC = () => {
         setLoading(true);
         setError(null);
         const response = await procurementPackageService.getPackages();
-        setPackages(response.content || []);
+        const packagesWithWorkflowStatus = await Promise.all(
+          (response.content || []).map(async (pkg) => {
+            if (!pkg.packageNo) {
+              return pkg;
+            }
+
+            try {
+              const workflowStatus = await workflowService.getWorkflowStatusByPackageNo(pkg.packageNo);
+              return {
+                ...pkg,
+                workflowId: workflowStatus.workflowId ?? null,
+                workflowStatus: workflowStatus.workflowStatus ?? null,
+                workflowInstanceId: workflowStatus.workflowInstanceId ?? null,
+                workflowInstanceStatus: workflowStatus.workflowInstanceStatus ?? null,
+              };
+            } catch (workflowError) {
+              return {
+                ...pkg,
+                workflowId: null,
+                workflowStatus: null,
+                workflowInstanceId: null,
+                workflowInstanceStatus: null,
+              };
+            }
+          })
+        );
+
+        setPackages(packagesWithWorkflowStatus);
       } catch (err: any) {
         setError(err.response?.data?.error || 'Failed to load APP management data');
       } finally {
@@ -45,6 +83,23 @@ const AppManagement: React.FC = () => {
 
     loadPackages();
   }, []);
+
+  const getStatusChipProps = (status?: string | null) => {
+    switch (status) {
+      case 'COMPLETED':
+        return { label: 'Completed', backgroundColor: '#dcfce7', color: '#166534' };
+      case 'IN_PROGRESS':
+        return { label: 'In Progress', backgroundColor: '#dbeafe', color: '#1d4ed8' };
+      case 'PENDING':
+        return { label: 'Pending', backgroundColor: '#fef3c7', color: '#92400e' };
+      case 'REJECTED':
+        return { label: 'Rejected', backgroundColor: '#fee2e2', color: '#b91c1c' };
+      case 'CANCELLED':
+        return { label: 'Cancelled', backgroundColor: '#e5e7eb', color: '#374151' };
+      default:
+        return { label: 'No Workflow', backgroundColor: '#f3f4f6', color: '#6b7280' };
+    }
+  };
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 } }}>
@@ -108,8 +163,8 @@ const AppManagement: React.FC = () => {
                 APP Packages
               </Typography>
               <Typography variant="body2" sx={{ color: '#6b7280' }}>
-                Showing package number, material description, method/type, source of fund, and a
-                temporary static status.
+                Showing package number, material description, method/type, source of fund, and the
+                linked workflow status when available.
               </Typography>
             </Box>
           </Box>
@@ -196,15 +251,26 @@ const AppManagement: React.FC = () => {
                         {pkg.sourceOfFund || '-'}
                       </TableCell>
                       <TableCell>
-                        <Chip
-                          label="Pending"
-                          size="small"
-                          sx={{
-                            backgroundColor: '#fef3c7',
-                            color: '#92400e',
-                            fontWeight: 600,
-                          }}
-                        />
+                        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
+                          <Chip
+                            label={getStatusChipProps(pkg.workflowInstanceStatus).label}
+                            size="small"
+                            sx={{
+                              backgroundColor: getStatusChipProps(pkg.workflowInstanceStatus).backgroundColor,
+                              color: getStatusChipProps(pkg.workflowInstanceStatus).color,
+                              fontWeight: 600,
+                            }}
+                          />
+                          {pkg.workflowId ? (
+                            <Button
+                              size="small"
+                              onClick={() => navigate(`/workflows?selected=${pkg.workflowId}`)}
+                              sx={{ minWidth: 0, px: 0, textTransform: 'none' }}
+                            >
+                              View Workflow
+                            </Button>
+                          ) : null}
+                        </Box>
                       </TableCell>
                     </TableRow>
                   ))
