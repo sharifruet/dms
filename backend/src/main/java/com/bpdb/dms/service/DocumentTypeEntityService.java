@@ -69,6 +69,9 @@ public class DocumentTypeEntityService {
     @Autowired
     private StationeryRecordRepository stationeryRecordRepository;
 
+    @Autowired
+    private WorkCompletionCertificateRepository workCompletionCertificateRepository;
+
     /**
      * Populate the type-specific entity for the given document using present metadata.
      * Missing metadata fields are left unset for later implementation.
@@ -98,6 +101,7 @@ public class DocumentTypeEntityService {
                 case PERFORMANCE_SECURITY_PS -> populatePerformanceSecurity(documentId, meta);
                 case PERFORMANCE_GUARANTEE_PG -> populatePerformanceGuarantee(documentId, meta);
                 case BILL -> populateBillDocument(documentId, meta);
+                case WORK_COMPLETION_CERTIFICATE -> populateWorkCompletionCertificate(documentId, meta);
                 case CORRESPONDENCE -> populateCorrespondence(documentId);
                 case STATIONERY_RECORD -> populateStationeryRecord(documentId);
                 default -> logger.debug("No type entity for document type {} (document {})",
@@ -242,6 +246,27 @@ public class DocumentTypeEntityService {
 
         billDocumentRepository.save(entity);
         logger.info("Populated BillDocument for document {}", documentId);
+    }
+
+    private void populateWorkCompletionCertificate(Long documentId, Map<String, String> meta) {
+        WorkCompletionCertificate entity = workCompletionCertificateRepository.findByDocumentId(documentId)
+            .orElseGet(() -> {
+                WorkCompletionCertificate w = new WorkCompletionCertificate();
+                w.setDocumentId(documentId);
+                return w;
+            });
+
+        firstPresent(meta, "certificateNumber", "referenceNo", "referenceNumber").ifPresent(entity::setCertificateNumber);
+        firstPresent(meta, "contractNumber", "contractNo").ifPresent(entity::setContractNumber);
+        get(meta, "vendorName").ifPresent(entity::setVendorName);
+        parseDate(meta, "completionDate", "dateOfCompletion").ifPresent(entity::setCompletionDate);
+        firstPresent(meta, "projectDescription", "workDescription", "description").ifPresent(entity::setProjectDescription);
+        parseDecimal(meta, "contractAmount", "amount").ifPresent(entity::setContractAmount);
+        parseDate(meta, "issueDate", "certificateDate").ifPresent(entity::setIssueDate);
+        get(meta, "issuedBy").ifPresent(entity::setIssuedBy);
+
+        workCompletionCertificateRepository.save(entity);
+        logger.info("Populated WorkCompletionCertificate for document {}", documentId);
     }
 
     /** Stub: only documentId for now */

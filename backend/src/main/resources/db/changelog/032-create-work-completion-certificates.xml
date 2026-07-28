@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="032-001-create-work-completion-certificates" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="work_completion_certificates"/></not>
+        </preConditions>
+        <comment>Create work_completion_certificates table for WORK_COMPLETION_CERTIFICATE typed documents</comment>
+        <createTable tableName="work_completion_certificates">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_work_completion_certificates"/>
+            </column>
+            <column name="document_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_work_completion_certificates_document_id"
+                             foreignKeyName="fk_work_completion_certificates_document"
+                             referencedTableName="documents" referencedColumnNames="id"/>
+            </column>
+            <column name="certificate_number" type="VARCHAR(100)"/>
+            <column name="contract_number" type="VARCHAR(100)"/>
+            <column name="vendor_name" type="VARCHAR(255)"/>
+            <column name="completion_date" type="DATE"/>
+            <column name="project_description" type="TEXT"/>
+            <column name="contract_amount" type="NUMERIC(18,2)"/>
+            <column name="issue_date" type="DATE"/>
+            <column name="issued_by" type="VARCHAR(255)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <createIndex tableName="work_completion_certificates" indexName="idx_work_completion_certificates_certificate_number">
+            <column name="certificate_number"/>
+        </createIndex>
+        <createIndex tableName="work_completion_certificates" indexName="idx_work_completion_certificates_contract_number">
+            <column name="contract_number"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
