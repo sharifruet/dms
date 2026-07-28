@@ -5,6 +5,7 @@ import com.bpdb.dms.repository.TenderNoticeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -35,6 +36,11 @@ public class TenderNoticeService {
 
     public Optional<TenderNoticeDto> findByDocumentId(Long documentId) {
         return tenderNoticeRepository.findByDocumentId(documentId).map(TenderNoticeDto::fromEntity);
+    }
+
+    @Transactional(readOnly = true)
+    public long countLiveTenders() {
+        return tenderNoticeRepository.countLiveTenders(LocalDate.now());
     }
 
     public TenderNoticeDto create(TenderNoticeDto dto) {

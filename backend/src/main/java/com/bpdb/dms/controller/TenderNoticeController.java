@@ -29,6 +29,12 @@ public class TenderNoticeController {
         return ResponseEntity.ok(tenderNoticeService.findAll());
     }
 
+    @GetMapping("/live/count")
+    @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
+    public ResponseEntity<Long> getLiveTenderCount() {
+        return ResponseEntity.ok(tenderNoticeService.countLiveTenders());
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('PERM_DOCUMENT_VIEW')")
     public ResponseEntity<TenderNoticeDto> getById(@PathVariable Long id) {

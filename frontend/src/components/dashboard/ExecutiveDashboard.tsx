@@ -59,6 +59,7 @@ import {
   RECENT_ALERTS,
 } from '../../constants/executiveDashboardData';
 import { contractAgreementService } from '../../services/contractAgreementService';
+import { tenderNoticeService } from '../../services/tenderNoticeService';
 import '../../styles/executive-dashboard.css';
 
 interface ChartItem {
@@ -246,35 +247,50 @@ const ExecutiveDashboard: React.FC = () => {
   const [animateCounters, setAnimateCounters] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [totalContracts, setTotalContracts] = useState<number | null>(null);
+  const [liveTenders, setLiveTenders] = useState<number | null>(null);
 
-  const loadTotalContracts = useCallback(async () => {
-    try {
-      const count = await contractAgreementService.getTotalCount();
-      setTotalContracts(count);
-    } catch (error) {
-      console.error('Failed to load total contracts count:', error);
+  const loadKpiCounts = useCallback(async () => {
+    const [contractsResult, liveTendersResult] = await Promise.allSettled([
+      contractAgreementService.getTotalCount(),
+      tenderNoticeService.getLiveCount(),
+    ]);
+
+    if (contractsResult.status === 'fulfilled') {
+      setTotalContracts(contractsResult.value);
+    } else {
+      console.error('Failed to load total contracts count:', contractsResult.reason);
+    }
+
+    if (liveTendersResult.status === 'fulfilled') {
+      setLiveTenders(liveTendersResult.value);
+    } else {
+      console.error('Failed to load live tender count:', liveTendersResult.reason);
     }
   }, []);
 
   useEffect(() => {
-    loadTotalContracts();
-  }, [loadTotalContracts]);
+    loadKpiCounts();
+  }, [loadKpiCounts]);
 
   const handleRefresh = useCallback(() => {
     setSpinning(true);
     setLastUpdated(formatTimestamp(new Date()));
     setAnimateCounters(false);
-    loadTotalContracts().finally(() => {
+    loadKpiCounts().finally(() => {
       requestAnimationFrame(() => setAnimateCounters(true));
       setTimeout(() => setSpinning(false), 650);
     });
-  }, [loadTotalContracts]);
+  }, [loadKpiCounts]);
 
-  const kpiCards = EXECUTIVE_KPI_CARDS.map((kpi) =>
-    kpi.label === 'Total Contracts' && totalContracts !== null
-      ? { ...kpi, value: totalContracts }
-      : kpi
-  );
+  const kpiCards = EXECUTIVE_KPI_CARDS.map((kpi) => {
+    if (kpi.label === 'Total Contracts' && totalContracts !== null) {
+      return { ...kpi, value: totalContracts };
+    }
+    if (kpi.label === 'Live Tender' && liveTenders !== null) {
+      return { ...kpi, value: liveTenders };
+    }
+    return kpi;
+  });
 
   const tenderTotal = TENDER_STATS.reduce((s, d) => s + d.value, 0);
   const procurementTotal = PROCUREMENT_METHODS.reduce((s, d) => s + d.value, 0);
