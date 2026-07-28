@@ -5,6 +5,7 @@ import com.bpdb.dms.repository.ContractAgreementRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -40,6 +41,11 @@ public class ContractAgreementService {
     @Transactional(readOnly = true)
     public long count() {
         return contractAgreementRepository.count();
+    }
+
+    @Transactional(readOnly = true)
+    public long countRunningContracts() {
+        return contractAgreementRepository.countRunningContracts(LocalDate.now());
     }
 
     public ContractAgreementDto create(ContractAgreementDto dto) {

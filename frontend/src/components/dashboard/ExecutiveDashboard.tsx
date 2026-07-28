@@ -248,11 +248,13 @@ const ExecutiveDashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [totalContracts, setTotalContracts] = useState<number | null>(null);
   const [liveTenders, setLiveTenders] = useState<number | null>(null);
+  const [runningContracts, setRunningContracts] = useState<number | null>(null);
 
   const loadKpiCounts = useCallback(async () => {
-    const [contractsResult, liveTendersResult] = await Promise.allSettled([
+    const [contractsResult, liveTendersResult, runningContractsResult] = await Promise.allSettled([
       contractAgreementService.getTotalCount(),
       tenderNoticeService.getLiveCount(),
+      contractAgreementService.getRunningCount(),
     ]);
 
     if (contractsResult.status === 'fulfilled') {
@@ -265,6 +267,12 @@ const ExecutiveDashboard: React.FC = () => {
       setLiveTenders(liveTendersResult.value);
     } else {
       console.error('Failed to load live tender count:', liveTendersResult.reason);
+    }
+
+    if (runningContractsResult.status === 'fulfilled') {
+      setRunningContracts(runningContractsResult.value);
+    } else {
+      console.error('Failed to load running contracts count:', runningContractsResult.reason);
     }
   }, []);
 
@@ -288,6 +296,9 @@ const ExecutiveDashboard: React.FC = () => {
     }
     if (kpi.label === 'Live Tender' && liveTenders !== null) {
       return { ...kpi, value: liveTenders };
+    }
+    if (kpi.label === 'Running Contracts' && runningContracts !== null) {
+      return { ...kpi, value: runningContracts };
     }
     return kpi;
   });

@@ -1,7 +1,7 @@
 export const EXECUTIVE_KPI_CARDS = [
   { label: 'Total Contracts', value: 0, sub: 'All Time', accent: '#0e7cc4', icon: 'contract' },
   { label: 'Live Tender', value: 0, sub: 'Currently Live', accent: '#16a34a', icon: 'calendar' },
-  { label: 'Running Contracts', value: 182, sub: 'In Progress', accent: '#f5a623', icon: 'briefcase' },
+  { label: 'Running Contracts', value: 0, sub: 'In Progress', accent: '#f5a623', icon: 'briefcase' },
   { label: 'Completed Contracts', value: 963, sub: 'Completed', accent: '#7c3aed', icon: 'check' },
   { label: 'Approved Budget', value: 5250, prefix: 'BDT ', suffix: ' Cr', sub: 'FY Total', accent: '#0e7cc4', icon: 'vault' },
   { label: 'Allocated Budget', value: 4820, prefix: 'BDT ', suffix: ' Cr', sub: 'Released', accent: '#00b4a6', icon: 'money' },
