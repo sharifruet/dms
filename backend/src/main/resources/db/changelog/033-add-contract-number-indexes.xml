@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="033-001-index-contract-agreements-contract-number" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="contract_agreements"/>
+            <not>
+                <indexExists indexName="idx_contract_agreements_contract_number" tableName="contract_agreements"/>
+            </not>
+        </preConditions>
+        <comment>Index contract_number on contract_agreements for contract lookups</comment>
+        <createIndex tableName="contract_agreements" indexName="idx_contract_agreements_contract_number">
+            <column name="contract_number"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="033-002-index-work-completion-certificates-contract-number" author="dms">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="work_completion_certificates"/>
+            <not>
+                <indexExists indexName="idx_work_completion_certificates_contract_number" tableName="work_completion_certificates"/>
+            </not>
+        </preConditions>
+        <comment>Index contract_number on work_completion_certificates for contract lookups</comment>
+        <createIndex tableName="work_completion_certificates" indexName="idx_work_completion_certificates_contract_number">
+            <column name="contract_number"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

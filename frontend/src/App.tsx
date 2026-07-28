@@ -25,6 +25,7 @@ import AssetAssignments from './pages/AssetAssignments';
 import DocumentTypeFields from './pages/DocumentTypeFields';
 import Archive from './pages/Archive';
 import StationeryTracking from './pages/StationeryTracking';
+import AppManagement from './pages/AppManagement';
 import AppEntries from './pages/AppEntries';
 import BillEntries from './pages/BillEntries';
 import { useAppSelector } from './hooks/redux';
@@ -60,6 +61,10 @@ function App() {
           <Route 
             path="/documents" 
             element={isAuthenticated ? <DocumentsEnhanced /> : <Navigate to="/login" />} 
+          />
+          <Route 
+            path="/app-management" 
+            element={isAuthenticated ? <AppManagement /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/users" 

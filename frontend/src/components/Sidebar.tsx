@@ -14,6 +14,7 @@ import {
 import {
   Dashboard as DashboardIcon,
   Description as DocumentsIcon,
+  BusinessCenter as AppManagementIcon,
   Search as SearchIcon,
   Notifications as NotificationsIcon,
   CalendarToday as ExpiryIcon,
@@ -54,6 +55,7 @@ const Sidebar: React.FC = () => {
   const navItems: NavItem[] = [
     { label: 'Dashboard', path: '/dashboard', icon: <DashboardIcon /> },
     { label: 'Documents', path: '/documents', icon: <DocumentsIcon /> },
+    { label: 'APP Management', path: '/app-management', icon: <AppManagementIcon /> },
     { label: 'Yearly Budgets', path: '/app-entries', icon: <AppIcon /> },
     { label: 'Bill Entries', path: '/bill-entries', icon: <BillIcon /> },
     { label: 'Search', path: '/search', icon: <SearchIcon /> },
