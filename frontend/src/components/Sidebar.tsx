@@ -52,22 +52,21 @@ const Sidebar: React.FC = () => {
   const { user } = useAppSelector((state) => state.auth);
 
   const navItems: NavItem[] = [
-    { label: 'Dashboard', path: '/dashboard', icon: <DashboardIcon /> },
-    { label: 'Documents', path: '/documents', icon: <DocumentsIcon /> },
-    { label: 'Yearly Budgets', path: '/app-entries', icon: <AppIcon /> },
-    { label: 'Bill Entries', path: '/bill-entries', icon: <BillIcon /> },
+    // The procurement lifecycle is the spine of the system, so it leads the nav.
+    { label: 'Procurement', path: '/procurement', icon: <DashboardIcon /> },
+    { label: 'Packages', path: '/procurement/packages', icon: <DocumentsIcon /> },
+    { label: 'Expiries', path: '/procurement/expiries', icon: <ExpiryIcon /> },
+    { label: 'Needs Attention', path: '/procurement/exceptions', icon: <ArchiveIcon /> },
     { label: 'Search', path: '/search', icon: <SearchIcon /> },
     { label: 'Notifications', path: '/notifications', icon: <NotificationsIcon /> },
-    { label: 'Expiry Tracking', path: '/expiry-tracking', icon: <ExpiryIcon /> },
+    { label: 'Reports', path: '/reports', icon: <AppIcon /> },
     { label: 'Assets', path: '/assets', icon: <AssetsIcon /> },
     { label: 'Assignments', path: '/asset-assignments', icon: <AssignmentsIcon /> },
     { label: 'Workflows', path: '/workflows', icon: <WorkflowsIcon /> },
     { label: 'Health', path: '/health', icon: <HealthIcon /> },
-    // Place Archive and Stationery near the bottom as requested
-    { label: 'Archive', path: '/archive', icon: <ArchiveIcon /> },
     { label: 'Stationery', path: '/stationery', icon: <StationeryIcon /> },
     { label: 'Users', path: '/users', icon: <UsersIcon />, role: 'ADMIN' },
-    { label: 'Document Fields', path: '/document-type-fields', icon: <FieldsIcon />, role: 'ADMIN' },
+    { label: 'Field Catalogue', path: '/document-type-fields', icon: <FieldsIcon />, role: 'ADMIN' },
   ];
 
   const filteredNavItems = navItems.filter(

@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+      Seeds the stage definitions: which documents each stage requires, and which
+      fields each stage captures. Requirements section 3.7.
+      Stage completion is driven entirely from these rows - adding a field is
+      configuration, not a code change (REQ-P13, REQ-P14).
+    -->
+
+    <changeSet id="036-001" author="dms">
+        <comment>Seed required documents per stage</comment>
+        <sql>
+INSERT INTO stage_document_requirement (stage_code, doc_role, doc_label, is_mandatory, is_conditional, display_order) VALUES
+ (1,'APP_DOCUMENT','APP Document',true,false,1),
+ (1,'APP_APPROVAL_MEMO','APP Approval Memo',true,false,2),
+ (2,'TENDER_NOTICE','Tender Notice',true,false,1),
+ (2,'TENDER_DOCUMENT','Tender Document',true,false,2),
+ (2,'ADVERTISEMENT_COPY','Advertisement Copy',true,false,3),
+ (3,'BID_OPENING_MINUTES','Bid Opening Minutes',true,false,1),
+ (3,'BID_OPENING_REGISTER','Bid Opening Register',true,false,2),
+ (3,'BIDDER_LIST','Bidder List',true,false,3),
+ (3,'BID_SECURITY','Bid Security (BG / Pay Order)',false,true,4),
+ (4,'BER','Bid Evaluation Report (BER)',true,false,1),
+ (5,'APPROVAL_NOTE','Approval Note',true,false,1),
+ (5,'APPROVAL_MEMO','Approval Memo',true,false,2),
+ (6,'NOA','Notification of Award (NOA)',true,false,1),
+ (7,'PERFORMANCE_SECURITY','Performance Security (BG / PO)',true,false,1),
+ (8,'SIGNED_CONTRACT','Signed Contract Agreement',true,false,1),
+ (9,'LETTER_OF_CREDIT','Letter of Credit (LC)',true,false,1),
+ (9,'LC_AMENDMENT','LC Amendment',false,true,2),
+ (10,'PRODUCTION_SCHEDULE','Production Schedule',true,false,1),
+ (10,'EGP_PRICE_SCHEDULE','e-GP Price Schedule',true,false,2),
+ (10,'PROGRESS_REPORT','Progress Report',false,false,3),
+ (11,'INSPECTION_REPORT','Inspection Report',true,false,1),
+ (11,'PRE_SHIPMENT_INSPECTION','Pre-Shipment Inspection Report',true,false,2),
+ (11,'FAT_REPORT','FAT Report',true,false,3),
+ (11,'SAT_REPORT','SAT Report',false,true,4),
+ (12,'DELIVERY_CHALLAN','Delivery Challan',true,false,1),
+ (12,'PACKING_LIST','Packing List',true,false,2),
+ (12,'GRN','Goods Received Note (GRN)',true,false,3),
+ (13,'INVOICE','Invoice / Bill',true,false,1),
+ (13,'SUPPORTING_DOCUMENTS','Supporting Documents',true,false,2),
+ (14,'PAYMENT_VOUCHER','Payment Voucher',true,false,1),
+ (14,'PAYMENT_APPROVAL','Payment Approval',true,false,2),
+ (14,'BANK_ADVICE','Bank Advice',false,false,3),
+ (15,'ACCEPTANCE_CERTIFICATE','Acceptance Certificate',true,false,1),
+ (16,'COMPLETION_CERTIFICATE','Completion Certificate',true,false,1),
+ (16,'FINAL_ACCEPTANCE_CERTIFICATE','Final Acceptance Certificate',true,false,2),
+ (16,'CONTRACT_CLOSE_MEMO','Contract Close Memo',true,false,3);
+        </sql>
+        <rollback>
+            <sql>DELETE FROM stage_document_requirement;</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="036-002" author="dms">
+        <comment>Seed the field catalogue - source O = OCR, M = manual, per requirements section 3.7</comment>
+        <sql>
+INSERT INTO document_type_fields
+ (document_type, field_key, field_label, field_type, is_required, is_ocr_mappable,
+  display_order, is_active, stage_code, entity_type, entity_column, capture_source, is_mandatory, created_at)
+VALUES
+ -- Stage 1
+ ('APP_DOCUMENT','package_number','Package Number','TEXT',true,true,1,true,1,'PACKAGE','packageNumber','OCR',true,CURRENT_TIMESTAMP),
+ ('APP_DOCUMENT','package_description','Package Description','TEXT',true,true,2,true,1,'PACKAGE','packageDescription','OCR',true,CURRENT_TIMESTAMP),
+ ('APP_DOCUMENT','approving_authority','Approving Authority','TEXT',true,true,3,true,1,'PACKAGE','approvingAuthority','OCR',true,CURRENT_TIMESTAMP),
+ ('APP_DOCUMENT','price_lac_bdt','Price (lac BDT)','CURRENCY',true,true,4,true,1,'PACKAGE','priceLacBdt','OCR',true,CURRENT_TIMESTAMP),
+ -- Stage 2
+ ('TENDER_NOTICE','procurement_type','Procurement Type','TEXT',true,true,1,true,2,'TENDER','procurementType','OCR',true,CURRENT_TIMESTAMP),
+ ('TENDER_NOTICE','procurement_method','Procurement Method','TEXT',true,true,2,true,2,'TENDER','procurementMethod','OCR',true,CURRENT_TIMESTAMP),
+ ('TENDER_NOTICE','procurement_nature','Procurement Nature','TEXT',true,true,3,true,2,'TENDER','procurementNature','OCR',true,CURRENT_TIMESTAMP),
+ ('TENDER_NOTICE','opening_date','Opening Date','DATE',true,true,4,true,2,'TENDER','openingDate','OCR',true,CURRENT_TIMESTAMP),
+ ('TENDER_NOTICE','closing_date','Closing Date','DATE',true,true,5,true,2,'TENDER','closingDate','OCR',true,CURRENT_TIMESTAMP),
+ ('TENDER_NOTICE','tender_validity_date','Tender Validity','DATE',true,true,6,true,2,'TENDER','tenderValidityDate','OCR',true,CURRENT_TIMESTAMP),
+ -- Stage 3 (summary only - no per-bidder entity, REQ-3.2)
+ ('BID_OPENING_MINUTES','number_of_bidders','Number of Bidders','NUMBER',true,true,1,true,3,'TENDER_OPENING','numberOfBidders','OCR',true,CURRENT_TIMESTAMP),
+ ('BID_OPENING_MINUTES','participating_bidders','Participating Bidders','TEXT',true,true,2,true,3,'TENDER_OPENING','participatingBidders','OCR',true,CURRENT_TIMESTAMP),
+ ('BID_SECURITY','reference_no','Bid Security Reference','TEXT',false,true,1,true,3,'BID_SECURITY','referenceNo','OCR',false,CURRENT_TIMESTAMP),
+ ('BID_SECURITY','issuing_bank','Issuing Bank','TEXT',false,true,2,true,3,'BID_SECURITY','issuingBank','OCR',false,CURRENT_TIMESTAMP),
+ ('BID_SECURITY','expiry_date','Bid Security Expiry','DATE',false,true,3,true,3,'BID_SECURITY','expiryDate','OCR',false,CURRENT_TIMESTAMP),
+ -- Stage 4 (BER is the single source of bidder data, REQ-4.1)
+ ('BER','oce_value','OCE Value','CURRENCY',false,true,1,true,4,'EVALUATION','oceValue','OCR',false,CURRENT_TIMESTAMP),
+ ('BER','evaluation_date','Evaluation Date','DATE',false,true,2,true,4,'EVALUATION','evaluationDate','OCR',false,CURRENT_TIMESTAMP),
+ ('BER','bidder_name','Bidder Name','TEXT',true,true,3,true,4,'BER_BIDDER','bidderName','OCR',true,CURRENT_TIMESTAMP),
+ ('BER','bidding_price','Bidding Price','CURRENCY',true,true,4,true,4,'BER_BIDDER','biddingPrice','OCR',true,CURRENT_TIMESTAMP),
+ ('BER','deviation_pct','Deviation (%) with OCE','NUMBER',true,true,5,true,4,'BER_BIDDER','deviationPct','OCR',true,CURRENT_TIMESTAMP),
+ ('BER','is_responsive','Responsive','BOOL',true,true,6,true,4,'BER_BIDDER','isResponsive','OCR',true,CURRENT_TIMESTAMP),
+ -- Stage 5 (manual)
+ ('APPROVAL_NOTE','approval_date','Approval Date','DATE',true,false,1,true,5,'CONTRACT_APPROVAL','approvalDate','MANUAL',true,CURRENT_TIMESTAMP),
+ ('APPROVAL_NOTE','approving_authority','Approving Authority','TEXT',true,false,2,true,5,'CONTRACT_APPROVAL','approvingAuthority','MANUAL',true,CURRENT_TIMESTAMP),
+ -- Stage 6
+ ('NOA','ps_amount','Performance Security Amount','CURRENCY',true,true,1,true,6,'NOA','psAmount','OCR',true,CURRENT_TIMESTAMP),
+ ('NOA','ps_currency','PS Currency','TEXT',true,true,2,true,6,'NOA','psCurrency','OCR',true,CURRENT_TIMESTAMP),
+ ('NOA','pg_submission_last_date','PG Submission Last Date','DATE',true,true,3,true,6,'NOA','pgSubmissionLastDate','OCR',true,CURRENT_TIMESTAMP),
+ ('NOA','contract_signing_last_date','Contract Signing Last Date','DATE',true,true,4,true,6,'NOA','contractSigningLastDate','OCR',true,CURRENT_TIMESTAMP),
+ -- Stage 7
+ ('PERFORMANCE_SECURITY','validity_date','Validity','DATE',true,true,1,true,7,'PERFORMANCE_SECURITY','validityDate','OCR',true,CURRENT_TIMESTAMP),
+ ('PERFORMANCE_SECURITY','issuing_bank','Issuing Bank','TEXT',true,true,2,true,7,'PERFORMANCE_SECURITY','issuingBank','OCR',true,CURRENT_TIMESTAMP),
+ -- Stage 8 (manual)
+ ('SIGNED_CONTRACT','contract_number','Contract Number','TEXT',true,false,1,true,8,'CONTRACT','contractNumber','MANUAL',true,CURRENT_TIMESTAMP),
+ ('SIGNED_CONTRACT','contract_date','Contract Date','DATE',true,false,2,true,8,'CONTRACT','contractDate','MANUAL',true,CURRENT_TIMESTAMP),
+ ('SIGNED_CONTRACT','contract_value','Contract Value','CURRENCY',true,false,3,true,8,'CONTRACT','contractValue','MANUAL',true,CURRENT_TIMESTAMP),
+ ('SIGNED_CONTRACT','currency','Currency','TEXT',true,false,4,true,8,'CONTRACT','currency','MANUAL',true,CURRENT_TIMESTAMP),
+ ('SIGNED_CONTRACT','completion_date','Completion Date','DATE',true,false,5,true,8,'CONTRACT','completionDate','MANUAL',true,CURRENT_TIMESTAMP),
+ ('SIGNED_CONTRACT','delivery_period_days','Delivery Period (days)','NUMBER',true,false,6,true,8,'CONTRACT','deliveryPeriodDays','MANUAL',true,CURRENT_TIMESTAMP),
+ ('SIGNED_CONTRACT','warranty_period_months','Warranty Period (months)','NUMBER',true,false,7,true,8,'CONTRACT','warrantyPeriodMonths','MANUAL',true,CURRENT_TIMESTAMP),
+ -- Stage 9 (manual)
+ ('LETTER_OF_CREDIT','lc_number','LC Number','TEXT',true,false,1,true,9,'LETTER_OF_CREDIT','lcNumber','MANUAL',true,CURRENT_TIMESTAMP),
+ ('LETTER_OF_CREDIT','lc_amount','LC Amount','CURRENCY',true,false,2,true,9,'LETTER_OF_CREDIT','lcAmount','MANUAL',true,CURRENT_TIMESTAMP),
+ ('LETTER_OF_CREDIT','lc_currency','LC Currency','TEXT',true,false,3,true,9,'LETTER_OF_CREDIT','lcCurrency','MANUAL',true,CURRENT_TIMESTAMP),
+ ('LETTER_OF_CREDIT','lc_opening_date','LC Opening Date','DATE',true,false,4,true,9,'LETTER_OF_CREDIT','lcOpeningDate','MANUAL',true,CURRENT_TIMESTAMP),
+ ('LETTER_OF_CREDIT','lc_expiry_date','LC Expiry Date','DATE',true,false,5,true,9,'LETTER_OF_CREDIT','lcExpiryDate','MANUAL',true,CURRENT_TIMESTAMP),
+ ('LETTER_OF_CREDIT','issuing_bank','Issuing Bank','TEXT',true,false,6,true,9,'LETTER_OF_CREDIT','issuingBank','MANUAL',true,CURRENT_TIMESTAMP),
+ ('LETTER_OF_CREDIT','advising_bank','Advising Bank','TEXT',true,false,7,true,9,'LETTER_OF_CREDIT','advisingBank','MANUAL',true,CURRENT_TIMESTAMP),
+ -- Stage 10
+ ('PRODUCTION_SCHEDULE','delivery_period_days','Delivery Period (days)','NUMBER',true,true,1,true,10,'PRODUCTION_SCHEDULE','deliveryPeriodDays','OCR',true,CURRENT_TIMESTAMP),
+ -- Stage 11
+ ('INSPECTION_REPORT','inspection_type','Inspection Type (PDI/PLI)','ENUM',true,true,1,true,11,'INSPECTION_EVENT','inspectionType','OCR',true,CURRENT_TIMESTAMP),
+ ('INSPECTION_REPORT','inspection_date','Inspection Date','DATE',false,true,2,true,11,'INSPECTION_EVENT','inspectionDate','OCR',false,CURRENT_TIMESTAMP),
+ -- Stage 12
+ ('DELIVERY_CHALLAN','delivery_date','Delivery Date','DATE',true,true,1,true,12,'DELIVERY','deliveryDate','OCR',true,CURRENT_TIMESTAMP),
+ ('DELIVERY_CHALLAN','delivered_quantity','Delivered Quantity','NUMBER',true,true,2,true,12,'DELIVERY','deliveredQuantity','OCR',true,CURRENT_TIMESTAMP),
+ ('DELIVERY_CHALLAN','delivery_reference_number','Delivery Reference Number','TEXT',true,true,3,true,12,'DELIVERY','deliveryReferenceNumber','OCR',true,CURRENT_TIMESTAMP),
+ -- Stage 13
+ ('INVOICE','invoice_number','Invoice Number','TEXT',true,true,1,true,13,'INVOICE','invoiceNumber','OCR',true,CURRENT_TIMESTAMP),
+ ('INVOICE','invoice_date','Invoice Date','DATE',true,true,2,true,13,'INVOICE','invoiceDate','OCR',true,CURRENT_TIMESTAMP),
+ ('INVOICE','invoice_amount','Invoice Amount','CURRENCY',true,true,3,true,13,'INVOICE','invoiceAmount','OCR',true,CURRENT_TIMESTAMP),
+ ('INVOICE','currency','Currency','TEXT',true,true,4,true,13,'INVOICE','currency','OCR',true,CURRENT_TIMESTAMP),
+ ('INVOICE','supplier_name','Supplier Name','TEXT',true,true,5,true,13,'INVOICE','supplierName','OCR',true,CURRENT_TIMESTAMP),
+ -- Stage 14
+ ('PAYMENT_VOUCHER','voucher_number','Payment Voucher Number','TEXT',true,true,1,true,14,'PAYMENT','voucherNumber','OCR',true,CURRENT_TIMESTAMP),
+ ('PAYMENT_VOUCHER','payment_date','Payment Date','DATE',true,true,2,true,14,'PAYMENT','paymentDate','OCR',true,CURRENT_TIMESTAMP),
+ ('PAYMENT_VOUCHER','payment_amount','Payment Amount','CURRENCY',true,true,3,true,14,'PAYMENT','paymentAmount','OCR',true,CURRENT_TIMESTAMP),
+ -- Stage 15
+ ('ACCEPTANCE_CERTIFICATE','warranty_start_date','Warranty Start Date','DATE',true,true,1,true,15,'WARRANTY','warrantyStartDate','OCR',true,CURRENT_TIMESTAMP),
+ ('ACCEPTANCE_CERTIFICATE','warranty_end_date','Warranty End Date','DATE',true,true,2,true,15,'WARRANTY','warrantyEndDate','OCR',true,CURRENT_TIMESTAMP),
+ -- Stage 16
+ ('COMPLETION_CERTIFICATE','completion_date','Completion Date','DATE',true,true,1,true,16,'CONTRACT_CLOSURE','completionDate','OCR',true,CURRENT_TIMESTAMP),
+ ('COMPLETION_CERTIFICATE','contract_close_date','Contract Close Date','DATE',true,true,2,true,16,'CONTRACT_CLOSURE','contractCloseDate','OCR',true,CURRENT_TIMESTAMP);
+        </sql>
+        <rollback>
+            <sql>DELETE FROM document_type_fields WHERE stage_code IS NOT NULL;</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

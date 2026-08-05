@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!-- Stages 8-12: contract, LC, manufacturing, inspection, delivery -->
+
+    <changeSet id="033-001" author="dms">
+        <comment>
+            Stage 8 - contract. Second-level correlation key (REQ-L2).
+            A contract may span several packages (client answer Q-1), so the
+            package relationship lives in contract_package, not a column here.
+        </comment>
+        <createTable tableName="contract">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_contract"/>
+            </column>
+            <column name="noa_id" type="BIGINT"/>
+            <column name="contract_number" type="VARCHAR(100)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_contract_number"/>
+            </column>
+            <column name="contract_date" type="DATE"/>
+            <column name="contract_value" type="NUMERIC(18,2)"/>
+            <column name="currency" type="VARCHAR(3)" defaultValue="BDT"/>
+            <column name="completion_date" type="DATE"/>
+            <column name="delivery_period_days" type="INTEGER"/>
+            <column name="warranty_period_months" type="INTEGER"/>
+            <column name="supplier_name" type="VARCHAR(255)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="contract" baseColumnNames="noa_id"
+                                 constraintName="fk_contract_noa"
+                                 referencedTableName="noa" referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+        <createIndex tableName="contract" indexName="idx_contract_number">
+            <column name="contract_number"/>
+        </createIndex>
+
+        <!-- Many-to-many: one contract may cover several APP packages (Q-1) -->
+        <createTable tableName="contract_package">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_contract_package"/>
+            </column>
+            <column name="contract_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="package_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_primary" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="allocation_pct" type="NUMERIC(9,4)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addUniqueConstraint tableName="contract_package" columnNames="contract_id, package_id"
+                             constraintName="uk_contract_package"/>
+        <addForeignKeyConstraint baseTableName="contract_package" baseColumnNames="contract_id"
+                                 constraintName="fk_cp_contract"
+                                 referencedTableName="contract" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="contract_package" baseColumnNames="package_id"
+                                 constraintName="fk_cp_package"
+                                 referencedTableName="procurement_package" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <createIndex tableName="contract_package" indexName="idx_cp_package">
+            <column name="package_id"/>
+        </createIndex>
+        <rollback>
+            <dropTable tableName="contract_package"/>
+            <dropTable tableName="contract"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="033-002" author="dms">
+        <comment>Stage 9 - letter of credit and amendments</comment>
+        <createTable tableName="letter_of_credit">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_letter_of_credit"/>
+            </column>
+            <column name="contract_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="lc_number" type="VARCHAR(100)"/>
+            <column name="lc_amount" type="NUMERIC(18,2)"/>
+            <column name="lc_currency" type="VARCHAR(3)"/>
+            <column name="lc_opening_date" type="DATE"/>
+            <column name="lc_expiry_date" type="DATE"/>
+            <column name="issuing_bank" type="VARCHAR(255)"/>
+            <column name="advising_bank" type="VARCHAR(255)"/>
+            <column name="is_current" type="BOOLEAN" defaultValueBoolean="true"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="letter_of_credit" baseColumnNames="contract_id"
+                                 constraintName="fk_lc_contract"
+                                 referencedTableName="contract" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+
+        <createTable tableName="lc_amendment">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_lc_amendment"/>
+            </column>
+            <column name="lc_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="amendment_no" type="INTEGER"/>
+            <column name="amendment_date" type="DATE"/>
+            <column name="revised_amount" type="NUMERIC(18,2)"/>
+            <column name="revised_expiry_date" type="DATE"/>
+            <column name="remarks" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="lc_amendment" baseColumnNames="lc_id"
+                                 constraintName="fk_lcamend_lc"
+                                 referencedTableName="letter_of_credit" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <rollback>
+            <dropTable tableName="lc_amendment"/>
+            <dropTable tableName="letter_of_credit"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="033-003" author="dms">
+        <comment>Stage 10 - price schedule (e-GP), production schedule, progress reports</comment>
+        <createTable tableName="price_schedule">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_price_schedule"/>
+            </column>
+            <column name="contract_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_priceschedule_contract"/>
+            </column>
+            <column name="source" type="VARCHAR(20)" defaultValue="E_GP"/>
+            <column name="delivery_period_days" type="INTEGER"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="price_schedule" baseColumnNames="contract_id"
+                                 constraintName="fk_priceschedule_contract"
+                                 referencedTableName="contract" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+
+        <createTable tableName="price_schedule_line">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_price_schedule_line"/>
+            </column>
+            <column name="schedule_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="line_no" type="INTEGER"/>
+            <column name="item_code" type="VARCHAR(100)"/>
+            <column name="item_description" type="TEXT"/>
+            <column name="quantity" type="NUMERIC(18,3)"/>
+            <column name="uom" type="VARCHAR(20)"/>
+            <column name="unit_price" type="NUMERIC(18,2)"/>
+            <column name="line_amount" type="NUMERIC(18,2)"/>
+            <column name="currency" type="VARCHAR(3)" defaultValue="BDT"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="price_schedule_line" baseColumnNames="schedule_id"
+                                 constraintName="fk_psline_schedule"
+                                 referencedTableName="price_schedule" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+
+        <createTable tableName="production_schedule">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_production_schedule"/>
+            </column>
+            <column name="contract_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="start_date" type="DATE"/>
+            <column name="end_date" type="DATE"/>
+            <column name="delivery_period_days" type="INTEGER"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="production_schedule" baseColumnNames="contract_id"
+                                 constraintName="fk_prodschedule_contract"
+                                 referencedTableName="contract" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+
+        <createTable tableName="progress_report">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_progress_report"/>
+            </column>
+            <column name="production_schedule_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="report_date" type="DATE"/>
+            <column name="progress_pct" type="NUMERIC(5,2)"/>
+            <column name="remarks" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="progress_report" baseColumnNames="production_schedule_id"
+                                 constraintName="fk_progress_schedule"
+                                 referencedTableName="production_schedule" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <rollback>
+            <dropTable tableName="progress_report"/>
+            <dropTable tableName="production_schedule"/>
+            <dropTable tableName="price_schedule_line"/>
+            <dropTable tableName="price_schedule"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="033-004" author="dms">
+        <comment>Stage 11 - inspection events</comment>
+        <createTable tableName="inspection_event">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_inspection_event"/>
+            </column>
+            <column name="contract_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="inspection_type" type="VARCHAR(10)"/>
+            <column name="inspection_date" type="DATE"/>
+            <column name="location" type="VARCHAR(255)"/>
+            <column name="fat_done" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="sat_applicable" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="sat_done" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="result" type="VARCHAR(30)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="inspection_event" baseColumnNames="contract_id"
+                                 constraintName="fk_inspection_contract"
+                                 referencedTableName="contract" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <rollback><dropTable tableName="inspection_event"/></rollback>
+    </changeSet>
+
+    <changeSet id="033-005" author="dms">
+        <comment>Stage 12 - deliveries and their line items</comment>
+        <createTable tableName="delivery">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_delivery"/>
+            </column>
+            <column name="contract_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="inspection_event_id" type="BIGINT"/>
+            <column name="delivery_reference_number" type="VARCHAR(100)"/>
+            <column name="delivery_date" type="DATE"/>
+            <column name="delivered_quantity" type="NUMERIC(18,3)"/>
+            <column name="is_final" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="delivery" baseColumnNames="contract_id"
+                                 constraintName="fk_delivery_contract"
+                                 referencedTableName="contract" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="delivery" baseColumnNames="inspection_event_id"
+                                 constraintName="fk_delivery_inspection"
+                                 referencedTableName="inspection_event" referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+        <addUniqueConstraint tableName="delivery" columnNames="contract_id, delivery_reference_number"
+                             constraintName="uk_delivery_ref"/>
+
+        <createTable tableName="delivery_line">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_delivery_line"/>
+            </column>
+            <column name="delivery_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="price_schedule_line_id" type="BIGINT"/>
+            <column name="quantity" type="NUMERIC(18,3)"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="delivery_line" baseColumnNames="delivery_id"
+                                 constraintName="fk_delline_delivery"
+                                 referencedTableName="delivery" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="delivery_line" baseColumnNames="price_schedule_line_id"
+                                 constraintName="fk_delline_psline"
+                                 referencedTableName="price_schedule_line" referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+        <rollback>
+            <dropTable tableName="delivery_line"/>
+            <dropTable tableName="delivery"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

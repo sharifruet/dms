@@ -70,7 +70,24 @@ public class ExpiryTracking {
     
     @Column(name = "currency")
     private String currency;
-    
+
+    // --- Procurement linkage (REQ-P16) ---
+    // A tracker points at the instrument it guards, not merely at a document, so an
+    // amendment or extension can supersede it rather than overwrite the date.
+
+    @Column(name = "entity_type", length = 50)
+    private String entityType;
+
+    @Column(name = "entity_id")
+    private Long entityId;
+
+    @Column(name = "package_id")
+    private Long packageId;
+
+    /** Set when a later instrument replaces this one, e.g. an LC amendment (REQ-E5). */
+    @Column(name = "superseded_by_id")
+    private Long supersededById;
+
     @CreatedDate
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -145,4 +162,36 @@ public class ExpiryTracking {
     
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getEntityType() {
+        return entityType;
+    }
+
+    public void setEntityType(String entityType) {
+        this.entityType = entityType;
+    }
+
+    public Long getEntityId() {
+        return entityId;
+    }
+
+    public void setEntityId(Long entityId) {
+        this.entityId = entityId;
+    }
+
+    public Long getPackageId() {
+        return packageId;
+    }
+
+    public void setPackageId(Long packageId) {
+        this.packageId = packageId;
+    }
+
+    public Long getSupersededById() {
+        return supersededById;
+    }
+
+    public void setSupersededById(Long supersededById) {
+        this.supersededById = supersededById;
+    }
 }

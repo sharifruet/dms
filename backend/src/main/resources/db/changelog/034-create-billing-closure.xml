@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!-- Stages 13-16: billing, payment, warranty, closure. Plus budget. -->
+
+    <changeSet id="034-001" author="dms">
+        <comment>Stage 13 - invoice, bridged to the existing finance module (open point Q-6)</comment>
+        <createTable tableName="invoice">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_invoice"/>
+            </column>
+            <column name="contract_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="invoice_number" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="invoice_date" type="DATE"/>
+            <column name="invoice_amount" type="NUMERIC(18,2)"/>
+            <column name="currency" type="VARCHAR(3)" defaultValue="BDT"/>
+            <column name="supplier_name" type="VARCHAR(255)"/>
+            <column name="bill_header_id" type="BIGINT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="invoice" baseColumnNames="contract_id"
+                                 constraintName="fk_invoice_contract"
+                                 referencedTableName="contract" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addUniqueConstraint tableName="invoice" columnNames="contract_id, supplier_name, invoice_number"
+                             constraintName="uk_invoice_number"/>
+        <createIndex tableName="invoice" indexName="idx_invoice_number">
+            <column name="invoice_number"/>
+        </createIndex>
+
+        <createTable tableName="invoice_delivery_link">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_invoice_delivery_link"/>
+            </column>
+            <column name="invoice_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="delivery_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="apportioned_amount" type="NUMERIC(18,2)"/>
+            <column name="apportioned_quantity" type="NUMERIC(18,3)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addUniqueConstraint tableName="invoice_delivery_link" columnNames="invoice_id, delivery_id"
+                             constraintName="uk_invoice_delivery_link"/>
+        <addForeignKeyConstraint baseTableName="invoice_delivery_link" baseColumnNames="invoice_id"
+                                 constraintName="fk_idl_invoice"
+                                 referencedTableName="invoice" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="invoice_delivery_link" baseColumnNames="delivery_id"
+                                 constraintName="fk_idl_delivery"
+                                 referencedTableName="delivery" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <rollback>
+            <dropTable tableName="invoice_delivery_link"/>
+            <dropTable tableName="invoice"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="034-002" author="dms">
+        <comment>Stage 14 - payment, many-to-many with invoice (REQ-L7)</comment>
+        <createTable tableName="payment">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_payment"/>
+            </column>
+            <column name="contract_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="voucher_number" type="VARCHAR(100)"/>
+            <column name="payment_date" type="DATE"/>
+            <column name="payment_amount" type="NUMERIC(18,2)"/>
+            <column name="currency" type="VARCHAR(3)" defaultValue="BDT"/>
+            <column name="bank_advice_ref" type="VARCHAR(100)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="payment" baseColumnNames="contract_id"
+                                 constraintName="fk_payment_contract"
+                                 referencedTableName="contract" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+
+        <createTable tableName="payment_invoice_link">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_payment_invoice_link"/>
+            </column>
+            <column name="payment_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="invoice_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="apportioned_amount" type="NUMERIC(18,2)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addUniqueConstraint tableName="payment_invoice_link" columnNames="payment_id, invoice_id"
+                             constraintName="uk_payment_invoice_link"/>
+        <addForeignKeyConstraint baseTableName="payment_invoice_link" baseColumnNames="payment_id"
+                                 constraintName="fk_pil_payment"
+                                 referencedTableName="payment" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="payment_invoice_link" baseColumnNames="invoice_id"
+                                 constraintName="fk_pil_invoice"
+                                 referencedTableName="invoice" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <rollback>
+            <dropTable tableName="payment_invoice_link"/>
+            <dropTable tableName="payment"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="034-003" author="dms">
+        <comment>Stages 15-16 - warranty and contract closure</comment>
+        <createTable tableName="warranty">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_warranty"/>
+            </column>
+            <column name="contract_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_warranty_contract"/>
+            </column>
+            <column name="final_delivery_id" type="BIGINT"/>
+            <column name="warranty_start_date" type="DATE"/>
+            <column name="warranty_end_date" type="DATE"/>
+            <column name="acceptance_certificate_doc_id" type="BIGINT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="warranty" baseColumnNames="contract_id"
+                                 constraintName="fk_warranty_contract"
+                                 referencedTableName="contract" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="warranty" baseColumnNames="final_delivery_id"
+                                 constraintName="fk_warranty_delivery"
+                                 referencedTableName="delivery" referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+
+        <createTable tableName="contract_closure">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_contract_closure"/>
+            </column>
+            <column name="contract_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_closure_contract"/>
+            </column>
+            <column name="completion_date" type="DATE"/>
+            <column name="contract_close_date" type="DATE"/>
+            <column name="outstanding_notes" type="TEXT"/>
+            <column name="closed_by" type="BIGINT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="contract_closure" baseColumnNames="contract_id"
+                                 constraintName="fk_closure_contract"
+                                 referencedTableName="contract" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <rollback>
+            <dropTable tableName="contract_closure"/>
+            <dropTable tableName="warranty"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="034-004" author="dms">
+        <comment>Budget module - manual entries plus auto consumption from invoices (Section 5)</comment>
+        <createTable tableName="budget_entry">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_budget_entry"/>
+            </column>
+            <column name="package_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entry_type" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="amount" type="NUMERIC(18,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="currency" type="VARCHAR(3)" defaultValue="BDT"/>
+            <column name="effective_date" type="DATE"/>
+            <column name="reason" type="TEXT"/>
+            <column name="approved_by" type="BIGINT"/>
+            <column name="created_by" type="BIGINT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="budget_entry" baseColumnNames="package_id"
+                                 constraintName="fk_budget_package"
+                                 referencedTableName="procurement_package" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+
+        <createTable tableName="budget_consumption">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_budget_consumption"/>
+            </column>
+            <column name="package_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="invoice_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="consumed_amount" type="NUMERIC(18,2)"/>
+            <column name="currency" type="VARCHAR(3)" defaultValue="BDT"/>
+            <column name="posted_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <!-- An invoice on a multi-package contract apportions across packages (Q-1) -->
+        <addUniqueConstraint tableName="budget_consumption" columnNames="invoice_id, package_id"
+                             constraintName="uk_consumption_invoice_package"/>
+        <addForeignKeyConstraint baseTableName="budget_consumption" baseColumnNames="package_id"
+                                 constraintName="fk_consumption_package"
+                                 referencedTableName="procurement_package" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="budget_consumption" baseColumnNames="invoice_id"
+                                 constraintName="fk_consumption_invoice"
+                                 referencedTableName="invoice" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <rollback>
+            <dropTable tableName="budget_consumption"/>
+            <dropTable tableName="budget_entry"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="034-005" author="dms">
+        <comment>Point expiry_tracking at the entity it guards, and support supersede (REQ-E5, REQ-P16)</comment>
+        <addColumn tableName="expiry_tracking">
+            <column name="entity_type" type="VARCHAR(50)"/>
+            <column name="entity_id" type="BIGINT"/>
+            <column name="package_id" type="BIGINT"/>
+            <column name="superseded_by_id" type="BIGINT"/>
+        </addColumn>
+        <createIndex tableName="expiry_tracking" indexName="idx_expiry_package">
+            <column name="package_id"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="expiry_tracking" indexName="idx_expiry_package"/>
+            <dropColumn tableName="expiry_tracking" columnName="entity_type"/>
+            <dropColumn tableName="expiry_tracking" columnName="entity_id"/>
+            <dropColumn tableName="expiry_tracking" columnName="package_id"/>
+            <dropColumn tableName="expiry_tracking" columnName="superseded_by_id"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

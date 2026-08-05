@@ -62,15 +62,14 @@ const MobileSidebar: React.FC = () => {
   const { user } = useAppSelector((state) => state.auth);
 
   const navItems: NavItem[] = [
-    { label: 'Dashboard', path: '/dashboard', icon: <DashboardIcon /> },
-    { label: 'Documents', path: '/documents', icon: <DocumentsIcon /> },
-    { label: 'Archive', path: '/archive', icon: <ArchiveIcon /> },
+    { label: 'Procurement', path: '/procurement', icon: <DashboardIcon /> },
+    { label: 'Packages', path: '/procurement/packages', icon: <DocumentsIcon /> },
+    { label: 'Expiries', path: '/procurement/expiries', icon: <ExpiryIcon /> },
+    { label: 'Needs Attention', path: '/procurement/exceptions', icon: <ArchiveIcon /> },
     { label: 'Stationery', path: '/stationery', icon: <StationeryIcon /> },
-    { label: 'APP Entries', path: '/app-entries', icon: <AppIcon /> },
-    { label: 'Bill Entries', path: '/bill-entries', icon: <BillIcon /> },
+    { label: 'Reports', path: '/reports', icon: <AppIcon /> },
     { label: 'Search', path: '/search', icon: <SearchIcon /> },
     { label: 'Notifications', path: '/notifications', icon: <NotificationsIcon /> },
-    { label: 'Expiry Tracking', path: '/expiry-tracking', icon: <ExpiryIcon /> },
     { label: 'Assets', path: '/assets', icon: <AssetsIcon /> },
     { label: 'Assignments', path: '/asset-assignments', icon: <AssignmentsIcon /> },
     { label: 'Workflows', path: '/workflows', icon: <WorkflowsIcon /> },

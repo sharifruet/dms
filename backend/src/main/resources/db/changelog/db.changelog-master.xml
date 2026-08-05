@@ -38,4 +38,13 @@
     <include file="db/changelog/028-add-workflow-app-entry-relationship.xml"/>
     <include file="db/changelog/029-add-bill-document-fields.xml"/>
     <include file="db/changelog/030-update-tender-notice-fields-regex.xml"/>
+
+    <!-- Procurement lifecycle revamp -->
+    <include file="db/changelog/031-create-procurement-core.xml"/>
+    <include file="db/changelog/032-create-tender-award.xml"/>
+    <include file="db/changelog/033-create-contract-execution.xml"/>
+    <include file="db/changelog/034-create-billing-closure.xml"/>
+    <include file="db/changelog/035-create-capture-store.xml"/>
+    <include file="db/changelog/036-seed-field-catalogue.xml"/>
+    <include file="db/changelog/037-align-audit-columns.xml"/>
 </databaseChangeLog>

@@ -5,17 +5,17 @@ import Sidebar from './components/Sidebar';
 import MobileSidebar from './components/MobileSidebar';
 import NotificationPermissionPrompt from './components/NotificationPermissionPrompt';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import DocumentsEnhanced from './pages/DocumentsEnhanced';
+import ProcurementDashboard from './pages/procurement/ProcurementDashboard';
+import PackageList from './pages/procurement/PackageList';
+import PackageWorkspace from './pages/procurement/PackageWorkspace';
+import ExpiryDashboard from './pages/procurement/ExpiryDashboard';
+import ExceptionsDashboard from './pages/procurement/ExceptionsDashboard';
 import Users from './pages/Users';
 import Search from './pages/Search';
 import Notifications from './pages/Notifications';
-import ExpiryTracking from './pages/ExpiryTracking';
 import Reports from './pages/Reports';
-import DashboardPage from './pages/DashboardPage';
 import DashboardManagement from './pages/DashboardManagement';
 import Workflows from './pages/Workflows';
-import DocumentVersioning from './pages/DocumentVersioning';
 import Integrations from './pages/Integrations';
 import AdvancedAnalytics from './pages/AdvancedAnalytics';
 import MachineLearning from './pages/MachineLearning';
@@ -23,10 +23,7 @@ import SystemHealth from './pages/SystemHealth';
 import Assets from './pages/Assets';
 import AssetAssignments from './pages/AssetAssignments';
 import DocumentTypeFields from './pages/DocumentTypeFields';
-import Archive from './pages/Archive';
 import StationeryTracking from './pages/StationeryTracking';
-import AppEntries from './pages/AppEntries';
-import BillEntries from './pages/BillEntries';
 import { useAppSelector } from './hooks/redux';
 
 function App() {
@@ -54,14 +51,6 @@ function App() {
             element={!isAuthenticated ? <Login /> : <Navigate to="/dashboard" />} 
           />
           <Route 
-            path="/dashboard" 
-            element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/documents" 
-            element={isAuthenticated ? <DocumentsEnhanced /> : <Navigate to="/login" />} 
-          />
-          <Route 
             path="/users" 
             element={isAuthenticated ? <Users /> : <Navigate to="/login" />} 
           />
@@ -72,10 +61,6 @@ function App() {
           <Route 
             path="/notifications" 
             element={isAuthenticated ? <Notifications /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/expiry-tracking" 
-            element={isAuthenticated ? <ExpiryTracking /> : <Navigate to="/login" />} 
           />
           <Route 
             path="/assets" 
@@ -98,10 +83,6 @@ function App() {
             element={isAuthenticated ? <Workflows /> : <Navigate to="/login" />} 
           />
           <Route 
-            path="/versioning" 
-            element={isAuthenticated ? <DocumentVersioning /> : <Navigate to="/login" />} 
-          />
-          <Route 
             path="/integrations" 
             element={isAuthenticated ? <Integrations /> : <Navigate to="/login" />} 
           />
@@ -122,24 +103,44 @@ function App() {
             element={isAuthenticated ? <DocumentTypeFields /> : <Navigate to="/login" />} 
           />
           <Route 
-            path="/archive" 
-            element={isAuthenticated ? <Archive /> : <Navigate to="/login" />} 
-          />
-          <Route 
             path="/stationery" 
             element={isAuthenticated ? <StationeryTracking /> : <Navigate to="/login" />} 
           />
-          <Route 
-            path="/app-entries" 
-            element={isAuthenticated ? <AppEntries /> : <Navigate to="/login" />} 
+          {/* Procurement lifecycle - the primary workspace */}
+          <Route
+            path="/procurement"
+            element={isAuthenticated ? <ProcurementDashboard /> : <Navigate to="/login" />}
           />
-          <Route 
-            path="/bill-entries" 
-            element={isAuthenticated ? <BillEntries /> : <Navigate to="/login" />} 
+          <Route
+            path="/procurement/packages"
+            element={isAuthenticated ? <PackageList /> : <Navigate to="/login" />}
           />
+          <Route
+            path="/procurement/packages/:id"
+            element={isAuthenticated ? <PackageWorkspace /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/procurement/expiries"
+            element={isAuthenticated ? <ExpiryDashboard /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/procurement/exceptions"
+            element={isAuthenticated ? <ExceptionsDashboard /> : <Navigate to="/login" />}
+          />
+
+          {/* Retired document-centric pages. Kept as redirects for one release so
+              existing bookmarks and links keep working. */}
+          <Route path="/dashboard" element={<Navigate to="/procurement" replace />} />
+          <Route path="/documents" element={<Navigate to="/procurement/packages" replace />} />
+          <Route path="/expiry-tracking" element={<Navigate to="/procurement/expiries" replace />} />
+          <Route path="/app-entries" element={<Navigate to="/procurement/packages?stage=1" replace />} />
+          <Route path="/bill-entries" element={<Navigate to="/procurement/packages?stage=13" replace />} />
+          <Route path="/archive" element={<Navigate to="/procurement/packages?status=CLOSED" replace />} />
+          <Route path="/versioning" element={<Navigate to="/procurement/packages" replace />} />
+
           <Route 
             path="/" 
-            element={<Navigate to={isAuthenticated ? "/dashboard" : "/login"} />} 
+            element={<Navigate to={isAuthenticated ? "/procurement" : "/login"} />} 
           />
         </Routes>
       </Box>

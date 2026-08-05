@@ -59,6 +59,30 @@ public class DocumentTypeField {
     @Column(name = "description", length = 500)
     private String description;
 
+    // --- Procurement field catalogue (requirements section 3.7) ---
+    // These turn the table into the stage-aware catalogue that drives capture and
+    // stage completion, so adding a field is configuration rather than code.
+
+    /** Lifecycle stage 1..16 this field is captured at; null for non-procurement fields. */
+    @Column(name = "stage_code")
+    private Short stageCode;
+
+    /** Owning procurement entity, e.g. CONTRACT, INVOICE, BER_BIDDER. */
+    @Column(name = "entity_type", length = 50)
+    private String entityType;
+
+    /** Property name on that entity, e.g. contractNumber. */
+    @Column(name = "entity_column", length = 100)
+    private String entityColumn;
+
+    /** OCR | MANUAL | DERIVED | IMPORT */
+    @Column(name = "capture_source", length = 20)
+    private String captureSource;
+
+    /** Blocks stage completion until confirmed (WF-03). */
+    @Column(name = "is_mandatory")
+    private Boolean isMandatory = false;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -204,6 +228,46 @@ public class DocumentTypeField {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public Short getStageCode() {
+        return stageCode;
+    }
+
+    public void setStageCode(Short stageCode) {
+        this.stageCode = stageCode;
+    }
+
+    public String getEntityType() {
+        return entityType;
+    }
+
+    public void setEntityType(String entityType) {
+        this.entityType = entityType;
+    }
+
+    public String getEntityColumn() {
+        return entityColumn;
+    }
+
+    public void setEntityColumn(String entityColumn) {
+        this.entityColumn = entityColumn;
+    }
+
+    public String getCaptureSource() {
+        return captureSource;
+    }
+
+    public void setCaptureSource(String captureSource) {
+        this.captureSource = captureSource;
+    }
+
+    public Boolean getIsMandatory() {
+        return isMandatory;
+    }
+
+    public void setIsMandatory(Boolean isMandatory) {
+        this.isMandatory = isMandatory;
     }
 }
 

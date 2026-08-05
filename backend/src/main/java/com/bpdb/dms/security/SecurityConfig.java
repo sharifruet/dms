@@ -78,6 +78,15 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/finance/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
                 // Search endpoints
                 .requestMatchers("/api/search/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
+
+                // Procurement lifecycle. Reading is open to any authenticated role;
+                // capturing, completing stages and posting budget are officer actions.
+                .requestMatchers(HttpMethod.GET, "/api/procurement/**")
+                    .hasAnyRole("ADMIN", "OFFICER", "VIEWER", "DD1", "DD2", "DD3", "DD4")
+                .requestMatchers(HttpMethod.POST, "/api/procurement/documents/upload")
+                    .hasAnyRole("ADMIN", "OFFICER", "DD1", "DD2", "DD3", "DD4")
+                .requestMatchers("/api/procurement/**")
+                    .hasAnyRole("ADMIN", "OFFICER", "DD1", "DD2", "DD3", "DD4")
                 // User management endpoints
                 .requestMatchers("/api/users/**").hasAuthority(PermissionConstants.USER_MANAGEMENT)
                 .requestMatchers("/api/roles/**").hasAuthority(PermissionConstants.USER_MANAGEMENT)

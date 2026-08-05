@@ -105,7 +105,20 @@ public class Document {
     
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
-    
+
+    // --- Procurement context (REQ-L9) ---
+    // Denormalised from document_link so search returns a document together with the
+    // package it belongs to, rather than the file on its own.
+
+    @Column(name = "package_id")
+    private Long packageId;
+
+    @Column(name = "contract_id")
+    private Long contractId;
+
+    @Column(name = "stage_code")
+    private Short stageCode;
+
     @CreatedDate
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -304,6 +317,30 @@ public class Document {
         return deletedAt;
     }
     
+    public Long getPackageId() {
+        return packageId;
+    }
+
+    public void setPackageId(Long packageId) {
+        this.packageId = packageId;
+    }
+
+    public Long getContractId() {
+        return contractId;
+    }
+
+    public void setContractId(Long contractId) {
+        this.contractId = contractId;
+    }
+
+    public Short getStageCode() {
+        return stageCode;
+    }
+
+    public void setStageCode(Short stageCode) {
+        this.stageCode = stageCode;
+    }
+
     public void setDeletedAt(LocalDateTime deletedAt) {
         this.deletedAt = deletedAt;
     }

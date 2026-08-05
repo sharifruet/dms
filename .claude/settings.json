@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(python genentities.py)",
+      "Bash(./mvnw compile *)",
+      "Bash(./mvnw clean *)",
+      "Bash(npx react-scripts *)",
+      "Bash(docker run *)",
+      "Bash(./mvnw -q liquibase:rollback -Dliquibase.rollbackCount=12 -Dliquibase.changeLogFile=db/changelog/db.changelog-master.xml -Dliquibase.url=jdbc:postgresql://localhost:55432/dms_test -Dliquibase.username=postgres -Dliquibase.password=test -Dliquibase.searchPath=src/main/resources)",
+      "Bash(grep -Ev \"^WARNING|^$\")",
+      "Bash(./mvnw test *)",
+      "Bash(docker rm *)"
+    ]
+  }
+}

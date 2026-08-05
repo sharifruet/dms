@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!-- Stages 2-7: tender through award and performance security -->
+
+    <changeSet id="032-001" author="dms">
+        <comment>Stage 2 - tender</comment>
+        <createTable tableName="tender">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_tender"/>
+            </column>
+            <column name="package_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_tender_package"/>
+            </column>
+            <column name="procurement_type" type="VARCHAR(100)"/>
+            <column name="procurement_method" type="VARCHAR(100)"/>
+            <column name="procurement_nature" type="VARCHAR(100)"/>
+            <column name="opening_date" type="DATE"/>
+            <column name="closing_date" type="DATE"/>
+            <column name="tender_validity_days" type="INTEGER"/>
+            <column name="tender_validity_date" type="DATE"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="tender" baseColumnNames="package_id"
+                                 constraintName="fk_tender_package"
+                                 referencedTableName="procurement_package" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <rollback><dropTable tableName="tender"/></rollback>
+    </changeSet>
+
+    <changeSet id="032-002" author="dms">
+        <comment>Stage 3 - tender_opening. Summary only; no per-bidder entity here (REQ-3.2)</comment>
+        <createTable tableName="tender_opening">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_tender_opening"/>
+            </column>
+            <column name="tender_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_opening_tender"/>
+            </column>
+            <column name="opening_date" type="DATE"/>
+            <column name="number_of_bidders" type="INTEGER"/>
+            <column name="participating_bidders" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="tender_opening" baseColumnNames="tender_id"
+                                 constraintName="fk_opening_tender"
+                                 referencedTableName="tender" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <rollback><dropTable tableName="tender_opening"/></rollback>
+    </changeSet>
+
+    <changeSet id="032-003" author="dms">
+        <comment>Stage 3 - bid_security. Exists only to feed expiry tracking E-2 (REQ-3.4)</comment>
+        <createTable tableName="bid_security">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_bid_security"/>
+            </column>
+            <column name="opening_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="instrument_type" type="VARCHAR(20)"/>
+            <column name="reference_no" type="VARCHAR(100)"/>
+            <column name="issuing_bank" type="VARCHAR(255)"/>
+            <column name="bidder_name" type="VARCHAR(255)"/>
+            <column name="expiry_date" type="DATE"/>
+            <column name="released_at" type="TIMESTAMP"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="bid_security" baseColumnNames="opening_id"
+                                 constraintName="fk_bidsec_opening"
+                                 referencedTableName="tender_opening" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <rollback><dropTable tableName="bid_security"/></rollback>
+    </changeSet>
+
+    <changeSet id="032-004" author="dms">
+        <comment>Stage 4 - evaluation (BER)</comment>
+        <createTable tableName="evaluation">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_evaluation"/>
+            </column>
+            <column name="opening_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_evaluation_opening"/>
+            </column>
+            <column name="oce_value" type="NUMERIC(18,2)"/>
+            <column name="currency" type="VARCHAR(3)" defaultValue="BDT"/>
+            <column name="evaluation_date" type="DATE"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="evaluation" baseColumnNames="opening_id"
+                                 constraintName="fk_evaluation_opening"
+                                 referencedTableName="tender_opening" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <rollback><dropTable tableName="evaluation"/></rollback>
+    </changeSet>
+
+    <changeSet id="032-005" author="dms">
+        <comment>Stage 4 - ber_bidder. The BER is the single source of bidder data (REQ-4.1)</comment>
+        <createTable tableName="ber_bidder">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_ber_bidder"/>
+            </column>
+            <column name="evaluation_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="bidder_name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="bidding_price" type="NUMERIC(18,2)"/>
+            <column name="currency" type="VARCHAR(3)" defaultValue="BDT"/>
+            <column name="is_responsive" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="deviation_pct" type="NUMERIC(9,4)"/>
+            <column name="bid_rank" type="INTEGER"/>
+            <column name="is_awarded" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="remarks" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="ber_bidder" baseColumnNames="evaluation_id"
+                                 constraintName="fk_berbidder_evaluation"
+                                 referencedTableName="evaluation" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <createIndex tableName="ber_bidder" indexName="idx_berbidder_evaluation">
+            <column name="evaluation_id"/>
+        </createIndex>
+        <rollback><dropTable tableName="ber_bidder"/></rollback>
+    </changeSet>
+
+    <changeSet id="032-006" author="dms">
+        <comment>Stage 5 - contract_approval, referencing the awarded BER bidder (L-08)</comment>
+        <createTable tableName="contract_approval">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_contract_approval"/>
+            </column>
+            <column name="package_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="awarded_bidder_id" type="BIGINT"/>
+            <column name="approval_date" type="DATE"/>
+            <column name="approving_authority" type="VARCHAR(255)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="contract_approval" baseColumnNames="package_id"
+                                 constraintName="fk_approval_package"
+                                 referencedTableName="procurement_package" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="contract_approval" baseColumnNames="awarded_bidder_id"
+                                 constraintName="fk_approval_bidder"
+                                 referencedTableName="ber_bidder" referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+        <rollback><dropTable tableName="contract_approval"/></rollback>
+    </changeSet>
+
+    <changeSet id="032-007" author="dms">
+        <comment>Stage 6 - notification of award</comment>
+        <createTable tableName="noa">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_noa"/>
+            </column>
+            <column name="approval_id" type="BIGINT">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_noa_approval"/>
+            </column>
+            <column name="noa_date" type="DATE"/>
+            <column name="ps_amount" type="NUMERIC(18,2)"/>
+            <column name="ps_currency" type="VARCHAR(3)" defaultValue="BDT"/>
+            <column name="ps_percentage" type="NUMERIC(5,2)"/>
+            <column name="pg_submission_last_date" type="DATE"/>
+            <column name="contract_signing_last_date" type="DATE"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="noa" baseColumnNames="approval_id"
+                                 constraintName="fk_noa_approval"
+                                 referencedTableName="contract_approval" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <rollback><dropTable tableName="noa"/></rollback>
+    </changeSet>
+
+    <changeSet id="032-008" author="dms">
+        <comment>Stage 7 - performance security</comment>
+        <createTable tableName="performance_security">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_performance_security"/>
+            </column>
+            <column name="noa_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="instrument_type" type="VARCHAR(20)"/>
+            <column name="reference_no" type="VARCHAR(100)"/>
+            <column name="amount" type="NUMERIC(18,2)"/>
+            <column name="currency" type="VARCHAR(3)" defaultValue="BDT"/>
+            <column name="issuing_bank" type="VARCHAR(255)"/>
+            <column name="validity_date" type="DATE"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="performance_security" baseColumnNames="noa_id"
+                                 constraintName="fk_ps_noa"
+                                 referencedTableName="noa" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <rollback><dropTable tableName="performance_security"/></rollback>
+    </changeSet>
+
+</databaseChangeLog>

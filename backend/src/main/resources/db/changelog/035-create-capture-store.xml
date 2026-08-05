@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+      The capture store: every value extracted by OCR or entered by hand, with its
+      provenance, verification state and full history. Requirements section 3.5-3.6.
+    -->
+
+    <changeSet id="035-001" author="dms">
+        <comment>OCR job / result / page - re-OCR is additive, never destructive (REQ-P6, P10)</comment>
+        <createTable tableName="ocr_job">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_ocr_job"/>
+            </column>
+            <column name="document_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(20)" defaultValue="QUEUED">
+                <constraints nullable="false"/>
+            </column>
+            <column name="engine" type="VARCHAR(50)"/>
+            <column name="engine_version" type="VARCHAR(30)"/>
+            <column name="attempt_no" type="INTEGER" defaultValueNumeric="1"/>
+            <column name="started_at" type="TIMESTAMP"/>
+            <column name="finished_at" type="TIMESTAMP"/>
+            <column name="duration_ms" type="INTEGER"/>
+            <column name="error_message" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="ocr_job" baseColumnNames="document_id"
+                                 constraintName="fk_ocrjob_document"
+                                 referencedTableName="documents" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <createIndex tableName="ocr_job" indexName="idx_ocrjob_status">
+            <column name="status"/>
+        </createIndex>
+
+        <createTable tableName="ocr_result">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_ocr_result"/>
+            </column>
+            <column name="job_id" type="BIGINT"/>
+            <column name="document_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="INTEGER" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="full_text" type="TEXT"/>
+            <column name="page_count" type="INTEGER"/>
+            <column name="avg_confidence" type="NUMERIC(5,4)"/>
+            <column name="language" type="VARCHAR(20)"/>
+            <column name="is_current" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="ocr_result" baseColumnNames="job_id"
+                                 constraintName="fk_ocrresult_job"
+                                 referencedTableName="ocr_job" referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+        <addForeignKeyConstraint baseTableName="ocr_result" baseColumnNames="document_id"
+                                 constraintName="fk_ocrresult_document"
+                                 referencedTableName="documents" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <createIndex tableName="ocr_result" indexName="idx_ocrresult_document">
+            <column name="document_id"/>
+            <column name="is_current"/>
+        </createIndex>
+
+        <createTable tableName="ocr_page">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_ocr_page"/>
+            </column>
+            <column name="result_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="page_no" type="INTEGER"/>
+            <column name="page_text" type="TEXT"/>
+            <column name="confidence" type="NUMERIC(5,4)"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="ocr_page" baseColumnNames="result_id"
+                                 constraintName="fk_ocrpage_result"
+                                 referencedTableName="ocr_result" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <rollback>
+            <dropTable tableName="ocr_page"/>
+            <dropTable tableName="ocr_result"/>
+            <dropTable tableName="ocr_job"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="035-002" author="dms">
+        <comment>extracted_field - one row per captured value, OCR or manual (REQ-P3..P8)</comment>
+        <createTable tableName="extracted_field">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_extracted_field"/>
+            </column>
+            <column name="entity_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entity_id" type="BIGINT"/>
+            <column name="package_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="stage_code" type="SMALLINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="field_key" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="field_label" type="VARCHAR(255)"/>
+            <column name="data_type" type="VARCHAR(20)" defaultValue="TEXT">
+                <constraints nullable="false"/>
+            </column>
+
+            <!-- raw is immutable after insert (REQ-P5) -->
+            <column name="raw_value" type="TEXT"/>
+            <column name="text_value" type="TEXT"/>
+            <column name="numeric_value" type="NUMERIC(18,4)"/>
+            <column name="date_value" type="DATE"/>
+            <column name="bool_value" type="BOOLEAN"/>
+            <column name="currency" type="VARCHAR(3)"/>
+            <column name="unit" type="VARCHAR(20)"/>
+            <column name="fx_rate" type="NUMERIC(18,6)"/>
+
+            <column name="capture_source" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="document_id" type="BIGINT"/>
+            <column name="ocr_result_id" type="BIGINT"/>
+            <column name="page_no" type="INTEGER"/>
+            <column name="bbox" type="VARCHAR(60)"/>
+            <column name="ocr_confidence" type="NUMERIC(5,4)"/>
+
+            <column name="status" type="VARCHAR(30)" defaultValue="OCR_SUGGESTED">
+                <constraints nullable="false"/>
+            </column>
+            <column name="verified_by" type="BIGINT"/>
+            <column name="verified_at" type="TIMESTAMP"/>
+            <column name="is_mandatory" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="validation_state" type="VARCHAR(30)"/>
+            <column name="validation_message" type="TEXT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="extracted_field" baseColumnNames="package_id"
+                                 constraintName="fk_field_package"
+                                 referencedTableName="procurement_package" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <addForeignKeyConstraint baseTableName="extracted_field" baseColumnNames="document_id"
+                                 constraintName="fk_field_document"
+                                 referencedTableName="documents" referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+        <addForeignKeyConstraint baseTableName="extracted_field" baseColumnNames="ocr_result_id"
+                                 constraintName="fk_field_ocrresult"
+                                 referencedTableName="ocr_result" referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+        <addUniqueConstraint tableName="extracted_field"
+                             columnNames="entity_type, entity_id, field_key"
+                             constraintName="uk_extracted_field"/>
+        <createIndex tableName="extracted_field" indexName="idx_field_entity">
+            <column name="entity_type"/>
+            <column name="entity_id"/>
+        </createIndex>
+        <createIndex tableName="extracted_field" indexName="idx_field_package_stage">
+            <column name="package_id"/>
+            <column name="stage_code"/>
+        </createIndex>
+        <createIndex tableName="extracted_field" indexName="idx_field_status">
+            <column name="status"/>
+        </createIndex>
+        <rollback><dropTable tableName="extracted_field"/></rollback>
+    </changeSet>
+
+    <changeSet id="035-003" author="dms">
+        <comment>extracted_field_history - append only (REQ-P5)</comment>
+        <createTable tableName="extracted_field_history">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_extracted_field_history"/>
+            </column>
+            <column name="extracted_field_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="INTEGER"/>
+            <column name="old_value" type="TEXT"/>
+            <column name="new_value" type="TEXT"/>
+            <column name="old_status" type="VARCHAR(30)"/>
+            <column name="new_status" type="VARCHAR(30)"/>
+            <column name="changed_by" type="BIGINT"/>
+            <column name="changed_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="change_reason" type="TEXT"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="extracted_field_history" baseColumnNames="extracted_field_id"
+                                 constraintName="fk_fieldhist_field"
+                                 referencedTableName="extracted_field" referencedColumnNames="id"
+                                 onDelete="CASCADE"/>
+        <createIndex tableName="extracted_field_history" indexName="idx_fieldhist_field">
+            <column name="extracted_field_id"/>
+        </createIndex>
+        <rollback><dropTable tableName="extracted_field_history"/></rollback>
+    </changeSet>
+
+    <changeSet id="035-004" author="dms">
+        <comment>Extend document_type_fields into the stage-aware field catalogue (REQ-P13)</comment>
+        <addColumn tableName="document_type_fields">
+            <column name="stage_code" type="SMALLINT"/>
+            <column name="entity_type" type="VARCHAR(50)"/>
+            <column name="entity_column" type="VARCHAR(100)"/>
+            <column name="capture_source" type="VARCHAR(20)"/>
+            <column name="is_mandatory" type="BOOLEAN" defaultValueBoolean="false"/>
+        </addColumn>
+        <createIndex tableName="document_type_fields" indexName="idx_dtf_stage">
+            <column name="stage_code"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="document_type_fields" indexName="idx_dtf_stage"/>
+            <dropColumn tableName="document_type_fields" columnName="stage_code"/>
+            <dropColumn tableName="document_type_fields" columnName="entity_type"/>
+            <dropColumn tableName="document_type_fields" columnName="entity_column"/>
+            <dropColumn tableName="document_type_fields" columnName="capture_source"/>
+            <dropColumn tableName="document_type_fields" columnName="is_mandatory"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="035-005" author="dms">
+        <comment>stage_document_requirement - required documents per stage, config not code (REQ-P2)</comment>
+        <createTable tableName="stage_document_requirement">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_stage_document_requirement"/>
+            </column>
+            <column name="stage_code" type="SMALLINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="doc_role" type="VARCHAR(80)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="doc_label" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_mandatory" type="BOOLEAN" defaultValueBoolean="true"/>
+            <column name="is_conditional" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="display_order" type="INTEGER" defaultValueNumeric="0"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true"/>
+        </createTable>
+        <addUniqueConstraint tableName="stage_document_requirement" columnNames="stage_code, doc_role"
+                             constraintName="uk_stage_doc_role"/>
+        <rollback><dropTable tableName="stage_document_requirement"/></rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+      Every procurement entity extends BaseProcurementEntity, which maps created_at
+      and updated_at. Tables created in 032-035 without both columns get them here so
+      the mapping is uniform.
+    -->
+
+    <changeSet id="037-001" author="dms">
+        <comment>Add updated_at where missing</comment>
+        <addColumn tableName="lc_amendment"><column name="updated_at" type="TIMESTAMP"/></addColumn>
+        <addColumn tableName="price_schedule"><column name="updated_at" type="TIMESTAMP"/></addColumn>
+        <addColumn tableName="price_schedule_line"><column name="updated_at" type="TIMESTAMP"/></addColumn>
+        <addColumn tableName="production_schedule"><column name="updated_at" type="TIMESTAMP"/></addColumn>
+        <addColumn tableName="progress_report"><column name="updated_at" type="TIMESTAMP"/></addColumn>
+        <addColumn tableName="delivery_line"><column name="updated_at" type="TIMESTAMP"/></addColumn>
+        <addColumn tableName="contract_closure"><column name="updated_at" type="TIMESTAMP"/></addColumn>
+        <addColumn tableName="budget_entry"><column name="updated_at" type="TIMESTAMP"/></addColumn>
+        <addColumn tableName="budget_consumption"><column name="updated_at" type="TIMESTAMP"/></addColumn>
+        <addColumn tableName="ocr_job"><column name="updated_at" type="TIMESTAMP"/></addColumn>
+        <addColumn tableName="ocr_result"><column name="updated_at" type="TIMESTAMP"/></addColumn>
+        <addColumn tableName="ocr_page"><column name="updated_at" type="TIMESTAMP"/></addColumn>
+        <addColumn tableName="stage_document_requirement"><column name="updated_at" type="TIMESTAMP"/></addColumn>
+        <addColumn tableName="extracted_field_history"><column name="updated_at" type="TIMESTAMP"/></addColumn>
+        <addColumn tableName="document_link"><column name="updated_at" type="TIMESTAMP"/></addColumn>
+        <rollback>
+            <dropColumn tableName="lc_amendment" columnName="updated_at"/>
+            <dropColumn tableName="price_schedule" columnName="updated_at"/>
+            <dropColumn tableName="price_schedule_line" columnName="updated_at"/>
+            <dropColumn tableName="production_schedule" columnName="updated_at"/>
+            <dropColumn tableName="progress_report" columnName="updated_at"/>
+            <dropColumn tableName="delivery_line" columnName="updated_at"/>
+            <dropColumn tableName="contract_closure" columnName="updated_at"/>
+            <dropColumn tableName="budget_entry" columnName="updated_at"/>
+            <dropColumn tableName="budget_consumption" columnName="updated_at"/>
+            <dropColumn tableName="ocr_job" columnName="updated_at"/>
+            <dropColumn tableName="ocr_result" columnName="updated_at"/>
+            <dropColumn tableName="ocr_page" columnName="updated_at"/>
+            <dropColumn tableName="stage_document_requirement" columnName="updated_at"/>
+            <dropColumn tableName="extracted_field_history" columnName="updated_at"/>
+            <dropColumn tableName="document_link" columnName="updated_at"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="037-002" author="dms">
+        <comment>Add created_at where missing</comment>
+        <addColumn tableName="price_schedule_line">
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </addColumn>
+        <addColumn tableName="delivery_line">
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </addColumn>
+        <addColumn tableName="stage_document_requirement">
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="price_schedule_line" columnName="created_at"/>
+            <dropColumn tableName="delivery_line" columnName="created_at"/>
+            <dropColumn tableName="stage_document_requirement" columnName="created_at"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
