@@ -7,7 +7,7 @@ import com.bpdb.dms.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureWebMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * End-to-end integration tests for Stationery Tracking per Employee feature
  */
 @SpringBootTest
-@AutoConfigureWebMvc
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
 class StationeryTrackingIntegrationTest {
@@ -37,6 +37,11 @@ class StationeryTrackingIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+
+    @Autowired
+
+    private com.bpdb.dms.repository.RoleRepository roleRepository;
+
     private User testUser;
     private User employeeUser;
     private Document stationeryRecord;
@@ -48,6 +53,7 @@ class StationeryTrackingIntegrationTest {
         testUser.setUsername("testuser");
         testUser.setEmail("test@example.com");
         testUser.setPassword("password");
+        testUser.setRole(com.bpdb.dms.support.TestRoles.officer(roleRepository));
         testUser.setIsActive(true);
         testUser = userRepository.save(testUser);
 
@@ -56,6 +62,7 @@ class StationeryTrackingIntegrationTest {
         employeeUser.setUsername("employee");
         employeeUser.setEmail("employee@example.com");
         employeeUser.setPassword("password");
+        employeeUser.setRole(com.bpdb.dms.support.TestRoles.officer(roleRepository));
         employeeUser.setIsActive(true);
         employeeUser = userRepository.save(employeeUser);
 
@@ -70,7 +77,7 @@ class StationeryTrackingIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "OFFICER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_OFFICER", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD", "PERM_DOCUMENT_DELETE", "PERM_DOCUMENT_ARCHIVE", "PERM_DOCUMENT_EDIT"})
     void assignStationeryToEmployee_IntegrationTest() throws Exception {
         // When & Then
         mockMvc.perform(post("/api/documents/" + stationeryRecord.getId() + "/assign-stationery")
@@ -87,7 +94,7 @@ class StationeryTrackingIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "OFFICER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_OFFICER", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD", "PERM_DOCUMENT_DELETE", "PERM_DOCUMENT_ARCHIVE", "PERM_DOCUMENT_EDIT"})
     void unassignStationeryFromEmployee_IntegrationTest() throws Exception {
         // Given - Assign stationery first
         stationeryRecord.setAssignedEmployee(employeeUser);
@@ -106,7 +113,7 @@ class StationeryTrackingIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "VIEWER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_VIEWER", "PERM_DOCUMENT_VIEW"})
     void getStationeryRecords_IntegrationTest() throws Exception {
         // When & Then
         mockMvc.perform(get("/api/documents/stationery")
@@ -117,7 +124,7 @@ class StationeryTrackingIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "VIEWER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_VIEWER", "PERM_DOCUMENT_VIEW"})
     void getStationeryRecordsByEmployee_IntegrationTest() throws Exception {
         // Given - Assign stationery to employee
         stationeryRecord.setAssignedEmployee(employeeUser);
@@ -132,7 +139,7 @@ class StationeryTrackingIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "VIEWER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_VIEWER", "PERM_DOCUMENT_VIEW"})
     void getStationeryStatistics_IntegrationTest() throws Exception {
         // When & Then
         mockMvc.perform(get("/api/documents/stationery/statistics"))
@@ -144,7 +151,7 @@ class StationeryTrackingIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "VIEWER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_VIEWER", "PERM_DOCUMENT_VIEW"})
     void getStationeryStatisticsPerEmployee_IntegrationTest() throws Exception {
         // Given - Assign stationery to employee
         stationeryRecord.setAssignedEmployee(employeeUser);

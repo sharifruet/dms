@@ -52,6 +52,7 @@ public class ProcurementRecordService {
     private final StageDataService stageDataService;
     private final ValidationService validationService;
     private final BudgetService budgetService;
+    private final ProcurementAuditService auditService;
 
     public ProcurementRecordService(BerBidderRepository bidderRepository,
                                     ContractApprovalRepository approvalRepository,
@@ -63,7 +64,8 @@ public class ProcurementRecordService {
                                     PaymentInvoiceLinkRepository paymentInvoiceLinkRepository,
                                     StageDataService stageDataService,
                                     ValidationService validationService,
-                                    BudgetService budgetService) {
+                                    BudgetService budgetService,
+                                    ProcurementAuditService auditService) {
         this.bidderRepository = bidderRepository;
         this.approvalRepository = approvalRepository;
         this.inspectionRepository = inspectionRepository;
@@ -75,6 +77,7 @@ public class ProcurementRecordService {
         this.stageDataService = stageDataService;
         this.validationService = validationService;
         this.budgetService = budgetService;
+        this.auditService = auditService;
     }
 
     // ------------------------------------------------------- Stage 4: bidders
@@ -158,7 +161,54 @@ public class ProcurementRecordService {
                         + " is already used on this contract (REQ-12.4)");
             }
         }
+
+        // Finality is not an ordinary field. Declaring a delivery final closes the delivery
+        // set and unblocks the stage, so it is a Checker's decision made through
+        // declareFinal (REQ-12.5) - not something that can ride in on a form payload.
+        if (delivery.getId() == null) {
+            delivery.setIsFinal(Boolean.FALSE);
+        } else {
+            deliveryRepository.findById(delivery.getId())
+                    .ifPresent(existing -> delivery.setIsFinal(existing.getIsFinal()));
+        }
         return deliveryRepository.save(delivery);
+    }
+
+    /**
+     * Declare a delivery final, closing the delivery set for the contract (REQ-12.5).
+     *
+     * <p>Q-11 did not say who declares a delivery final, so it follows the maker/checker
+     * split of Q-17: the Checker who approves the stage is the one who decides the goods
+     * are all in. The route is permission-gated; this records the decision.
+     */
+    @Transactional
+    public Delivery declareFinal(Long packageId, Long deliveryId, Long userId) {
+        Contract contract = requireContract(packageId);
+        Delivery delivery = deliveryRepository.findById(deliveryId)
+                .orElseThrow(() -> new IllegalArgumentException("Delivery not found: " + deliveryId));
+        if (!contract.getId().equals(delivery.getContractId())) {
+            throw new IllegalArgumentException(
+                    "Delivery " + deliveryId + " does not belong to this package");
+        }
+
+        delivery.setIsFinal(Boolean.TRUE);
+        Delivery saved = deliveryRepository.save(delivery);
+        auditService.deliveryDeclaredFinal(userId, saved.getId(),
+                saved.getDeliveryReferenceNumber());
+        return saved;
+    }
+
+    /** Reopen a delivery set that was closed too early. Also a Checker's decision. */
+    @Transactional
+    public Delivery reopenDeliveries(Long packageId, Long deliveryId, Long userId, String reason) {
+        Delivery delivery = deliveryRepository.findById(deliveryId)
+                .orElseThrow(() -> new IllegalArgumentException("Delivery not found: " + deliveryId));
+        delivery.setIsFinal(Boolean.FALSE);
+        Delivery saved = deliveryRepository.save(delivery);
+        auditService.recordChange(userId, "PROCUREMENT_DELIVERY_REOPENED",
+                ProcurementAuditService.DELIVERY, saved.getId(),
+                "Delivery " + saved.getDeliveryReferenceNumber(), "final", "not final", reason);
+        return saved;
     }
 
     public List<Delivery> deliveries(Long packageId) {
@@ -191,6 +241,25 @@ public class ProcurementRecordService {
             throw new IllegalArgumentException("Invoice " + invoice.getInvoiceNumber()
                     + " already exists for this supplier (REQ-13.2)");
         }
+
+        // Over-billing is refused at the door, not recorded and flagged (Q-12, REQ-13.3).
+        // Checked against what the contract would total WITH this invoice applied.
+        if (validationService.mismatchedCurrency(contract, invoice.getCurrency())) {
+            throw new IllegalArgumentException("Invoice currency " + invoice.getCurrency()
+                    + " differs from the contract currency " + contract.getCurrency()
+                    + " - a package is single-currency (REQ-B7)");
+        }
+        BigDecimal wouldTotal = cumulativeBilledExcluding(contract.getId(), invoice.getId())
+                .add(invoice.getInvoiceAmount() == null ? BigDecimal.ZERO : invoice.getInvoiceAmount());
+        if (validationService.overBilled(contract, wouldTotal)) {
+            String message = validationService.overBillingMessage(contract, wouldTotal);
+            // An attempt to bill beyond the contract value is worth recording whether or
+            // not it succeeded - a refused action is still an action (REQ-X6)
+            auditService.refused(null, ProcurementAuditService.INVOICE, contract.getId(),
+                    "Invoice " + invoice.getInvoiceNumber() + " rejected as over-billing", message);
+            throw new IllegalArgumentException(message);
+        }
+
         Invoice saved = invoiceRepository.save(invoice);
 
         if (deliveryIds != null) {
@@ -209,6 +278,9 @@ public class ProcurementRecordService {
             }
         }
 
+        auditService.invoiceRecorded(null, saved.getId(), saved.getInvoiceNumber(),
+                saved.getInvoiceAmount());
+
         // Consumption is posted from the invoice, never typed by hand (REQ-B5)
         budgetService.postConsumption(saved);
         log.info("Invoice {} saved for package {} - budget consumption posted",
@@ -222,13 +294,45 @@ public class ProcurementRecordService {
                 .orElseGet(List::of);
     }
 
+    /**
+     * What the contract has been billed so far, ignoring one invoice - so an edit to an
+     * existing invoice is measured against its siblings rather than against itself.
+     */
+    private BigDecimal cumulativeBilledExcluding(Long contractId, Long invoiceId) {
+        return invoiceRepository.findByContractId(contractId).stream()
+                .filter(i -> invoiceId == null || !invoiceId.equals(i.getId()))
+                .map(i -> i.getInvoiceAmount() == null ? BigDecimal.ZERO : i.getInvoiceAmount())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
     // -------------------------------------------------------- Stage 14: payments
 
     @Transactional
     public Payment savePayment(Long packageId, Payment payment, List<Long> invoiceIds) {
         Contract contract = requireContract(packageId);
         payment.setContractId(contract.getId());
+
+        if (validationService.mismatchedCurrency(contract, payment.getCurrency())) {
+            throw new IllegalArgumentException("Payment currency " + payment.getCurrency()
+                    + " differs from the contract currency " + contract.getCurrency()
+                    + " - a package is single-currency (REQ-B7)");
+        }
+        // A payment cannot settle more than the invoices it is attached to (Q-12, REQ-14.2)
+        BigDecimal wouldPay = cumulativePaidExcluding(contract.getId(), payment.getId())
+                .add(payment.getPaymentAmount() == null ? BigDecimal.ZERO : payment.getPaymentAmount());
+        BigDecimal billed = cumulativeBilledExcluding(contract.getId(), null);
+        if (wouldPay.compareTo(billed) > 0) {
+            String message = "Cumulative payments " + wouldPay.toPlainString()
+                    + " would exceed the invoiced total " + billed.toPlainString()
+                    + " - over-payment is not permitted (REQ-14.2)";
+            auditService.refused(null, ProcurementAuditService.PAYMENT, contract.getId(),
+                    "Payment " + payment.getVoucherNumber() + " rejected as over-payment", message);
+            throw new IllegalArgumentException(message);
+        }
+
         Payment saved = paymentRepository.save(payment);
+        auditService.paymentRecorded(null, saved.getId(), saved.getVoucherNumber(),
+                saved.getPaymentAmount());
 
         if (invoiceIds != null) {
             paymentInvoiceLinkRepository.deleteAll(
@@ -252,6 +356,14 @@ public class ProcurementRecordService {
         return stageDataService.findContract(packageId)
                 .map(c -> paymentRepository.findByContractId(c.getId()))
                 .orElseGet(List::of);
+    }
+
+    /** What the contract has been paid so far, ignoring one payment (see the invoice twin). */
+    private BigDecimal cumulativePaidExcluding(Long contractId, Long paymentId) {
+        return paymentRepository.findByContractId(contractId).stream()
+                .filter(p -> paymentId == null || !paymentId.equals(p.getId()))
+                .map(p -> p.getPaymentAmount() == null ? BigDecimal.ZERO : p.getPaymentAmount())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     /** Outstanding balance per invoice, so part payments are visible (REQ-14.3). */

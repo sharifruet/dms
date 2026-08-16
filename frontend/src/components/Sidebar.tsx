@@ -43,6 +43,8 @@ interface NavItem {
   path: string;
   icon: React.ReactNode;
   role?: string;
+  /** Caption rendered above this item, starting a new group. */
+  section?: string;
 }
 
 const Sidebar: React.FC = () => {
@@ -67,6 +69,18 @@ const Sidebar: React.FC = () => {
     { label: 'Stationery', path: '/stationery', icon: <StationeryIcon /> },
     { label: 'Users', path: '/users', icon: <UsersIcon />, role: 'ADMIN' },
     { label: 'Field Catalogue', path: '/document-type-fields', icon: <FieldsIcon />, role: 'ADMIN' },
+
+    // The document-centric pages the procurement workspace supersedes. They are removed
+    // from the navigation in Phase 8, after pilot sign-off (R-8) — keeping them here means
+    // a user blocked by a stage gate still has somewhere to go. Bill Entries is not
+    // retired at all: the finance module stays independent (Q-6).
+    { section: 'Documents', label: 'All Documents', path: '/documents', icon: <DocumentsIcon /> },
+    { label: 'Expiry Tracking', path: '/expiry-tracking', icon: <ExpiryIcon /> },
+    { label: 'Versions', path: '/versioning', icon: <VersioningIcon /> },
+    { label: 'Archive', path: '/archive', icon: <ArchiveIcon /> },
+    { label: 'APP Entries', path: '/app-entries', icon: <AppIcon /> },
+    { label: 'Bill Entries', path: '/bill-entries', icon: <BillIcon /> },
+    { label: 'Document Dashboard', path: '/dashboard', icon: <ReportsIcon /> },
   ];
 
   const filteredNavItems = navItems.filter(
@@ -124,7 +138,7 @@ const Sidebar: React.FC = () => {
               color: '#3b82f6',
             },
           }}
-          onClick={() => navigate('/dashboard')}
+          onClick={() => navigate('/procurement')}
         >
           Document Manager
         </Typography>
@@ -134,7 +148,26 @@ const Sidebar: React.FC = () => {
       {/* Navigation Items */}
       <List sx={{ px: 1.5, py: 1.5, flex: 1 }}>
         {filteredNavItems.map((item) => (
-          <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
+          <React.Fragment key={item.path}>
+          {item.section && (
+            <Typography
+              variant="caption"
+              sx={{
+                display: 'block',
+                px: 1.5,
+                pt: 2,
+                pb: 0.5,
+                color: '#9ca3af',
+                fontSize: '0.7rem',
+                fontWeight: 600,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {item.section}
+            </Typography>
+          )}
+          <ListItem disablePadding sx={{ mb: 0.5 }}>
             <ListItemButton
               onClick={() => handleNavigation(item.path)}
               sx={{
@@ -167,6 +200,7 @@ const Sidebar: React.FC = () => {
               />
             </ListItemButton>
           </ListItem>
+          </React.Fragment>
         ))}
       </List>
 

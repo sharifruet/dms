@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+      Remaining corrections from the 2026-08-13 client answers:
+        Q-4  Bid Security is out of scope         -> drop the table and its catalogue rows
+        Q-9  OCE is entered manually at BER upload -> flip the catalogue row to MANUAL
+        Q-8  master lists for type/method/nature   -> seed them as a lookup
+        Q-15 expiry warning intervals              -> seed 90/60/30/15/7 as configurable policy
+        Q-17 Maker / Checker roles                 -> seed the two roles and their permissions
+    -->
+
+    <!-- ===================================================== Q-4 bid security -->
+
+    <changeSet id="040-001" author="dms">
+        <comment>Q-4: Bid Security is out of scope - remove its catalogue rows</comment>
+        <sql>
+DELETE FROM document_type_fields WHERE entity_type = 'BID_SECURITY';
+DELETE FROM stage_document_requirement WHERE doc_role = 'BID_SECURITY';
+        </sql>
+        <rollback>
+            <sql>
+INSERT INTO stage_document_requirement (stage_code, doc_role, doc_label, is_mandatory, is_conditional, display_order)
+VALUES (3,'BID_SECURITY','Bid Security (BG / Pay Order)',false,true,4);
+INSERT INTO document_type_fields
+ (document_type, field_key, field_label, field_type, is_required, is_ocr_mappable,
+  display_order, is_active, stage_code, entity_type, entity_column, capture_source, is_mandatory, created_at)
+VALUES
+ ('BID_SECURITY','reference_no','Bid Security Reference','TEXT',false,true,1,true,3,'BID_SECURITY','referenceNo','OCR',false,CURRENT_TIMESTAMP),
+ ('BID_SECURITY','issuing_bank','Issuing Bank','TEXT',false,true,2,true,3,'BID_SECURITY','issuingBank','OCR',false,CURRENT_TIMESTAMP),
+ ('BID_SECURITY','expiry_date','Bid Security Expiry','DATE',false,true,3,true,3,'BID_SECURITY','expiryDate','OCR',false,CURRENT_TIMESTAMP);
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="040-002" author="dms">
+        <comment>Q-4: retire any bid security expiry trackers before dropping the table</comment>
+        <sql>
+UPDATE expiry_tracking SET status = 'CANCELLED',
+       notes = COALESCE(notes || ' | ', '') || 'Bid Security moved out of scope (Q-4)'
+ WHERE entity_type = 'BID_SECURITY';
+        </sql>
+        <rollback>
+            <sql>
+UPDATE expiry_tracking SET status = 'ACTIVE' WHERE entity_type = 'BID_SECURITY';
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="040-003" author="dms">
+        <comment>Q-4: drop the bid_security table</comment>
+        <dropTable tableName="bid_security"/>
+        <rollback>
+            <createTable tableName="bid_security">
+                <column name="id" type="BIGSERIAL">
+                    <constraints primaryKey="true" primaryKeyName="pk_bid_security"/>
+                </column>
+                <column name="opening_id" type="BIGINT">
+                    <constraints nullable="false"/>
+                </column>
+                <column name="instrument_type" type="VARCHAR(20)"/>
+                <column name="reference_no" type="VARCHAR(100)"/>
+                <column name="issuing_bank" type="VARCHAR(255)"/>
+                <column name="bidder_name" type="VARCHAR(255)"/>
+                <column name="expiry_date" type="DATE"/>
+                <column name="released_at" type="TIMESTAMP"/>
+                <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+                <column name="updated_at" type="TIMESTAMP"/>
+            </createTable>
+            <addForeignKeyConstraint baseTableName="bid_security" baseColumnNames="opening_id"
+                                     constraintName="fk_bidsec_opening"
+                                     referencedTableName="tender_opening" referencedColumnNames="id"
+                                     onDelete="CASCADE"/>
+        </rollback>
+    </changeSet>
+
+    <!-- ========================================================= Q-9 OCE value -->
+
+    <changeSet id="040-004" author="dms">
+        <comment>Q-9: OCE is entered by hand at BER upload, and is mandatory</comment>
+        <sql>
+UPDATE document_type_fields
+   SET capture_source = 'MANUAL',
+       is_ocr_mappable = false,
+       is_required = true,
+       is_mandatory = true,
+       field_label = 'OCE Value (manual entry)'
+ WHERE field_key = 'oce_value' AND entity_type = 'EVALUATION';
+        </sql>
+        <rollback>
+            <sql>
+UPDATE document_type_fields
+   SET capture_source = 'OCR', is_ocr_mappable = true, is_required = false,
+       is_mandatory = false, field_label = 'OCE Value'
+ WHERE field_key = 'oce_value' AND entity_type = 'EVALUATION';
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!-- ====================================================== Q-8 master lists -->
+
+    <changeSet id="040-005" author="dms">
+        <comment>Q-8: permitted values for Procurement Type / Method / Nature</comment>
+        <createTable tableName="procurement_master_list">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_procurement_master_list"/>
+            </column>
+            <column name="list_key" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="value_code" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="value_label" type="VARCHAR(255)"/>
+            <column name="display_order" type="INTEGER"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <addUniqueConstraint tableName="procurement_master_list" columnNames="list_key, value_code"
+                             constraintName="uk_master_list_key_value"/>
+        <sql>
+INSERT INTO procurement_master_list (list_key, value_code, value_label, display_order) VALUES
+ ('PROCUREMENT_TYPE','NCT','National Competitive Tender',1),
+ ('PROCUREMENT_TYPE','ICT','International Competitive Tender',2),
+ ('PROCUREMENT_METHOD','OTM','Open Tendering Method',1),
+ ('PROCUREMENT_METHOD','LTM','Limited Tendering Method',2),
+ ('PROCUREMENT_METHOD','RFQ','Request for Quotation',3),
+ ('PROCUREMENT_METHOD','DPM','Direct Procurement Method',4),
+ ('PROCUREMENT_NATURE','SERVICE','Service',1),
+ ('PROCUREMENT_NATURE','WORKS','Works',2),
+ ('PROCUREMENT_NATURE','GOODS','Goods',3);
+        </sql>
+        <rollback><dropTable tableName="procurement_master_list"/></rollback>
+    </changeSet>
+
+    <!-- ================================================= Q-15 expiry intervals -->
+
+    <changeSet id="040-006" author="dms">
+        <comment>Q-15: default warning intervals per tracked document, kept configurable</comment>
+        <createTable tableName="expiry_policy">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_expiry_policy"/>
+            </column>
+            <column name="entity_type" type="VARCHAR(50)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_expiry_policy_entity"/>
+            </column>
+            <column name="doc_label" type="VARCHAR(255)"/>
+            <column name="expiry_field_label" type="VARCHAR(255)"/>
+            <!-- comma-separated days before expiry, editable by an administrator -->
+            <column name="warning_days" type="VARCHAR(100)" defaultValue="90,60,30,15,7"/>
+            <column name="notify_responsible_officer" type="BOOLEAN" defaultValueBoolean="true"/>
+            <column name="notify_roles" type="VARCHAR(255)" defaultValue="CHECKER"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <sql>
+INSERT INTO expiry_policy (entity_type, doc_label, expiry_field_label, warning_days, notify_roles) VALUES
+ ('TENDER','Tender Notice','Tender Validity','90,60,30,15,7','CHECKER'),
+ ('PERFORMANCE_SECURITY','Performance Guarantee (PG)','PG Expiry Date','90,60,30,15,7','CHECKER'),
+ ('LETTER_OF_CREDIT','Letter of Credit (LC)','LC Expiry Date','90,60,30,15,7','CHECKER'),
+ ('CONTRACT','Contract Agreement','Completion Date','90,60,30,15,7','CHECKER'),
+ ('WARRANTY','Warranty Certificate','Warranty End Date','90,60,30,15,7','CHECKER');
+        </sql>
+        <rollback><dropTable tableName="expiry_policy"/></rollback>
+    </changeSet>
+
+    <!-- ============================================= Q-17 maker / checker roles -->
+
+    <changeSet id="040-007" author="dms">
+        <comment>Q-17: procurement permissions</comment>
+        <sql>
+INSERT INTO permissions (name, display_name, description, resource, action) VALUES
+ ('PROCUREMENT_VIEW','Procurement View','View packages, stages and captured data','PROCUREMENT','READ'),
+ ('PROCUREMENT_CAPTURE','Procurement Capture','Create packages, upload documents, enter and correct values','PROCUREMENT','CREATE'),
+ ('PROCUREMENT_VERIFY','Procurement Verify','Verify captured values and complete stages','PROCUREMENT','APPROVE'),
+ ('PROCUREMENT_OVERRIDE','Procurement Override','Mark a stage Not Applicable, send back for rework, reopen a closed package','PROCUREMENT','MANAGE'),
+ ('BUDGET_APPROVE','Budget Approve','Approve budget allocations and revisions','BUDGET','APPROVE');
+        </sql>
+        <rollback>
+            <sql>
+DELETE FROM permissions WHERE name IN
+ ('PROCUREMENT_VIEW','PROCUREMENT_CAPTURE','PROCUREMENT_VERIFY','PROCUREMENT_OVERRIDE','BUDGET_APPROVE');
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="040-008" author="dms">
+        <comment>Q-17: two roles - Maker enters, Checker approves</comment>
+        <insert tableName="roles">
+            <column name="name" value="MAKER"/>
+            <column name="display_name" value="Maker"/>
+            <column name="description" value="Creates packages, uploads documents and enters procurement data"/>
+        </insert>
+        <insert tableName="roles">
+            <column name="name" value="CHECKER"/>
+            <column name="display_name" value="Checker"/>
+            <column name="description" value="Verifies captured values, completes stages and approves budget"/>
+        </insert>
+        <sql>
+-- Maker: capture and view, plus the document upload rights the DMS already models
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id FROM roles r, permissions p
+ WHERE r.name = 'MAKER'
+   AND p.name IN ('PROCUREMENT_VIEW','PROCUREMENT_CAPTURE','DOCUMENT_UPLOAD','DOCUMENT_VIEW');
+
+-- Checker: everything the Maker can do, plus verification, override and budget approval
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id FROM roles r, permissions p
+ WHERE r.name = 'CHECKER'
+   AND p.name IN ('PROCUREMENT_VIEW','PROCUREMENT_CAPTURE','PROCUREMENT_VERIFY',
+                  'PROCUREMENT_OVERRIDE','BUDGET_APPROVE','DOCUMENT_UPLOAD','DOCUMENT_VIEW');
+        </sql>
+        <rollback>
+            <sql>
+DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE name IN ('MAKER','CHECKER'));
+DELETE FROM roles WHERE name IN ('MAKER','CHECKER');
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

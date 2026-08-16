@@ -14,9 +14,17 @@ import java.io.FileInputStream;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * Test class for OCRService to verify Tesseract OCR functionality
+ * Test class for OCRService to verify Tesseract OCR functionality.
+ *
+ * <p>Tesseract is an external binary that is not present on a plain checkout or on CI.
+ * The tests that genuinely need it now <em>skip</em> rather than fail — they used to
+ * assert a Homebrew install on someone's Mac, so they failed on every other machine and
+ * made the whole suite look broken. The tests that only exercise the service's own
+ * error handling run everywhere, because that behaviour matters most precisely when
+ * OCR is unavailable.
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -24,22 +32,25 @@ class OCRServiceTest {
 
     @Autowired
     private OCRService ocrService;
-    
-    private static final String TEST_IMAGE_PATH = "/Users/til/Downloads/test.png";
+
+    private static final String TEST_IMAGE_PATH =
+            System.getProperty("ocr.test.image", "src/test/resources/ocr/test.png");
 
     @Test
     void testOCRServiceInitialization() {
-        // Verify that OCR service is available
-        assertTrue(ocrService.isOcrAvailable(), 
+        assumeTrue(ocrService.isOcrAvailable(),
+            "Tesseract is not installed in this environment - skipping");
+        assertTrue(ocrService.isOcrAvailable(),
             "OCR service should be available after initialization");
     }
 
     @Test
     void testExtractTextFromTestImage() throws IOException, TesseractException {
-        // Check if test image exists
+        assumeTrue(ocrService.isOcrAvailable(),
+            "Tesseract is not installed in this environment - skipping");
         File testImageFile = new File(TEST_IMAGE_PATH);
-        assertTrue(testImageFile.exists(), 
-            "Test image file should exist at: " + TEST_IMAGE_PATH);
+        assumeTrue(testImageFile.exists(),
+            "No sample image at " + TEST_IMAGE_PATH + " - set -Docr.test.image to run this");
 
         // Create MultipartFile from test image
         try (FileInputStream fis = new FileInputStream(testImageFile)) {
@@ -99,9 +110,16 @@ class OCRServiceTest {
         }
     }
 
+    /*
+     * These two assert the service's error contract, and it is not "throws".
+     * extractText catches TesseractException and Throwable and returns a result with
+     * success = false and an error message - deliberate graceful degradation, so one bad
+     * scan in a batch does not abort the batch. The tests previously demanded an
+     * exception, which the code has never thrown; they now pin the real behaviour.
+     */
+
     @Test
-    void testExtractTextFromNonExistentFile() {
-        // Create a mock file that doesn't exist
+    void testExtractTextFromEmptyFile() {
         MultipartFile multipartFile = new MockMultipartFile(
             "nonexistent.png",
             "nonexistent.png",
@@ -109,15 +127,14 @@ class OCRServiceTest {
             new byte[0]
         );
 
-        // Should handle gracefully
-        assertThrows(Exception.class, () -> {
-            ocrService.extractText(multipartFile);
-        }, "Should throw exception for invalid image file");
+        OCRResult result = assertDoesNotThrow(() -> ocrService.extractText(multipartFile),
+            "An unreadable file must degrade to a failed result, not blow up the caller");
+        assertNotNull(result, "A result is always returned");
+        assertFalse(result.isSuccess(), "An empty file cannot produce a successful extraction");
     }
 
     @Test
     void testOCRWithInvalidImage() {
-        // Create an invalid image (empty or corrupted)
         MultipartFile invalidFile = new MockMultipartFile(
             "invalid.png",
             "invalid.png",
@@ -125,20 +142,19 @@ class OCRServiceTest {
             new byte[] { 0, 1, 2, 3, 4, 5 } // Not a valid PNG
         );
 
-        // Should handle gracefully
-        assertThrows(Exception.class, () -> {
-            ocrService.extractText(invalidFile);
-        }, "Should throw exception for invalid image data");
+        OCRResult result = assertDoesNotThrow(() -> ocrService.extractText(invalidFile),
+            "Corrupt image data must degrade to a failed result, not blow up the caller");
+        assertNotNull(result, "A result is always returned");
+        assertFalse(result.isSuccess(), "Corrupt image data cannot produce a successful extraction");
     }
 
     @Test
     void testOCRServiceAvailability() {
-        // Test that we can check OCR availability
-        boolean available = ocrService.isOcrAvailable();
-        
-        // On macOS with Homebrew Tesseract, it should be available
-        assertTrue(available, 
-            "OCR service should be available when Tesseract is properly configured");
+        // Availability depends on whether the Tesseract binary is installed, which is an
+        // environment fact rather than something this code controls. What must hold
+        // everywhere is that asking the question is safe and gives a definite answer.
+        assertDoesNotThrow(() -> ocrService.isOcrAvailable(),
+            "Checking OCR availability must never throw, whatever the environment");
     }
 }
 

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+      REQ-E2/E3. The expiry_policy table seeded in 040 allows any set of warning intervals
+      per document type - the client asked for defaults that stay configurable (Q-15).
+
+      expiry_tracking records which alerts have gone out as four fixed booleans
+      (alert_30_days, alert_15_days, alert_7_days, alert_expired), which cannot represent
+      an arbitrary configured set: there is nowhere to record that the 90 and 60 day
+      warnings were sent. This adds a single column holding the thresholds already sent,
+      so the policy can say 90/60/30/15/7 today and something else tomorrow without a
+      schema change - and nobody is warned twice about the same thing.
+
+      The old booleans are left alone; the legacy ExpiryTrackingService still uses them.
+    -->
+
+    <changeSet id="044-001" author="dms">
+        <comment>Record which configured warning thresholds have already been sent</comment>
+        <addColumn tableName="expiry_tracking">
+            <!-- comma-separated days-before-expiry, e.g. "90,60,30" -->
+            <column name="sent_warnings" type="VARCHAR(100)"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="expiry_tracking" columnName="sent_warnings"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

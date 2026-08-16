@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureWebMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,7 +24,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
-@AutoConfigureWebMvc
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 class AuthControllerTest {
 
@@ -58,12 +58,18 @@ class AuthControllerTest {
         registerRequest.setPassword("password123");
         registerRequest.setFirstName("Test");
         registerRequest.setLastName("User");
+        // Registration resolves the requested role against the role table, so the request
+        // must name one and the role must exist
+        registerRequest.setRole(com.bpdb.dms.support.TestRoles.officer(roleRepository).getName());
 
+        // The endpoint answers with a plain string, not a JSON envelope - authService.ts
+        // types register() as Promise<string>, so asserting $.message would be asserting
+        // an API the frontend does not consume
         mockMvc.perform(post("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(registerRequest)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("User registered successfully"));
+                .andExpect(content().string("User registered successfully"));
     }
 
     @Test
@@ -75,8 +81,8 @@ class AuthControllerTest {
         user.setPassword(passwordEncoder.encode("password123"));
         user.setFirstName("Test");
         user.setLastName("User");
-        Role officerRole = roleRepository.findByName(RoleType.OFFICER)
-                .orElseThrow(() -> new IllegalStateException("Officer role missing in test database"));
+        // Liquibase seeds this in a real environment; on H2 the table starts empty
+        Role officerRole = com.bpdb.dms.support.TestRoles.officer(roleRepository);
         user.setRole(officerRole);
         user.setIsActive(true);
         userRepository.save(user);
@@ -90,7 +96,11 @@ class AuthControllerTest {
                 .content(objectMapper.writeValueAsString(loginRequest)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.token").exists())
-                .andExpect(jsonPath("$.user.username").value("testuser"));
+                // LoginResponse is flat - token/username/role/department - which is what
+                // the LoginResponse interface in authService.ts reads. There is no
+                // nested $.user object and there never has been.
+                .andExpect(jsonPath("$.username").value("testuser"))
+                .andExpect(jsonPath("$.role").value("OFFICER"));
     }
 
     @Test

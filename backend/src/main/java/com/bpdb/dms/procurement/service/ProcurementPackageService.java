@@ -172,8 +172,11 @@ public class ProcurementPackageService {
         graph.put("package", pkg);
         graph.put("budget", budgetService.summary(packageId));
 
-        tenderRepository.findByPackageId(packageId).ifPresent(tender -> {
+        // The current attempt only - superseded re-tenders stay readable through the
+        // Stage 2 history panel, not through the live graph (REQ-L15)
+        tenderRepository.findByPackageIdAndIsCurrentTrue(packageId).ifPresent(tender -> {
             graph.put("tender", tender);
+            graph.put("tenderAttempts", tenderRepository.findByPackageIdOrderByAttemptNoDesc(packageId));
             openingRepository.findByTenderId(tender.getId()).ifPresent(opening -> {
                 graph.put("opening", opening);
                 evaluationRepository.findByOpeningId(opening.getId()).ifPresent(evaluation -> {

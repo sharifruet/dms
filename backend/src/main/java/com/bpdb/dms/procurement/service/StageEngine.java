@@ -19,10 +19,12 @@ import com.bpdb.dms.procurement.entity.ExtractedField;
 import com.bpdb.dms.procurement.entity.PackageStage;
 import com.bpdb.dms.procurement.entity.ProcurementPackage;
 import com.bpdb.dms.procurement.entity.StageDocumentRequirement;
+import com.bpdb.dms.procurement.entity.Tender;
 import com.bpdb.dms.procurement.repository.DocumentLinkRepository;
 import com.bpdb.dms.procurement.repository.ExtractedFieldRepository;
 import com.bpdb.dms.procurement.repository.PackageStageRepository;
 import com.bpdb.dms.procurement.repository.ProcurementPackageRepository;
+import com.bpdb.dms.procurement.repository.TenderRepository;
 
 /**
  * Owns stage progression. Nothing else in the system writes package_stage.status.
@@ -37,25 +39,37 @@ public class StageEngine {
 
     private static final Logger log = LoggerFactory.getLogger(StageEngine.class);
 
+    /** Letter of Credit. Applicable to international tenders only (Q-5, REQ-9.5). */
+    private static final short LC_STAGE = 9;
+
     private final ProcurementPackageRepository packageRepository;
     private final PackageStageRepository stageRepository;
     private final DocumentLinkRepository documentLinkRepository;
     private final ExtractedFieldRepository fieldRepository;
+    private final TenderRepository tenderRepository;
     private final StageDefinitionService definitions;
     private final ValidationService validationService;
+    private final ProcurementAuditService auditService;
+    private final ProcurementExpiryService expiryService;
 
     public StageEngine(ProcurementPackageRepository packageRepository,
                        PackageStageRepository stageRepository,
                        DocumentLinkRepository documentLinkRepository,
                        ExtractedFieldRepository fieldRepository,
+                       TenderRepository tenderRepository,
                        StageDefinitionService definitions,
-                       ValidationService validationService) {
+                       ValidationService validationService,
+                       ProcurementAuditService auditService,
+                       ProcurementExpiryService expiryService) {
         this.packageRepository = packageRepository;
         this.stageRepository = stageRepository;
         this.documentLinkRepository = documentLinkRepository;
         this.fieldRepository = fieldRepository;
+        this.tenderRepository = tenderRepository;
         this.definitions = definitions;
         this.validationService = validationService;
+        this.auditService = auditService;
+        this.expiryService = expiryService;
     }
 
     /** Create the 16 stage rows for a new package and open stage 1 (WF-02). */
@@ -99,6 +113,9 @@ public class StageEngine {
         PackageStage stage = stage(packageId, stageCode);
         result.status = stage.getStatus();
         result.applicable = !Boolean.FALSE.equals(stage.getIsApplicable());
+        // Stage 9 opens with applicability suggested by the tender's Procurement Type, so
+        // the UI can pre-set the toggle rather than making the user guess (Q-5, REQ-2.5)
+        result.applicabilitySuggested = stageCode != LC_STAGE || lcExpected(packageId);
 
         if (!result.applicable) {
             result.ready = true;
@@ -161,6 +178,7 @@ public class StageEngine {
         }
 
         PackageStage stage = stage(packageId, stageCode);
+        String previousStatus = stage.getStatus();
         stage.setStatus(PackageStage.COMPLETED);
         stage.setCompletedAt(LocalDateTime.now());
         stage.setCompletedBy(userId);
@@ -170,25 +188,51 @@ public class StageEngine {
                     stageCode, packageId, overrideReason, userId);
         }
         stageRepository.save(stage);
+        auditService.stageCompleted(userId, packageId, stageCode, previousStatus, overrideReason);
 
         openNextApplicableStage(packageId, stageCode);
         return stage;
     }
 
-    /** Mark a stage Not Applicable, e.g. Stage 9 for a non-LC contract (REQ-9.5). */
+    /**
+     * Mark a stage Not Applicable - in practice Stage 9 for a contract with no LC.
+     *
+     * Any authorised user may do this; there is no separate approval step (client answer
+     * Q-5, REQ-9.6). A reason is mandatory and the action is logged, including when it
+     * contradicts the applicability derived from the tender.
+     */
     @Transactional
     public PackageStage markNotApplicable(Long packageId, short stageCode, Long userId, String reason) {
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException("A reason is required to mark a stage Not Applicable");
         }
         PackageStage stage = stage(packageId, stageCode);
+        if (stageCode == LC_STAGE && lcExpected(packageId)) {
+            log.warn("Package {} is an ICT tender but Stage 9 (LC) was marked Not Applicable "
+                    + "by user {}: {} - overriding the derived default (REQ-9.6)",
+                    packageId, userId, reason);
+        }
         stage.setIsApplicable(Boolean.FALSE);
         stage.setNotApplicableReason(reason);
         stage.setCompletedBy(userId);
         stage.setCompletedAt(LocalDateTime.now());
         stageRepository.save(stage);
+        auditService.stageMarkedNotApplicable(userId, packageId, stageCode, reason);
         openNextApplicableStage(packageId, stageCode);
         return stage;
+    }
+
+    /**
+     * Does this package's tender suggest a Letter of Credit is needed?
+     *
+     * Derived from Procurement Type on the Tender Notice: ICT means an international
+     * tender, which may require an LC (Q-5, REQ-2.5). This is the default the Stage 9
+     * panel opens with - a suggestion, not a lock.
+     */
+    public boolean lcExpected(Long packageId) {
+        return tenderRepository.findByPackageIdAndIsCurrentTrue(packageId)
+                .map(Tender::isInternational)
+                .orElse(false);
     }
 
     /**
@@ -201,11 +245,13 @@ public class StageEngine {
             throw new IllegalArgumentException("A reason is required to send a stage back for rework");
         }
         PackageStage stage = stage(packageId, stageCode);
+        String previousStatus = stage.getStatus();
         stage.setStatus(PackageStage.REWORK);
         stage.setReworkReason(reason);
         stage.setCompletedAt(null);
         stage.setCompletedBy(null);
         stageRepository.save(stage);
+        auditService.stageReworked(userId, packageId, stageCode, previousStatus, reason);
 
         for (PackageStage downstream : stagesOf(packageId)) {
             if (downstream.getStageCode() > stageCode
@@ -231,6 +277,14 @@ public class StageEngine {
             ProcurementPackage pkg = packageRepository.findById(packageId).orElseThrow();
             pkg.setStatus("CLOSED");
             packageRepository.save(pkg);
+            // The instruments the trackers guard are released at contract close, so the
+            // trackers go with them - otherwise a closed package keeps raising warnings
+            // about an LC nobody is holding any more (REQ-E6, REQ-16.2).
+            int closedTrackers = expiryService.closeAllForPackage(packageId);
+            if (closedTrackers > 0) {
+                log.info("Package {} closed at stage {}; {} expiry tracker(s) closed with it",
+                        packageId, completedStage, closedTrackers);
+            }
             return;
         }
         Optional<PackageStage> nextStage = stageRepository.findByPackageIdAndStageCode(packageId, next);
@@ -256,6 +310,8 @@ public class StageEngine {
         public String stageName;
         public String status;
         public boolean applicable = true;
+        /** What the system derives this stage's applicability should be (Q-5, REQ-2.5). */
+        public boolean applicabilitySuggested = true;
         public boolean ready;
         public List<String> blockers = new ArrayList<>();
         public List<String> missingDocuments = new ArrayList<>();

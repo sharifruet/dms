@@ -5,6 +5,16 @@ import Sidebar from './components/Sidebar';
 import MobileSidebar from './components/MobileSidebar';
 import NotificationPermissionPrompt from './components/NotificationPermissionPrompt';
 import Login from './pages/Login';
+// Document-centric pages. Retired in Phase 8 *after pilot sign-off* (R-8), not before —
+// until then they remain reachable so users have a fallback if the stage workflow proves
+// too rigid. BillEntries is not retired at all: the finance module stays independent (Q-6).
+import Dashboard from './pages/Dashboard';
+import DocumentsEnhanced from './pages/DocumentsEnhanced';
+import ExpiryTracking from './pages/ExpiryTracking';
+import DocumentVersioning from './pages/DocumentVersioning';
+import Archive from './pages/Archive';
+import AppEntries from './pages/AppEntries';
+import BillEntries from './pages/BillEntries';
 import ProcurementDashboard from './pages/procurement/ProcurementDashboard';
 import PackageList from './pages/procurement/PackageList';
 import PackageWorkspace from './pages/procurement/PackageWorkspace';
@@ -48,7 +58,7 @@ function App() {
         <Routes>
           <Route 
             path="/login" 
-            element={!isAuthenticated ? <Login /> : <Navigate to="/dashboard" />} 
+            element={!isAuthenticated ? <Login /> : <Navigate to="/procurement" />}
           />
           <Route 
             path="/users" 
@@ -128,15 +138,41 @@ function App() {
             element={isAuthenticated ? <ExceptionsDashboard /> : <Navigate to="/login" />}
           />
 
-          {/* Retired document-centric pages. Kept as redirects for one release so
-              existing bookmarks and links keep working. */}
-          <Route path="/dashboard" element={<Navigate to="/procurement" replace />} />
-          <Route path="/documents" element={<Navigate to="/procurement/packages" replace />} />
-          <Route path="/expiry-tracking" element={<Navigate to="/procurement/expiries" replace />} />
-          <Route path="/app-entries" element={<Navigate to="/procurement/packages?stage=1" replace />} />
-          <Route path="/bill-entries" element={<Navigate to="/procurement/packages?stage=13" replace />} />
-          <Route path="/archive" element={<Navigate to="/procurement/packages?status=CLOSED" replace />} />
-          <Route path="/versioning" element={<Navigate to="/procurement/packages" replace />} />
+          {/* The document-centric pages the procurement workspace supersedes. These are
+              scheduled for retirement in Phase 8, after pilot sign-off — the redirects
+              belong there, not here (R-8). Procurement is still the landing page and
+              leads the navigation; these stay reachable as the fallback. */}
+          <Route
+            path="/dashboard"
+            element={isAuthenticated ? <Dashboard /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/documents"
+            element={isAuthenticated ? <DocumentsEnhanced /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/expiry-tracking"
+            element={isAuthenticated ? <ExpiryTracking /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/app-entries"
+            element={isAuthenticated ? <AppEntries /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/archive"
+            element={isAuthenticated ? <Archive /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/versioning"
+            element={isAuthenticated ? <DocumentVersioning /> : <Navigate to="/login" />}
+          />
+
+          {/* Not retired at any point (Q-6): the client keeps the finance module running
+              independently of the Stage 13 invoice path. */}
+          <Route
+            path="/bill-entries"
+            element={isAuthenticated ? <BillEntries /> : <Navigate to="/login" />}
+          />
 
           <Route 
             path="/" 

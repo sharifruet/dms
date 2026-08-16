@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+      Client answer Q-2 (2026-08-13): a failed tender is re-tendered as a NEW Tender
+      record under the SAME package, with the previous attempt retained as history.
+
+      As built, tender.package_id carried a UNIQUE constraint - strictly one tender per
+      package - which makes that impossible. This changeset replaces that constraint with
+      an attempt model (REQ-L14, REQ-L15).
+    -->
+
+    <changeSet id="038-001" author="dms">
+        <comment>Q-2: tender gains attempt tracking</comment>
+        <addColumn tableName="tender">
+            <column name="attempt_no" type="INTEGER" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_current" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="failure_reason" type="TEXT"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="tender" columnName="attempt_no"/>
+            <dropColumn tableName="tender" columnName="is_current"/>
+            <dropColumn tableName="tender" columnName="failure_reason"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="038-002" author="dms">
+        <comment>Q-2: one tender per package becomes one tender ATTEMPT per package</comment>
+        <dropUniqueConstraint tableName="tender" constraintName="uk_tender_package"/>
+        <addUniqueConstraint tableName="tender" columnNames="package_id, attempt_no"
+                             constraintName="uk_tender_package_attempt"/>
+        <!--
+          Exactly one attempt may be current. A partial index rather than a plain unique
+          constraint, because superseded attempts all share is_current = false.
+        -->
+        <sql>
+CREATE UNIQUE INDEX uk_tender_current ON tender (package_id) WHERE is_current;
+        </sql>
+        <rollback>
+            <sql>DROP INDEX IF EXISTS uk_tender_current;</sql>
+            <dropUniqueConstraint tableName="tender" constraintName="uk_tender_package_attempt"/>
+            <addUniqueConstraint tableName="tender" columnNames="package_id"
+                                 constraintName="uk_tender_package"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="038-003" author="dms">
+        <comment>Q-2: existing tenders are attempt 1 and current</comment>
+        <sql>
+UPDATE tender SET attempt_no = 1, is_current = true WHERE attempt_no IS NULL OR is_current IS NULL;
+        </sql>
+        <rollback>
+            <comment>Backfill only - nothing to undo beyond the column drops in 038-001</comment>
+            <empty/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

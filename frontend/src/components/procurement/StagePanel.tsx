@@ -22,6 +22,20 @@ import DocumentChecklist from './DocumentChecklist';
 import FieldRow from './FieldRow';
 import BidderTable from './BidderTable';
 import StageRecords from './StageRecords';
+import TenderAttempts from './TenderAttempts';
+import ManualFieldForm from './ManualFieldForm';
+import useProcurementRole from '../../hooks/useProcurementRole';
+
+/** Tender Advertisement — where a failed tender is re-tendered (Q-2). */
+const STAGE_TENDER = 2;
+/** Letter of Credit — applicability derived from Procurement Type (Q-5). */
+const STAGE_LC = 9;
+/**
+ * Bill Submission and Payment. Their money ceilings are hard blocks with no override
+ * (Q-12), so offering "complete anyway" on these stages would promise something the
+ * server refuses.
+ */
+const MONEY_STAGES = [13, 14];
 
 interface Props {
   packageId: number;
@@ -41,6 +55,7 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<null | 'override' | 'notApplicable' | 'rework'>(null);
   const [dialogReason, setDialogReason] = useState('');
+  const { canApprove } = useProcurementRole();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -86,6 +101,11 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
 
   const handleSaveBidders = async (bidders: BerBidder[]) => {
     await procurementService.saveBidders(packageId, bidders);
+    await refresh();
+  };
+
+  const handleSaveManualFields = async (values: Record<string, string>) => {
+    await procurementService.saveStageFields(packageId, stageCode, values);
     await refresh();
   };
 
@@ -142,6 +162,18 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
   const notApplicable = !detail.stage.isApplicable;
   const pendingFields = detail.fields.filter((f) => f.status === 'OCR_SUGGESTED');
 
+  // Stage 9 opens with applicability derived from the tender's Procurement Type: ICT
+  // suggests a Letter of Credit is needed (REQ-2.5). It is a suggestion the user may
+  // overrule, so it is shown as guidance rather than enforced.
+  const lcStage = stageCode === STAGE_LC;
+  const lcSuggested = readiness.applicabilitySuggested !== false;
+  const contradictsSuggestion = lcStage && !completed
+    && (notApplicable ? lcSuggested : !lcSuggested);
+
+  // Money ceilings are refused at the point of saving an invoice or payment, so a
+  // stage-level override cannot rescue them (Q-12)
+  const overrideAvailable = !MONEY_STAGES.includes(stageCode);
+
   return (
     <Box sx={{ p: 3, flexGrow: 1, overflow: 'auto' }}>
       <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
@@ -158,6 +190,22 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
       {notApplicable && detail.stage.notApplicableReason && (
         <Alert severity="info" sx={{ mb: 2 }}>
           Marked not applicable: {detail.stage.notApplicableReason}
+        </Alert>
+      )}
+
+      {lcStage && !completed && (
+        <Alert severity={contradictsSuggestion ? 'warning' : 'info'} sx={{ mb: 2 }}>
+          <AlertTitle>
+            {lcSuggested
+              ? 'This looks like an international tender'
+              : 'This does not look like an international tender'}
+          </AlertTitle>
+          {lcSuggested
+            ? 'The Tender Notice records Procurement Type as ICT, so a Letter of Credit is normally required. '
+            : 'The Tender Notice does not record Procurement Type as ICT, so this stage is normally not applicable. '}
+          {contradictsSuggestion
+            ? 'You have gone the other way, which is allowed — the choice is recorded against the stage.'
+            : 'You can still decide otherwise; this is guidance, not a rule.'}
         </Alert>
       )}
 
@@ -216,6 +264,17 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
         )}
       </Paper>
 
+      <ManualFieldForm
+        catalogue={detail.catalogue}
+        fields={detail.fields}
+        disabled={completed || notApplicable}
+        onSave={handleSaveManualFields}
+      />
+
+      {stageCode === STAGE_TENDER && (
+        <TenderAttempts packageId={packageId} onChanged={refresh} />
+      )}
+
       {stageCode === 4 && (
         <BidderTable bidders={detail.bidders || []} onSave={handleSaveBidders} />
       )}
@@ -226,28 +285,47 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
 
       <Divider sx={{ my: 3 }} />
 
-      <Stack direction="row" spacing={2}>
-        <Button
-          variant="contained"
-          disabled={completed || notApplicable || !readiness.ready}
-          onClick={() => handleComplete()}
-        >
-          Complete stage
-        </Button>
-        {!completed && !notApplicable && !readiness.ready && (
-          <Button color="warning" onClick={() => setDialog('override')}>
-            Complete with override
+      {/*
+        Approving is the Checker's job (Q-17). A Maker sees the stage and everything on it
+        but not these buttons - offering an action the server will refuse with a 403 reads
+        as a broken feature rather than a permission boundary.
+      */}
+      {canApprove ? (
+        <Stack direction="row" spacing={2}>
+          <Button
+            variant="contained"
+            disabled={completed || notApplicable || !readiness.ready}
+            onClick={() => handleComplete()}
+          >
+            Complete stage
           </Button>
-        )}
-        {!completed && !notApplicable && (
-          <Button onClick={() => setDialog('notApplicable')}>Mark not applicable</Button>
-        )}
-        {completed && (
-          <Button color="error" onClick={() => setDialog('rework')}>
-            Send back for rework
-          </Button>
-        )}
-      </Stack>
+          {!completed && !notApplicable && !readiness.ready && overrideAvailable && (
+            <Button color="warning" onClick={() => setDialog('override')}>
+              Complete with override
+            </Button>
+          )}
+          {!completed && !notApplicable && (
+            <Button onClick={() => setDialog('notApplicable')}>Mark not applicable</Button>
+          )}
+          {completed && (
+            <Button color="error" onClick={() => setDialog('rework')}>
+              Send back for rework
+            </Button>
+          )}
+        </Stack>
+      ) : (
+        <Alert severity="info">
+          Capture and correct values here as needed. Completing the stage is a Checker's
+          action.
+        </Alert>
+      )}
+
+      {canApprove && !completed && !notApplicable && !readiness.ready && !overrideAvailable && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+          Amounts on this stage cannot be overridden — an invoice or payment that would
+          breach the contract value is refused when it is saved, not here.
+        </Typography>
+      )}
 
       <Dialog open={dialog !== null} onClose={() => setDialog(null)} fullWidth maxWidth="sm">
         <DialogTitle>

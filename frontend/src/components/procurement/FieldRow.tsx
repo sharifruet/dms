@@ -133,7 +133,14 @@ const FieldRow: React.FC<Props> = ({ field, onVerify, onOverride, onShowSource, 
           </Typography>
         )}
         {field.validationMessage && (
-          <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>
+          <Typography
+            variant="caption"
+            // A conflict is a stronger signal than a caution: OCR is actively disagreeing
+            // with something a person confirmed, and someone should look at the document
+            color={field.validationState === 'CONFLICT' ? 'error.main' : 'warning.main'}
+            sx={{ display: 'block', mt: 0.5 }}
+          >
+            {field.validationState === 'CONFLICT' && <strong>Disagreement: </strong>}
             {field.validationMessage}
           </Typography>
         )}

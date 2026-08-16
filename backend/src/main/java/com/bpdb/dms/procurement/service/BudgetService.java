@@ -3,6 +3,7 @@ package com.bpdb.dms.procurement.service;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,10 +12,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.bpdb.dms.procurement.entity.BudgetConsumption;
 import com.bpdb.dms.procurement.entity.BudgetEntry;
+import com.bpdb.dms.procurement.entity.DepartmentBudget;
 import com.bpdb.dms.procurement.entity.Invoice;
 import com.bpdb.dms.procurement.repository.BudgetConsumptionRepository;
 import com.bpdb.dms.procurement.repository.BudgetEntryRepository;
 import com.bpdb.dms.procurement.repository.ContractPackageRepository;
+import com.bpdb.dms.procurement.repository.DepartmentBudgetRepository;
+import com.bpdb.dms.procurement.repository.ProcurementPackageRepository;
 
 /**
  * Budget module (requirements section 5).
@@ -39,13 +43,22 @@ public class BudgetService {
     private final BudgetEntryRepository entryRepository;
     private final BudgetConsumptionRepository consumptionRepository;
     private final ContractPackageRepository contractPackageRepository;
+    private final DepartmentBudgetRepository departmentBudgetRepository;
+    private final ProcurementPackageRepository packageRepository;
+    private final ProcurementAuditService auditService;
 
     public BudgetService(BudgetEntryRepository entryRepository,
                          BudgetConsumptionRepository consumptionRepository,
-                         ContractPackageRepository contractPackageRepository) {
+                         ContractPackageRepository contractPackageRepository,
+                         DepartmentBudgetRepository departmentBudgetRepository,
+                         ProcurementPackageRepository packageRepository,
+                         ProcurementAuditService auditService) {
         this.entryRepository = entryRepository;
         this.consumptionRepository = consumptionRepository;
         this.contractPackageRepository = contractPackageRepository;
+        this.departmentBudgetRepository = departmentBudgetRepository;
+        this.packageRepository = packageRepository;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -58,12 +71,20 @@ public class BudgetService {
         BudgetEntry entry = new BudgetEntry();
         entry.setPackageId(packageId);
         entry.setEntryType(entryType);
+        // An allocation draws down the department's annual budget for the package's
+        // fiscal year (Q-13). Packages with no departmental budget on file are allowed
+        // through - the drawdown is reported, not gated, until the client loads them.
+        if (ALLOCATION.equals(entryType)) {
+            departmentBudgetFor(packageId).ifPresent(db -> entry.setDepartmentBudgetId(db.getId()));
+        }
         entry.setAmount(amount);
         entry.setCurrency(currency == null ? "BDT" : currency);
         entry.setEffectiveDate(effectiveDate);
         entry.setReason(reason);
         entry.setCreatedBy(userId);
         BudgetEntry saved = entryRepository.save(entry);
+        // Money moving is exactly what an audit asks about (REQ-X6)
+        auditService.budgetEntryAdded(userId, packageId, entryType, amount, reason);
 
         if (RELEASE.equals(entryType)) {
             BudgetSummary summary = summary(packageId);
@@ -145,12 +166,93 @@ public class BudgetService {
         return s;
     }
 
+    // ------------------------------------------ Q-13: annual departmental budget
+
+    /**
+     * The departmental budget a package draws from - matched on its fiscal year and
+     * department. Empty when the client has not loaded that year's figure yet.
+     */
+    public Optional<DepartmentBudget> departmentBudgetFor(Long packageId) {
+        return packageRepository.findById(packageId)
+                .filter(p -> p.getFiscalYear() != null && p.getDepartment() != null)
+                .flatMap(p -> departmentBudgetRepository
+                        .findByFiscalYearAndDepartment(p.getFiscalYear(), p.getDepartment()));
+    }
+
+    @Transactional
+    public DepartmentBudget saveDepartmentBudget(Integer fiscalYear, String department,
+                                                 BigDecimal amount, String currency,
+                                                 String notes, Long approverId) {
+        DepartmentBudget budget = departmentBudgetRepository
+                .findByFiscalYearAndDepartment(fiscalYear, department)
+                .orElseGet(DepartmentBudget::new);
+        BigDecimal previousAmount = budget.getAllocatedAmount();
+        budget.setFiscalYear(fiscalYear);
+        budget.setDepartment(department);
+        budget.setAllocatedAmount(amount);
+        budget.setCurrency(currency == null ? "BDT" : currency);
+        budget.setNotes(notes);
+        // Approval is a permission check on the caller, not a routed workflow (Q-13)
+        budget.setApprovedBy(approverId);
+        budget.setApprovedAt(LocalDateTime.now());
+        DepartmentBudget savedBudget = departmentBudgetRepository.save(budget);
+        auditService.departmentBudgetSet(approverId, savedBudget.getId(), department, fiscalYear,
+                previousAmount, amount);
+        return savedBudget;
+    }
+
+    /**
+     * How much of a departmental annual budget its packages have committed (REQ-B0).
+     *
+     * Sums the ALLOCATION lines drawn against it. Over-commitment is reported rather than
+     * refused - the department's figure is a planning control, not a payment gate, and the
+     * hard money ceilings live at the contract (REQ-13.3).
+     */
+    public DepartmentBudgetPosition departmentPosition(Integer fiscalYear, String department) {
+        DepartmentBudgetPosition position = new DepartmentBudgetPosition();
+        position.fiscalYear = fiscalYear;
+        position.department = department;
+
+        DepartmentBudget budget = departmentBudgetRepository
+                .findByFiscalYearAndDepartment(fiscalYear, department).orElse(null);
+        if (budget == null) {
+            return position;
+        }
+        position.departmentBudgetId = budget.getId();
+        position.allocated = budget.getAllocatedAmount() == null
+                ? BigDecimal.ZERO : budget.getAllocatedAmount();
+        position.currency = budget.getCurrency();
+        position.committed = entryRepository.findByDepartmentBudgetId(budget.getId()).stream()
+                .filter(e -> ALLOCATION.equals(e.getEntryType()))
+                .map(e -> e.getAmount() == null ? BigDecimal.ZERO : e.getAmount())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        position.remaining = position.allocated.subtract(position.committed);
+        position.overCommitted = position.remaining.signum() < 0;
+        if (position.overCommitted) {
+            log.warn("Department {} FY{} has committed {} against an annual budget of {} (REQ-B0)",
+                    department, fiscalYear, position.committed, position.allocated);
+        }
+        return position;
+    }
+
     public List<BudgetEntry> entries(Long packageId) {
         return entryRepository.findByPackageId(packageId);
     }
 
     public List<BudgetConsumption> consumption(Long packageId) {
         return consumptionRepository.findByPackageId(packageId);
+    }
+
+    /** How much of a department's annual budget its packages have drawn down (REQ-B0). */
+    public static class DepartmentBudgetPosition {
+        public Integer fiscalYear;
+        public String department;
+        public Long departmentBudgetId;
+        public String currency = "BDT";
+        public BigDecimal allocated = BigDecimal.ZERO;
+        public BigDecimal committed = BigDecimal.ZERO;
+        public BigDecimal remaining = BigDecimal.ZERO;
+        public boolean overCommitted;
     }
 
     /** Derived budget position. Remaining is computed here and nowhere else. */

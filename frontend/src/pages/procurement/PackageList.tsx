@@ -23,8 +23,10 @@ import {
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import procurementService from '../../services/procurementService';
 import { ProcurementPackage, STAGE_COUNT, STAGE_NAMES } from '../../types/procurement';
+import AppImportDialog from '../../components/procurement/AppImportDialog';
 
 /**
  * All packages, with where each one has got to. This replaces the document list as the
@@ -42,6 +44,7 @@ const PackageList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
@@ -92,6 +95,9 @@ const PackageList: React.FC = () => {
     <Box sx={{ p: 3 }}>
       <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
         <Typography variant="h5" sx={{ flexGrow: 1 }}>Procurement packages</Typography>
+        <Button startIcon={<UploadFileIcon />} onClick={() => setImportOpen(true)}>
+          Import APP
+        </Button>
         <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
           New package
         </Button>
@@ -203,6 +209,12 @@ const PackageList: React.FC = () => {
           rowsPerPageOptions={[10, 25, 50, 100]}
         />
       </Paper>
+
+      <AppImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={load}
+      />
 
       <Dialog open={createOpen} onClose={() => setCreateOpen(false)} fullWidth maxWidth="sm">
         <DialogTitle>New procurement package</DialogTitle>

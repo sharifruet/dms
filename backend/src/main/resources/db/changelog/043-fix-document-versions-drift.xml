@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+      document_versions was created in 006 with seven columns. The DocumentVersion entity
+      has since grown to fifteen, and nothing added the other eight - so Hibernate builds
+      an INSERT naming columns PostgreSQL does not have, and document versioning fails at
+      the first attempt.
+
+      This is not a dormant corner. The path is reachable two ways:
+        POST /api/documents/{id}/versions        (DocumentVersioningController)
+        uploading a duplicate with action=version (FileUploadService.uploadAsVersion)
+
+      The same shape of defect as the missing created_at columns in 041, and invisible for
+      the same reason: the tests build their schema from the entities, so the two can never
+      disagree there. Found by LiquibaseSchemaAgreementTest.
+    -->
+
+    <changeSet id="043-001" author="dms">
+        <comment>Add the DocumentVersion columns that 006 never created</comment>
+        <addColumn tableName="document_versions">
+            <column name="file_size" type="BIGINT"/>
+            <column name="file_hash" type="VARCHAR(255)"/>
+            <column name="mime_type" type="VARCHAR(255)"/>
+            <!-- @Enumerated(STRING) with nullable = false; MINOR is the entity's default -->
+            <column name="version_type" type="VARCHAR(50)" defaultValue="MINOR">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_current" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="is_archived" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="archived_at" type="TIMESTAMP"/>
+            <column name="metadata" type="VARCHAR(5000)"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="document_versions" columnName="file_size"/>
+            <dropColumn tableName="document_versions" columnName="file_hash"/>
+            <dropColumn tableName="document_versions" columnName="mime_type"/>
+            <dropColumn tableName="document_versions" columnName="version_type"/>
+            <dropColumn tableName="document_versions" columnName="is_current"/>
+            <dropColumn tableName="document_versions" columnName="is_archived"/>
+            <dropColumn tableName="document_versions" columnName="archived_at"/>
+            <dropColumn tableName="document_versions" columnName="metadata"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+      Deliberately NOT added here: a partial unique index enforcing one current version per
+      document. The invariant is real and the service does maintain it - it clears the old
+      current version before marking the new one - but it does so with separate saves in
+      one transaction, and Hibernate's action queue runs inserts before updates. The new
+      row would be written while the old one still says is_current, and a legitimate save
+      would fail on the constraint.
+
+      Worth having once markPreviousVersionsAsNotCurrent flushes before the insert. Adding
+      it now would trade a drift bug for a concurrency bug.
+    -->
+
+</databaseChangeLog>

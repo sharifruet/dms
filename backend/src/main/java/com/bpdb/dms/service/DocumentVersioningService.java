@@ -7,6 +7,7 @@ import com.bpdb.dms.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -17,6 +18,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
@@ -32,7 +34,16 @@ import java.util.Optional;
 public class DocumentVersioningService {
     
     private static final Logger logger = LoggerFactory.getLogger(DocumentVersioningService.class);
-    
+
+    /**
+     * Where version files are stored, under the same configured root as ordinary uploads.
+     * This used to be hard-coded to {@code user.dir + "/uploads/versions"}, which ignored
+     * the configuration entirely - tests wrote version files into the working tree and
+     * then collided with the leftovers on the next run.
+     */
+    @Value("${app.upload.dir:uploads}")
+    private String uploadDir;
+
     @Autowired
     private DocumentVersionRepository documentVersionRepository;
     
@@ -315,8 +326,7 @@ public class DocumentVersioningService {
      */
     private String saveVersionFile(Document document, MultipartFile file, String versionNumber) {
         try {
-            String uploadDir = System.getProperty("user.dir") + "/uploads/versions";
-            Path uploadPath = Paths.get(uploadDir);
+            Path uploadPath = Paths.get(uploadDir, "versions");
             
             if (!Files.exists(uploadPath)) {
                 Files.createDirectories(uploadPath);
@@ -327,20 +337,27 @@ public class DocumentVersioningService {
             
             Path filePath = uploadPath.resolve(fileName);
             
+            // REPLACE_EXISTING: the name is derived from document id + version + original
+            // filename, so re-creating a version that was previously written is a real
+            // possibility. Without this the copy throws FileAlreadyExistsException and the
+            // whole upload fails on what is really a stale file.
             if (file != null) {
-                Files.copy(file.getInputStream(), filePath);
+                Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
             } else {
                 // Copy existing file for backup
                 Path existingPath = Paths.get(document.getFilePath());
                 if (Files.exists(existingPath)) {
-                    Files.copy(existingPath, filePath);
+                    Files.copy(existingPath, filePath, StandardCopyOption.REPLACE_EXISTING);
                 }
             }
-            
+
             return filePath.toString();
-            
+
         } catch (IOException e) {
-            logger.error("Failed to save version file: {}", e.getMessage());
+            // Log the path and the exception - the message alone is often just a bare
+            // filename, which says nothing about what went wrong
+            logger.error("Failed to save version file for document {} version {}",
+                    document.getId(), versionNumber, e);
             throw new RuntimeException("Failed to save version file", e);
         }
     }

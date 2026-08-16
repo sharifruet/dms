@@ -3,6 +3,7 @@
 **Source:** `BPDB_Procurement_Lifecycle_Metadata_Mapping_Matrix 4.docx` (Doc Ref: BPDB-PROC-2026-M01, Version 1.0, July 2026, Draft for Review)
 **Scope:** Sections 1 (Lifecycle Metadata Mapping Matrix), 2 (Budget Module Integration), 3 (Expiry Tracking Matrix)
 **Target system:** OCR-Integrated Document Management System (DMS)
+**Client answers incorporated:** 2026-08-13, from [procurement-open-points-questionnaire.md](procurement-open-points-questionnaire.md) (Q-1 … Q-20 all answered). Section 8 records each answer and what changed.
 
 ---
 
@@ -49,17 +50,23 @@ Nothing in the lifecycle stands alone. Every document and every metadata record 
 
 ```
 APP (Annual Procurement Plan document)
-└── PROCUREMENT PACKAGE                     ← root entity, key = Package Number   [Stage 1]
+└── APP LINE ITEM  ── may be split into lots (Q-1) ──┐
+    │                                                │
+└── PROCUREMENT PACKAGE (one per lot)     ← root entity, key = Package Number   [Stage 1]
     │   docs: APP Document, APP Approval Memo
+    │   fields: lot_number, lot_description (null when the line is not split)
     │
     ├── BUDGET RECORD (allocation / release / revision / additional)              [Sec. 5]
+    │       drawn down from the DEPARTMENT ANNUAL BUDGET (Q-13)
     │
-    ├── TENDER                                                                    [Stage 2]
+    ├── TENDER (1..n — a re-tender adds a new attempt, Q-2)                       [Stage 2]
     │   │   docs: Tender Notice, Tender Document, Advertisement Copy
+    │   │   fields: attempt_no, is_current, failure_reason
     │   │
     │   └── TENDER OPENING                                                        [Stage 3]
     │       │   docs: Bid Opening Minutes, Bid Opening Register, Bidder List
     │       │   fields: Number of Bidders, Participating Bidders  (summary only)
+    │       │   Bid Security is OUT OF SCOPE (Q-4) — not captured, not tracked
     │       │
     │       └── EVALUATION (BER)                                                  [Stage 4]
     │           │   docs: BER
@@ -112,17 +119,17 @@ APP (Annual Procurement Plan document)
 
 | # | Child record (stage) | Parent / referenced record | Link key | Cardinality |
 |---|----------------------|----------------------------|----------|-------------|
-| L-01 | Procurement Package (1) | APP document | Package Number | 1 APP → n packages |
-| L-02 | Tender (2) | Procurement Package | Package Number | 1 → 1 |
+| L-01 | Procurement Package (1) | APP line item | APP line ID + Lot Number | **1 APP line → 1..n packages (lots)** (Q-1) |
+| L-02 | Tender (2) | Procurement Package | Package Number + Attempt No | **1 → 1..n** — one row per tender attempt; only one is `is_current` (Q-2) |
 | L-03 | Tender Opening (3) | Tender | Tender / Package Number | 1 → 1 |
 | L-04 | Evaluation / BER (4) | Tender Opening | Opening ID | 1 → 1 |
 | L-05 | BER Bidder (4) — the only bidder record | Evaluation | Evaluation ID + Bidder Name | 1 → n |
-| L-06 | Bid Security instrument (3, expiry tracking only) | Tender Opening | Opening ID | 1 → 0..n |
+| L-06 | *(withdrawn — Bid Security is out of scope, Q-4)* | — | — | — |
 | L-07 | Awarded bidder (4) | BER Bidder | Bidder row ID | 1 → 1 |
 | L-08 | Contract Approval (5) | Awarded BER Bidder | Bidder row ID | 1 → 1 |
 | L-09 | NOA (6) | Contract Approval | Approval ID | 1 → 1 |
 | L-10 | Performance Security (7) | NOA | NOA ID | 1 → 1..n |
-| L-11 | Contract (8) | NOA + Procurement Package | NOA ID / Package Number | 1 → 1 |
+| L-11 | Contract (8) | NOA + Procurement Package | NOA ID / Package Number | 1 → 1 — a contract covers exactly **one** package/lot (Q-1: the "one contract spanning several APP packages" option was *not* selected) |
 | L-12 | Letter of Credit (9) | Contract | Contract Number | 1 → 0..n |
 | L-13 | LC Amendment (9) | Letter of Credit | LC Number | 1 → 0..n |
 | L-14 | Price / Production Schedule (10) | Contract | Contract Number | 1 → 1 |
@@ -134,6 +141,7 @@ APP (Annual Procurement Plan document)
 | L-20 | Warranty (15) | Contract; Delivery / Acceptance Certificate | Contract Number | 1 → 1 |
 | L-21 | Contract Closure (16) | Contract | Contract Number | 1 → 1 |
 | L-22 | Budget records (Sec. 5) | Procurement Package | Package Number | 1 → n |
+| L-22a | Package allocation (Sec. 5) | Department Annual Budget | Fiscal Year + Department | 1 → n (Q-13) |
 | L-23 | Budget Consumption line (Sec. 5) | Invoice | Invoice Number | 1 → 1 |
 | L-24 | Expiry Tracker (Sec. 6) | Any expiry-bearing record | Record type + Record ID | 1 → 1 |
 
@@ -153,6 +161,9 @@ APP (Annual Procurement Plan document)
 | REQ-L10 | The system shall report **orphan and broken links** (a document with no parent, a child whose parent was reworked, an invoice with no delivery) on an exceptions dashboard. |
 | REQ-L11 | Rework of an upstream stage (WF-07) shall retain existing downstream links and mark the affected downstream records as `REVALIDATION_REQUIRED` rather than breaking the chain. |
 | REQ-L12 | Every link shall be audit-logged with the user, timestamp, and whether it was auto-established by OCR key match or set manually. |
+| REQ-L13 | **Lot split (Q-1).** One APP line item may produce several packages. Each lot is a full package with its own Package Number, its own budget, tender, contract and closure; `lot_number` distinguishes lots of the same APP line. A package created without a split carries a null `lot_number`. The APP value of the line shall be apportioned across its lots and the apportionment shall reconcile to the line total. |
+| REQ-L14 | **Re-tender (Q-2).** A failed tender shall not be deleted or overwritten. Re-tendering creates a **new Tender record under the same package**, with `attempt_no` incremented, the previous attempt retained as history with its documents, bidders and BER intact, and `is_current` moved to the new attempt. Package Number, APP linkage and budget are preserved unchanged. |
+| REQ-L15 | Stages 3–7 shall resolve to the **current** tender attempt. Records belonging to a superseded attempt remain readable and are labelled with their attempt number; they are excluded from stage-gate evaluation and from the package's live figures. |
 
 ### 2.4 Worked example — one package end to end
 
@@ -211,7 +222,7 @@ Everything captured in the lifecycle — every OCR-extracted value and every man
 | `document_relationships` | Free-form document↔document links | Keep for ad-hoc links; structural links move to typed FKs + `document_link` |
 | `expiry_tracking` | Expiry trackers (Section 6) | Add `entity_type`, `entity_id`, `package_id`, `superseded_by_id` |
 | `app_headers` / `app_lines` | APP import (Stage 1) | Link `app_lines.id` → `procurement_package.app_line_id` |
-| `bill_headers` / `bill_lines` | Existing billing/finance | Link to `invoice` rather than duplicating it |
+| `bill_headers` / `bill_lines` | Existing billing/finance — **kept running independently** (Q-6) | None. No bridge FK; the finance module and the procurement `invoice` are separate records and duplicate entry is accepted by the client |
 | `audit_logs` | Audit trail (REQ-X6, REQ-L12) | None |
 
 ### 3.3 Lifecycle graph tables
@@ -223,6 +234,7 @@ Sketch DDL (PostgreSQL; delivered as Liquibase changesets). `id BIGSERIAL PK` an
 procurement_package (
   app_line_id BIGINT REFERENCES app_lines,      -- APP Excel origin
   package_number VARCHAR(100) UNIQUE NOT NULL,  -- root correlation key (REQ-L2)
+  lot_number VARCHAR(50), lot_description TEXT, -- lot split (REQ-L13, Q-1); null when unsplit
   package_description TEXT,
   approving_authority VARCHAR(255),
   price_lac_bdt NUMERIC(18,2),
@@ -239,12 +251,19 @@ package_stage (                                  -- one row per stage, drives §
   rework_reason TEXT,
   UNIQUE (package_id, stage_code))
 
--- Stage 2
-tender (package_id BIGINT UNIQUE REFERENCES procurement_package,
-  procurement_type VARCHAR(100), procurement_method VARCHAR(100),
-  procurement_nature VARCHAR(100),
+-- Stage 2 — one row per tender attempt; re-tender adds a row (REQ-L14, Q-2)
+tender (package_id BIGINT NOT NULL REFERENCES procurement_package,
+  attempt_no INT NOT NULL DEFAULT 1,
+  is_current BOOLEAN NOT NULL DEFAULT TRUE,
+  failure_reason TEXT,                           -- why the previous attempt was re-tendered
+  procurement_type VARCHAR(100),                 -- NCT | ICT (Q-8)
+  procurement_method VARCHAR(100),               -- OTM | LTM | RFQ | DPM (Q-8)
+  procurement_nature VARCHAR(100),               -- SERVICE | WORKS | GOODS (Q-8)
   opening_date DATE, closing_date DATE,
-  tender_validity_days INT, tender_validity_date DATE)
+  tender_validity_days INT, tender_validity_date DATE,
+  UNIQUE (package_id, attempt_no))
+-- partial unique index: one current attempt per package
+--   CREATE UNIQUE INDEX uk_tender_current ON tender(package_id) WHERE is_current;
 
 -- Stage 3 — summary only; no per-bidder entity here (REQ-3.2)
 tender_opening (tender_id BIGINT UNIQUE REFERENCES tender,
@@ -252,14 +271,12 @@ tender_opening (tender_id BIGINT UNIQUE REFERENCES tender,
   number_of_bidders INT,
   participating_bidders TEXT)                    -- as read from the minutes
 
-bid_security (opening_id BIGINT REFERENCES tender_opening,
-  instrument_type VARCHAR(20),                   -- BG / PAY_ORDER
-  reference_no VARCHAR(100), issuing_bank VARCHAR(255),
-  expiry_date DATE)                              -- exists only to feed E-2 (REQ-3.4)
+-- bid_security: WITHDRAWN (Q-4) — Bid Security is out of scope for this application
 
 -- Stage 4 — the BER is the single source of bidder data
 evaluation (opening_id BIGINT UNIQUE REFERENCES tender_opening,
-  oce_value NUMERIC(18,2), currency VARCHAR(3), evaluation_date DATE)
+  oce_value NUMERIC(18,2),                       -- MANUAL entry at BER upload (Q-9)
+  currency VARCHAR(3), evaluation_date DATE)
 
 ber_bidder (evaluation_id BIGINT REFERENCES evaluation,
   bidder_name VARCHAR(255),
@@ -346,7 +363,7 @@ invoice (contract_id BIGINT REFERENCES contract,
   invoice_number VARCHAR(100), invoice_date DATE,
   invoice_amount NUMERIC(18,2), currency VARCHAR(3),
   supplier_name VARCHAR(255),
-  bill_header_id BIGINT REFERENCES bill_headers,  -- bridge to existing finance module
+  -- no bill_headers bridge: the finance module runs independently (Q-6)
   UNIQUE (contract_id, supplier_name, invoice_number))
 
 invoice_delivery_link (                           -- many-to-many (REQ-L7)
@@ -485,8 +502,7 @@ Every row below is a persisted field: a typed column in §3.3 **and** an `extrac
 | 2 | tender | opening_date, closing_date | date | O |
 | 2 | tender | tender_validity | number/date | O |
 | 3 | tender_opening | number_of_bidders, participating_bidders | number/text | O |
-| 3 | bid_security | reference_no, issuing_bank, expiry_date | text/date | O |
-| 4 | evaluation | oce_value | currency | O |
+| 4 | evaluation | oce_value | currency | **M** (Q-9 — entered at BER upload) |
 | 4 | ber_bidder | bidder_name | text | O |
 | 4 | ber_bidder | bidding_price, currency | currency | O |
 | 4 | ber_bidder | deviation_pct | number | O |
@@ -521,6 +537,7 @@ Every row below is a persisted field: a typed column in §3.3 **and** an `extrac
 | 14 | payment | payment_amount | currency | O |
 | 15 | warranty | warranty_start_date, warranty_end_date | date | O |
 | 16 | contract_closure | completion_date, contract_close_date | date | O |
+| — | department_budget | annual departmental allocation | currency | **M** |
 | — | budget_entry | allocation / release / revision / additional amounts | currency | **M** |
 | — | budget_consumption | consumed_amount | currency | **A** |
 | — | expiry_tracking | expiry_date per tracked instrument | date | **A** |
@@ -531,10 +548,20 @@ Every row below is a persisted field: a typed column in §3.3 **and** an `extrac
 ### 3.8 Budget and expiry persistence
 
 ```sql
+-- Annual departmental budget, drawn down per package (REQ-B0, Q-13)
+department_budget (
+  fiscal_year INT NOT NULL,
+  department VARCHAR(255) NOT NULL,
+  allocated_amount NUMERIC(18,2), currency VARCHAR(3) DEFAULT 'BDT',
+  approved_by BIGINT, approved_at TIMESTAMP,
+  UNIQUE (fiscal_year, department))
+
 budget_entry (package_id BIGINT REFERENCES procurement_package,
+  department_budget_id BIGINT REFERENCES department_budget,  -- source of the drawdown
   entry_type VARCHAR(20),                -- ALLOCATION | RELEASE | REVISION | ADDITIONAL
   amount NUMERIC(18,2), currency VARCHAR(3),
-  effective_date DATE, reason TEXT, approved_by BIGINT)
+  effective_date DATE, reason TEXT,
+  approved_by BIGINT)                    -- any user holding the approver permission (Q-13)
 
 budget_consumption (package_id BIGINT REFERENCES procurement_package,
   invoice_id BIGINT UNIQUE REFERENCES invoice,   -- L-23, auto from Stage 13
@@ -547,7 +574,7 @@ budget_consumption (package_id BIGINT REFERENCES procurement_package,
 
 ### 3.9 Retention, integrity and access
 
-- REQ-P17 Persisted values, OCR results and history are retained for the statutory retention period; closure (Stage 16) archives but does not delete.
+- REQ-P17 Persisted values, OCR results and field-change history are retained for **1 year** (Q-18), configurable; closure (Stage 16) archives but does not delete. Purging beyond the retention period is a separate, explicitly invoked administrative action — never automatic — and is audit-logged.
 - REQ-P18 All monetary and date columns are typed (`NUMERIC`, `DATE`) — never free text — so validations in Section 4 and reporting work off the database.
 - REQ-P19 Indexes shall exist on `package_number`, `contract_number`, `invoice_number`, `delivery_reference_number`, `document_link(package_id, stage_code)` and `extracted_field(entity_type, entity_id)`.
 - REQ-P20 Row-level access shall follow the package/department ownership so persistence does not bypass the role model (REQ-X4).
@@ -564,12 +591,14 @@ budget_consumption (package_id BIGINT REFERENCES procurement_package,
 - **Required documents:** APP Document; APP Approval Memo.
 - **OCR-extracted metadata:** Package Number, Package Description, Approving Authority, Price in lac BDT.
 - **Manual input:** — (none)
-- **Client note:** The APP Excel file will be uploaded into the system.
+- **Client note:** The APP Excel file will be uploaded into the system. Reference sample supplied: `APP 22-23 First Revision_2980.xls` (Q-7).
 - **System behaviour:**
-  - REQ-1.1 The system shall accept the APP as an Excel file and parse package rows from it, in addition to accepting scanned/PDF APP documents for OCR.
+  - REQ-1.1 The system shall accept the APP as an Excel file and parse package rows from it, in addition to accepting scanned/PDF APP documents for OCR. The parser shall be driven by a **column mapping profile per fiscal year**, so a changed layout is a configuration change rather than a code change; the supplied `APP 22-23 First Revision` layout is the first profile.
   - REQ-1.2 The system shall create/associate a procurement package using the extracted **Package Number** as the lifecycle correlation key.
   - REQ-1.3 The system shall reject a duplicate Package Number and offer to open the existing package instead.
   - REQ-1.4 **Price in lac BDT** shall be stored as the package's approved APP value and made available to the Budget module (Section 5).
+  - REQ-1.5 **Lot split (Q-1, REQ-L13).** The user may split one APP line into several packages, each given its own Package Number and Lot Number, with the line's APP value apportioned across the lots. The system shall show the unapportioned residue and shall block completion until the apportionment reconciles to the line total. An unsplit line produces a single package with a null Lot Number.
+  - REQ-1.6 A package's department and fiscal year shall determine which **Department Annual Budget** it draws down (Section 5).
 - **Exit criteria:** APP Document uploaded, Package Number + Package Description + Approving Authority + Price in lac BDT verified.
 
 ---
@@ -585,8 +614,13 @@ budget_consumption (package_id BIGINT REFERENCES procurement_package,
   - REQ-2.1 The extracted **Package Number** shall be matched against the Stage 1 package; a mismatch shall raise a validation warning and block completion until resolved.
   - REQ-2.2 The system shall validate that Opening Date ≤ Closing Date and that Tender Validity is a future-dated period relative to Closing Date.
   - REQ-2.3 **Tender Validity** shall be registered in the Expiry Tracking Matrix (Section 6).
-  - REQ-2.4 Procurement Type / Method / Nature shall be captured against a configurable master list; unmatched OCR values are flagged for manual selection.
-- **Exit criteria:** Tender Notice uploaded and all seven metadata fields verified.
+  - REQ-2.4 Procurement Type / Method / Nature shall be captured against a configurable master list; unmatched OCR values are flagged for manual selection. The seeded lists (Q-8) are:
+    - **Procurement Type:** NCT (National Competitive Tender), ICT (International Competitive Tender)
+    - **Procurement Method:** OTM, LTM, RFQ, DPM
+    - **Procurement Nature:** Service, Works, Goods
+  - REQ-2.5 **Procurement Type = ICT** shall set the default applicability of Stage 9 (Letter of Credit) to *applicable*; any other value defaults it to *not applicable* (REQ-9.5, Q-5). The default is a suggestion the user may change.
+  - REQ-2.6 **Re-tender (Q-2, REQ-L14).** An authorised user may declare the current tender attempt failed, recording a reason, and open a new attempt. The new attempt starts at Stage 2 with a fresh Tender record under the same package; the previous attempt and all its Stage 2–4 records and documents are retained, read-only, labelled with their attempt number.
+- **Exit criteria:** Tender Notice uploaded and all seven metadata fields verified, for the **current** tender attempt.
 
 ---
 
@@ -601,7 +635,7 @@ budget_consumption (package_id BIGINT REFERENCES procurement_package,
   - REQ-3.1 The system shall store **Number of Bidders** and **Participating Bidders** on the Tender Opening record as summary data captured from the Bid Opening Minutes / Bidder List.
   - REQ-3.2 The bidder documents uploaded here (Bid Opening Register, Bidder List) shall be retained and searchable, but the system shall **not** build a per-bidder data structure at this stage. The BER at Stage 4 is the single source of bidder data.
   - REQ-3.3 At Stage 4 the count of BER bidder rows shall reconcile with the **Number of Bidders** recorded here; a mismatch is flagged for review.
-  - REQ-3.4 Bid Security instruments (BG / Pay Order), where submitted, shall be uploadable against the Tender Opening solely so their **Bid Security Expiry** can be tracked (Section 6, E-2). No bidder-level financial record is created.
+  - REQ-3.4 *(Withdrawn — Q-4.)* **Bid Security is out of scope for this application.** No bid security instrument is captured, no bidder-level financial record is created, and no bid security expiry is tracked. Bid security documents may still be filed as ordinary attachments to the Tender Opening, but the system holds no structured data about them and raises no alerts.
 - **Exit criteria:** Bid Opening Minutes uploaded, Number of Bidders and Participating Bidders verified.
 
 ---
@@ -612,10 +646,11 @@ budget_consumption (package_id BIGINT REFERENCES procurement_package,
 - **Links to:** **Evaluation (BER)** is a child of the Tender Opening (L-04). **BER Bidder** rows are children of the Evaluation (L-05) and are the *only* bidder records in the system — bidder identity, price and evaluation outcome are captured together, in one place, from the BER. Exactly one row is flagged as awarded (L-07).
 - **Required documents:** BER (Bid Evaluation Report).
 - **OCR-extracted metadata:** Deviation (%) with OCE, Responsive Bidder List (per bidder: Bidder Name, Bidding Price, Responsive Y/N, Deviation %).
-- **Manual input:** — (none)
+- **Manual input:** OCE value (Q-9).
 - **System behaviour:**
   - REQ-4.1 The system shall extract the bidder table from the BER and store one **BER Bidder** row per bidder, carrying Bidder Name, Bidding Price, responsive flag and Deviation (%). This is the single bidder record for the package; Stage 3 does not duplicate it.
   - REQ-4.2 **Deviation (%) with OCE** shall be stored per bidder row and shown against the OCE (Officially Certified Estimate) value.
+  - REQ-4.2a The **OCE value shall be entered manually by the user at BER upload** (Q-9); it is not extracted and is not held elsewhere in the system. It is mandatory before the stage can complete, since every deviation figure is meaningless without it. Where the BER also states a deviation per bidder, the system shall recompute deviation from the entered OCE and flag any bidder row where the two disagree beyond a configurable tolerance.
   - REQ-4.3 The count of BER Bidder rows shall reconcile with **Number of Bidders** from Stage 3 (REQ-3.3); a mismatch is flagged, not blocked, since the BER may list only evaluated bidders.
   - REQ-4.4 The system shall allow one responsive bidder row to be marked as the recommended/awarded bidder, carried forward to Stages 5–8.
 - **Exit criteria:** BER uploaded, deviation and responsive bidder list verified, recommended bidder selected.
@@ -698,7 +733,8 @@ budget_consumption (package_id BIGINT REFERENCES procurement_package,
   - REQ-9.2 **LC Expiry Date** shall be registered in the Expiry Tracking Matrix (Section 6).
   - REQ-9.3 LC Amendments shall be uploadable any number of times, each as a versioned attachment to the parent LC, and an amendment may revise LC Amount and/or LC Expiry Date — the revised values supersede the originals for expiry tracking.
   - REQ-9.4 LC Amount shall be validated against Contract Value (Stage 8); a variance is flagged for review, not blocked.
-  - REQ-9.5 This stage is applicable to import/LC-based contracts only; for non-LC contracts the stage may be marked **Not Applicable** with a recorded reason and the workflow proceeds to Stage 10.
+  - REQ-9.5 **Applicability (Q-5).** The stage applies to international tenders. Its default applicability is derived from **Procurement Type** captured on the Tender Notice at Stage 2 (REQ-2.5): `ICT` → applicable, anything else → not applicable. The default is a suggestion, not a lock.
+  - REQ-9.6 **Any authorised user may mark the stage Not Applicable** (Q-5) — no separate approval step. A reason is mandatory, the action is audit-logged, and the workflow proceeds to Stage 10. Marking an `ICT` package Not Applicable, or marking a non-`ICT` package applicable, is permitted but recorded as an override of the derived default.
 - **Exit criteria:** LC uploaded and all seven fields recorded, or stage marked Not Applicable.
 
 ---
@@ -741,11 +777,12 @@ budget_consumption (package_id BIGINT REFERENCES procurement_package,
 - **OCR-extracted metadata:** Delivery Date, Delivered Quantity, Delivery Reference Number.
 - **Manual input:** — (none)
 - **System behaviour:**
-  - REQ-12.1 Partial deliveries shall be supported: the stage holds multiple delivery records, each with its own challan/packing list/GRN and metadata set.
+  - REQ-12.1 Partial deliveries shall be supported **for all contract categories** (Q-11): the stage holds multiple delivery records, each with its own challan/packing list/GRN and metadata set.
   - REQ-12.2 Cumulative **Delivered Quantity** shall be tracked against the contracted quantity from the e-GP price schedule (Stage 10).
   - REQ-12.3 **Delivery Date** shall be compared against the contractual delivery window derived from Delivery Period (Stage 8); late delivery is flagged.
   - REQ-12.4 **Delivery Reference Number** shall be unique per delivery record within the contract.
-- **Exit criteria:** At least one delivery record complete and the delivery declared final by the user (cumulative quantity reconciled).
+  - REQ-12.5 A delivery is declared **final** by a user holding the **Checker** role (Q-11 was silent on who declares finality; this follows the maker/checker model of Q-17). Declaring final closes the delivery set; reopening it requires the same role and is audit-logged.
+- **Exit criteria:** At least one delivery record complete and the delivery declared final by a Checker (cumulative quantity reconciled).
 
 ---
 
@@ -759,7 +796,7 @@ budget_consumption (package_id BIGINT REFERENCES procurement_package,
 - **System behaviour:**
   - REQ-13.1 Multiple invoices shall be supported per contract (progressive billing).
   - REQ-13.2 **Invoice Number** shall be unique per supplier; duplicates are blocked.
-  - REQ-13.3 Cumulative **Invoice Amount** shall be validated against Contract Value (Stage 8); an over-billing condition is flagged and requires authorised override.
+  - REQ-13.3 **Over-billing is not permitted (Q-12).** Cumulative Invoice Amount across a contract shall not exceed Contract Value (Stage 8). An invoice that would breach the ceiling is **rejected** — this is a hard block with no override path and no tolerance band. The user is shown the contract value, the amount already billed and the headroom remaining. Where a genuine increase is required (price variation, taxes, scope change), the contract value must first be revised at Stage 8 with its own document trail; the invoice is then accepted against the revised value.
   - REQ-13.4 The OCR-extracted **Invoice Amount** shall feed **Budget Consumption** in the Budget module (Section 5) — this is the single automated input to Budget.
   - REQ-13.5 **Supplier Name** shall be reconciled with the awarded bidder from Stage 4.
 - **Exit criteria:** Invoice uploaded and all five metadata fields verified for each submitted bill.
@@ -775,7 +812,7 @@ budget_consumption (package_id BIGINT REFERENCES procurement_package,
 - **Manual input:** — (none)
 - **System behaviour:**
   - REQ-14.1 Each payment record shall be linked to one or more Stage 13 invoices.
-  - REQ-14.2 Cumulative **Payment Amount** shall not exceed the linked invoice amount without an authorised override.
+  - REQ-14.2 Cumulative **Payment Amount** shall not exceed the linked invoice amount. Consistent with REQ-13.3 this is a hard block, not an override-able warning; a payment cannot settle more than the invoice it is attached to.
   - REQ-14.3 Part payments shall be supported; the outstanding balance per invoice is shown.
   - REQ-14.4 **Payment Date** shall not precede the linked Invoice Date.
 - **Exit criteria:** Payment Voucher and Payment Approval uploaded, all three fields verified, invoice fully settled or explicitly closed.
@@ -815,20 +852,21 @@ budget_consumption (package_id BIGINT REFERENCES procurement_package,
 
 ## 5. Budget Module Integration
 
-Runs alongside the lifecycle rather than as a stage. Budget records are held per package/contract.
+Runs alongside the lifecycle rather than as a stage. Budget is **allocated annually at department level and drawn down per package** (Q-13).
 
 | # | Module | Data Source | Requirement |
 |---|--------|-------------|-------------|
-| B-1 | Budget Allocation | Manual entry (Budget Management Module) | REQ-B1 The system shall allow allocation of budget to a package, entered manually. |
+| B-0 | Department Annual Budget | Manual entry | REQ-B0 The system shall hold one budget allocation per (fiscal year, department), entered manually. Package allocations draw down against it; the sum of package allocations for a fiscal year shall not exceed the departmental figure without an authorised override, and the departmental drawdown position (allocated / committed / remaining) shall be visible. |
+| B-1 | Budget Allocation | Manual entry (Budget Management Module) | REQ-B1 The system shall allow allocation of budget to a package from its department's annual budget, entered manually. |
 | B-2 | Budget Release | Manual entry | REQ-B2 The system shall record budget releases against an allocation, entered manually; cumulative release shall not exceed allocation without an authorised override. |
-| B-3 | Revised Budget | Manual entry | REQ-B3 The system shall record budget revisions, each with effective date and reason; the revised figure supersedes the original for all calculations. |
+| B-3 | Revised Budget | Manual entry | REQ-B3 The system shall record budget revisions, each with effective date and reason; the revised figure supersedes the original for all calculations. **Approval is a single permission check, not a routed workflow** (Q-13): any user holding the approver role/permission may approve a revision. The approver, timestamp and reason are recorded. |
 | B-4 | Additional Budget | Manual entry | REQ-B4 The system shall record additional budget as a separate line that increases the total available budget. |
 | B-5 | Budget Consumption | **Automatic** — OCR-extracted Invoice/Bill amount | REQ-B5 The system shall compute Budget Consumption automatically from the Invoice Amount extracted at Stage 13, updating on each verified invoice. |
 | B-6 | Remaining Budget | **Automatic** — system-calculated | REQ-B6 Remaining Budget = (Allocation ± Revisions + Additional) − Consumption, recalculated whenever any component changes. |
 
 Additional requirements:
 
-- REQ-B7 Budget figures shall be currency-aware and consistent with the currencies recorded at Stages 8, 9, 13 and 14.
+- REQ-B7 Budget figures shall be currency-aware and consistent with the currencies recorded at Stages 8, 9, 13 and 14. **A package is single-currency (Q-14):** contract, LC, invoices and payments within one package shall all share one currency, which is fixed at Stage 8 and validated at every later stage. A differing currency is rejected at entry. No FX conversion is performed and no rate source is required; should mixed currency ever become real, it is a change request, not a configuration change.
 - REQ-B8 The system shall alert when Remaining Budget falls below a configurable threshold and when consumption would exceed available budget.
 - REQ-B9 Budget entries and recalculations shall be audit-logged with user and timestamp.
 - REQ-B10 A budget view per package shall show Allocation, Release, Revisions, Additional, Consumption and Remaining, with drill-through to the source invoices.
@@ -842,7 +880,7 @@ Cross-cutting. Any document reaching the system with an expiry-bearing field is 
 | # | Document | Expiry Field | Captured at |
 |---|----------|--------------|-------------|
 | E-1 | Tender Notice | Tender Validity | Stage 2 |
-| E-2 | Bid Security (BG / Pay Order) | Bid Security Expiry | Stage 3 |
+| ~~E-2~~ | ~~Bid Security (BG / Pay Order)~~ | *withdrawn — out of scope (Q-4)* | — |
 | E-3 | Performance Guarantee (PG) | PG Expiry Date | Stage 7 (Validity) |
 | E-4 | Letter of Credit (LC) | LC Expiry Date | Stage 9 |
 | E-5 | Contract Agreement & Price Schedule | Completion Date | Stage 8 |
@@ -851,8 +889,8 @@ Cross-cutting. Any document reaching the system with an expiry-bearing field is 
 Requirements:
 
 - REQ-E1 The system shall register an expiry tracker automatically when the corresponding field is verified at its stage.
-- REQ-E2 Each tracker shall support configurable advance-warning intervals (e.g. 90 / 60 / 30 / 15 / 7 days) per document type.
-- REQ-E3 The system shall raise notifications (in-app, email) to the responsible role at each warning interval and on the expiry date.
+- REQ-E2 Each tracker shall support configurable advance-warning intervals per document type. The seeded default for every tracked document is **90 / 60 / 30 / 15 / 7 days**, editable per document type by an administrator without a code change (Q-15).
+- REQ-E3 The system shall raise notifications (in-app, email) at each warning interval and on the expiry date. The default recipient is the package's responsible officer plus all users holding the **Checker** role for that department (Q-15); the recipient set is configurable per document type.
 - REQ-E4 Expired items shall be highlighted on the package view and on a consolidated expiry dashboard filterable by document type, package, stage and date range.
 - REQ-E5 Extensions and amendments (e.g. LC amendment, PG extension, tender validity extension) shall update the tracked expiry date, retaining the previous value in history.
 - REQ-E6 Trackers shall be closed automatically at Contract Close (REQ-16.2) or when the underlying instrument is released.
@@ -865,7 +903,10 @@ Requirements:
 - REQ-X1 **Correlation:** Package Number (Stage 1) and Contract Number (Stage 8) shall correlate every document, metadata record, budget entry and expiry tracker in the lifecycle, per the linkage model in Section 2.
 - REQ-X2 **Linked document view:** From any stage the user shall be able to view the full document chain for the package across all 16 stages (see REQ-L8).
 - REQ-X3 **OCR verification UI:** Every OCR-extracted field shall be presented with its confidence indicator, the source document, and inline edit; a field below a configurable confidence threshold is forced through manual confirmation.
-- REQ-X4 **Role-based access:** Stage entry, completion, override and rework shall be permission-controlled per role.
+- REQ-X4 **Role-based access (Q-17):** the procurement module defines **two roles — Maker and Checker**. The Maker creates packages, uploads documents, enters and corrects field values, and submits a stage. The Checker verifies OCR-suggested values, completes stages, marks a stage Not Applicable, sends a stage back for rework, declares a delivery final, approves budget entries and revisions, and reopens a closed package. A user may hold both roles, but the system shall warn when the same user both submits and approves the same stage. All stage entry, completion, override and rework actions are permission-controlled against these two roles.
+- REQ-X4a **Existing workflow engine (Q-16):** the client confirms nothing depends on the current generic workflow engine. The `StageEngine` becomes the sole workflow authority for procurement; the generic `workflows` machinery is retired rather than kept in parallel.
+- REQ-X4b **Document language (Q-19):** all procurement documents are in **English**. The OCR engine is configured for English only (`eng`); no Bangla language pack, no mixed-script handling and no bilingual field variants are provisioned. A document that turns out to be in Bangla falls through to manual entry.
+- REQ-X4c **Deployment scope (Q-20):** a single department, **BPDB**, is in scope. Department remains a first-class column on packages and budgets so multi-department operation needs no schema change, but no cross-department access rules, routing or reporting are built now.
 - REQ-X5 **Dashboard:** A lifecycle view shall show each package's current stage, elapsed time per stage, overdue deadlines, budget position and open expiries.
 - REQ-X6 **Audit trail:** All actions described in this document shall be recorded immutably (who, what, when, before/after).
 - REQ-X7 **Versioning:** Re-uploaded documents shall create a new version; prior versions remain retrievable.
@@ -873,23 +914,38 @@ Requirements:
 
 ---
 
-## 8. Open Points for Client Alignment
+## 8. Client Alignment Register — answered 2026-08-13
 
-Carried from the source matrix, where the "Client Input / Alignment Notes" column is largely blank. These are issued to the client as [procurement-open-points-questionnaire.md](procurement-open-points-questionnaire.md), where each is stated with its assumption and its cost-to-change; points 11, 12, 3/3a, 5, 14 and the bid-security question are **blocking** (Group A) and database work does not start until they are answered.
+All 20 questions in [procurement-open-points-questionnaire.md](procurement-open-points-questionnaire.md) are answered. Nothing in this document now rests on an unconfirmed assumption. The table records the answer and where it lands.
 
-1. Stage 1 — confirm the APP Excel template/column layout for parsing.
-2. Stage 2 — confirm the master lists for Procurement Type, Method and Nature.
-3. Stage 3 — confirmed: no per-bidder record is kept at opening; the BER is the single source of bidder data (REQ-3.2, REQ-4.1). Still open: whether Bid Security is tracked for all bidders or only the awarded one, and who records its release.
-3a. Stage 3/4 — the source matrix lists Bidder Name and Bidding Price under Stage 3; these are now captured at Stage 4 from the BER instead. Confirm this is acceptable, i.e. that bidder names/prices are not needed before the BER is available.
-4. Stage 4 — confirm the source of the OCE value used for the deviation calculation.
-5. Stage 9 — confirm which contract categories require an LC (i.e. when the stage is Not Applicable).
-6. Stage 11 — confirm the inspection events applicable per contract category and SAT applicability rules.
-7. Stage 12 — confirm whether partial delivery is permitted per contract category.
-8. Stages 13/14 — confirm the tolerance for over-billing / over-payment and who may override.
-9. Section 5 — confirm the budget hierarchy (annual vs package-level) and the approval chain for revisions.
-10. Section 6 — confirm the advance-warning intervals and notification recipients per document type.
-11. Section 2 — confirm whether one APP line item can produce more than one package (lot-wise tendering) and whether one contract can span multiple APP packages; the model in §2.1 assumes one package → one tender → one contract.
-12. Section 2 — confirm whether a re-tender (failed tender) creates a new Tender record under the same package or a new package.
-13. Section 3 — confirm the statutory retention period for documents, OCR results and field history (REQ-P17).
-14. Section 3 — confirm whether the existing `bill_headers` / `bill_lines` finance module remains the system of record for billing, with `invoice` bridging to it (§3.3), or is replaced.
-15. Section 3 — confirm whether multi-currency contracts require FX rates to be persisted per transaction (REQ-P7) and the rate source.
+| Q | Question | Client answer | Effect on this document |
+|---|---|---|---|
+| **Q-1** | APP line → package cardinality | One APP line **may be split into lots**. (One contract spanning several APP packages was *not* selected.) | REQ-L13, REQ-1.5; `lot_number` on `procurement_package`; L-01 becomes 1 → 1..n. Contract → package stays **1 → 1** (L-11). |
+| **Q-2** | Re-tender | New Tender record under the **same package**, previous tender retained as history | REQ-L14, REQ-L15, REQ-2.6; `tender` gains `attempt_no` / `is_current` / `failure_reason`; L-02 becomes 1 → 1..n |
+| **Q-3** | Bidder data only from the BER | Confirmed — current design correct | No change (REQ-3.2, REQ-4.1 stand) |
+| **Q-4** | Bid Security | **Out of scope** for this application | `bid_security` table withdrawn; REQ-3.4 withdrawn; L-06 withdrawn; expiry item E-2 withdrawn; catalogue rows removed |
+| **Q-5** | LC applicability | ICT contracts may require an LC; derive from the Tender Notice **Procurement Type = ICT**. Any authorised user may mark Not Applicable | REQ-2.5, REQ-9.5, REQ-9.6 |
+| **Q-6** | Billing system of record | **Keep both independently**, accepting duplicate entry | §3.2 finance row; `invoice.bill_header_id` bridge dropped |
+| **Q-7** | APP Excel format | Sample supplied: `APP 22-23 First Revision_2980.xls` | REQ-1.1 — parser driven by a per-fiscal-year column mapping profile |
+| **Q-8** | Master lists | Type NCT/ICT · Method OTM/LTM/RFQ/DPM · Nature Service/Works/Goods | REQ-2.4 (seeded lists) |
+| **Q-9** | OCE source | **Manual input during BER upload** | REQ-4.2a; catalogue Src for `oce_value` changes O → M |
+| **Q-10** | Inspection events | Keep as designed | No change |
+| **Q-11** | Partial delivery | Permitted for **all** contract categories | REQ-12.1. *Finality* was not answered — assigned to the Checker role per Q-17 (REQ-12.5) |
+| **Q-12** | Over-billing tolerance | **Not permitted** | REQ-13.3 becomes a hard block with no override; REQ-14.2 aligned |
+| **Q-13** | Budget hierarchy | Allocated **annually at department level**, drawn down per package. Revision approval is a plain permission check | REQ-B0, REQ-B3; new `department_budget` table; L-22a |
+| **Q-14** | Multi-currency | **No** — one package, one currency | REQ-B7; currency fixed at Stage 8 and validated downstream; no FX |
+| **Q-15** | Expiry intervals | Use defaults, keep configurable | REQ-E2 (90/60/30/15/7 default), REQ-E3 (default recipients) |
+| **Q-16** | Existing workflow engine | Nothing depends on it — **revamp freely** | REQ-X4a; `StageEngine` is the sole workflow authority |
+| **Q-17** | Roles | Two roles: **Maker** and **Checker** | REQ-X4 |
+| **Q-18** | Retention | **1 year** | REQ-P17 |
+| **Q-19** | Document language | **English only** | REQ-X4b — OCR configured `eng` only |
+| **Q-20** | Pilot scope | One department: **BPDB** | REQ-X4c |
+
+### 8.1 Points the answers did not fully close
+
+These are not blocking; each has a stated fallback in the requirement it affects.
+
+1. **Q-11 — who declares a delivery final.** Not answered. Assigned to the Checker role (REQ-12.5); confirm at UAT.
+2. **Q-15 — per-document intervals and recipients.** The client asked for "defaults, kept configurable". The defaults in REQ-E2/E3 apply until the client tunes them in the admin screen before go-live.
+3. **Q-18 — 1 year retention** is short for procurement records that often have statutory retention far longer, and shorter than the warranty period of many contracts (Stage 15 alone can run 12–24 months). Purging is therefore implemented as an explicit administrative action rather than an automatic job (REQ-P17), so nothing is destroyed by a clock. Recommend the client re-confirm against BPDB's records-retention policy before any purge is run.
+4. **Q-12 — over-billing.** "Not permitted **for now**" implies this may loosen. REQ-13.3 is implemented as a single ceiling check in `ValidationService`, so introducing a tolerance band or an override role later is a contained change.

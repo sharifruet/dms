@@ -8,8 +8,12 @@ import com.bpdb.dms.entity.User;
 import com.bpdb.dms.repository.RoleRepository;
 import com.bpdb.dms.repository.UserRepository;
 import com.bpdb.dms.security.JwtUtil;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -26,7 +30,9 @@ import jakarta.validation.Valid;
 @RequestMapping("/api/auth")
 @CrossOrigin(origins = "*")
 public class AuthController {
-    
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
+
     @Autowired
     private AuthenticationManager authenticationManager;
     
@@ -65,8 +71,20 @@ public class AuthController {
             response.setDepartment(user.getDepartment());
             
             return ResponseEntity.ok(response);
+        } catch (AuthenticationException e) {
+            // 401, not 400: the request was well-formed, the credentials were not accepted.
+            // Callers cannot distinguish "you typed the wrong password" from "your payload
+            // was malformed" if both come back as 400.
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body("Invalid username or password");
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body("Invalid username or password");
+            // Anything else is our problem, not the caller's credentials. Reporting a
+            // database outage as "invalid username or password" sends people hunting for
+            // a password issue that does not exist.
+            logger.error("Login failed for user '{}' with an unexpected error",
+                    loginRequest.getUsername(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("Login could not be completed. Please try again.");
         }
     }
     

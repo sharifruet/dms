@@ -29,7 +29,13 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    // A 401 from the login call means "those credentials were wrong", not "your session
+    // expired". Redirecting there would reload the page and throw away the very error
+    // the form needs to show, so the sign-in endpoints are exempt.
+    const url = error.config?.url ?? '';
+    const isSignInAttempt = url.includes('/auth/login') || url.includes('/auth/register');
+
+    if (error.response?.status === 401 && !isSignInAttempt) {
       localStorage.removeItem('token');
       window.location.href = '/login';
     }

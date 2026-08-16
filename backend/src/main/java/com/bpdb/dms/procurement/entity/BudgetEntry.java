@@ -17,6 +17,10 @@ public class BudgetEntry extends BaseProcurementEntity {
     @Column(name = "package_id")
     private Long packageId;
 
+    /** The annual departmental budget this line draws down from (Q-13, REQ-B0). */
+    @Column(name = "department_budget_id")
+    private Long departmentBudgetId;
+
     @Column(name = "entry_type")
     private String entryType;
 
@@ -40,6 +44,9 @@ public class BudgetEntry extends BaseProcurementEntity {
 
     public Long getPackageId() { return packageId; }
     public void setPackageId(Long packageId) { this.packageId = packageId; }
+
+    public Long getDepartmentBudgetId() { return departmentBudgetId; }
+    public void setDepartmentBudgetId(Long departmentBudgetId) { this.departmentBudgetId = departmentBudgetId; }
 
     public String getEntryType() { return entryType; }
     public void setEntryType(String entryType) { this.entryType = entryType; }

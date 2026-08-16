@@ -62,6 +62,39 @@ public class CaptureService {
     @Transactional
     public ExtractedField captureFromOcr(CaptureRequest req) {
         ExtractedField field = findOrCreate(req);
+        boolean ocrFoundSomething = req.rawValue != null && !req.rawValue.isBlank();
+
+        // Two things a re-read must never do to a value that already exists.
+        //
+        // An OCR pass that found nothing must not erase what is there. Re-uploading a
+        // document, or re-running OCR on a poor scan, would otherwise wipe good data and
+        // report it as missing - which is precisely what happened the first time this was
+        // driven end to end: four confirmed values were nulled by an extraction that read
+        // nothing at all.
+        if (!ocrFoundSomething && field.hasValue()) {
+            field.setValidationMessage("A later OCR pass found no value for this field; "
+                    + "the existing value has been kept");
+            log.debug("OCR found nothing for {} on entity {} - keeping the existing value",
+                    req.fieldKey, req.entityId);
+            return fieldRepository.save(field);
+        }
+
+        // And a machine reading must not overrule a person. Once someone has confirmed a
+        // value, OCR may disagree with it but may not replace it: the confirmed value
+        // stands and the disagreement is flagged, so a misread cannot quietly undo a
+        // review (REQ-X3 - the verify screen is where OCR becomes trustworthy data).
+        if (isConfirmed(field)) {
+            if (ocrFoundSomething && !sameAsCurrent(field, req.rawValue)) {
+                field.setValidationState(ExtractedField.CONFLICT);
+                field.setValidationMessage("OCR now reads '" + req.rawValue.trim()
+                        + "' but this field was confirmed as '" + field.displayValue()
+                        + "'. The confirmed value has been kept - check the document.");
+                log.info("OCR conflict on {} (entity {}): confirmed '{}' vs OCR '{}'",
+                        req.fieldKey, req.entityId, field.displayValue(), req.rawValue.trim());
+            }
+            return fieldRepository.save(field);
+        }
+
         field.setCaptureSource(ExtractedField.SOURCE_OCR);
         field.setDocumentId(req.documentId);
         field.setOcrResultId(req.ocrResultId);
@@ -74,7 +107,7 @@ public class CaptureService {
         }
         applyParsedValue(field, req.rawValue);
 
-        if (req.rawValue == null || req.rawValue.isBlank()) {
+        if (!ocrFoundSomething) {
             // "missing" is a recorded fact, not an absent row (REQ-P8)
             field.setStatus(ExtractedField.OCR_SUGGESTED);
             field.setValidationState(ExtractedField.NOT_FOUND);
@@ -91,6 +124,25 @@ public class CaptureService {
         return fieldRepository.save(field);
     }
 
+    /** Has a person stood behind this value, by verifying it, correcting it or typing it? */
+    private static boolean isConfirmed(ExtractedField field) {
+        return ExtractedField.VERIFIED.equals(field.getStatus())
+                || ExtractedField.MANUAL_OVERRIDE.equals(field.getStatus());
+    }
+
+    /** Compares a fresh reading with what the field holds, ignoring incidental spacing. */
+    private static boolean sameAsCurrent(ExtractedField field, String rawValue) {
+        String current = field.displayValue();
+        if (current == null || rawValue == null) {
+            return false;
+        }
+        return normalizeForComparison(current).equals(normalizeForComparison(rawValue));
+    }
+
+    private static String normalizeForComparison(String s) {
+        return s.trim().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT);
+    }
+
     /**
      * Record a value typed by a user. Manual entry is trusted, so it is confirmed on
      * arrival - there is nothing for the user to verify against.
@@ -102,12 +154,18 @@ public class CaptureService {
         String before = existed ? field.displayValue() : null;
         String beforeStatus = field.getStatus();
 
+        // Read the previous source before overwriting it, otherwise the check below is
+        // asking whether MANUAL equals OCR and correcting an OCR reading is recorded as a
+        // plain verification rather than an override
+        boolean correctingAnOcrReading =
+                existed && ExtractedField.SOURCE_OCR.equals(field.getCaptureSource());
+
         field.setCaptureSource(ExtractedField.SOURCE_MANUAL);
         if (field.getRawValue() == null) {
             field.setRawValue(req.rawValue);
         }
         applyParsedValue(field, req.rawValue);
-        field.setStatus(existed && ExtractedField.SOURCE_OCR.equals(field.getCaptureSource())
+        field.setStatus(correctingAnOcrReading
                 ? ExtractedField.MANUAL_OVERRIDE : ExtractedField.VERIFIED);
         field.setValidationState(ExtractedField.VALID);
         field.setValidationMessage(null);
@@ -117,6 +175,42 @@ public class CaptureService {
         ExtractedField saved = fieldRepository.save(field);
         appendHistory(saved, before, saved.displayValue(), beforeStatus, saved.getStatus(),
                 userId, req.reason == null ? "Manual entry" : req.reason);
+        return saved;
+    }
+
+    /**
+     * Record a value read out of an imported file — today, the APP workbook at Stage 1.
+     *
+     * Treated as confirmed on arrival, like manual entry and for the same reason: a
+     * spreadsheet cell is read exactly, not guessed at, and the value is the client's own
+     * approved plan rather than a machine's opinion of a scan. Asking someone to re-verify
+     * 28 fields that were parsed deterministically would be busywork, and busywork is how
+     * verification screens stop being read.
+     *
+     * The origin — which sheet and row it came from — is carried in the history reason, so
+     * an imported value can still be traced back to the file it came from.
+     */
+    @Transactional
+    public ExtractedField captureImported(CaptureRequest req, Long userId) {
+        ExtractedField field = findOrCreate(req);
+        boolean existed = field.getId() != null;
+        String before = existed ? field.displayValue() : null;
+        String beforeStatus = field.getStatus();
+
+        field.setCaptureSource(ExtractedField.SOURCE_IMPORT);
+        if (field.getRawValue() == null) {
+            field.setRawValue(req.rawValue);
+        }
+        applyParsedValue(field, req.rawValue);
+        field.setStatus(ExtractedField.VERIFIED);
+        field.setValidationState(ExtractedField.VALID);
+        field.setValidationMessage(null);
+        field.setVerifiedBy(userId);
+        field.setVerifiedAt(LocalDateTime.now());
+
+        ExtractedField saved = fieldRepository.save(field);
+        appendHistory(saved, before, saved.displayValue(), beforeStatus, saved.getStatus(),
+                userId, req.reason == null ? "Imported" : req.reason);
         return saved;
     }
 

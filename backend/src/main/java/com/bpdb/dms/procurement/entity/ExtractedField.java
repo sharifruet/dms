@@ -38,6 +38,12 @@ public class ExtractedField extends BaseProcurementEntity {
     public static final String NEEDS_REVIEW = "NEEDS_REVIEW";
     public static final String NOT_FOUND = "NOT_FOUND";
     public static final String INVALID = "INVALID";
+    /**
+     * A later OCR pass read something different from the value a person confirmed.
+     * The confirmed value is kept and this flags the disagreement for review - neither
+     * reading is thrown away, and neither silently wins.
+     */
+    public static final String CONFLICT = "CONFLICT";
 
     @Column(name = "entity_type", nullable = false)
     private String entityType;

@@ -15,6 +15,7 @@ import com.bpdb.dms.procurement.entity.Invoice;
 import com.bpdb.dms.procurement.entity.LetterOfCredit;
 import com.bpdb.dms.procurement.entity.Noa;
 import com.bpdb.dms.procurement.entity.Payment;
+import com.bpdb.dms.procurement.entity.ProcurementMasterList;
 import com.bpdb.dms.procurement.entity.PerformanceSecurity;
 import com.bpdb.dms.procurement.entity.Tender;
 import com.bpdb.dms.procurement.entity.TenderOpening;
@@ -27,7 +28,9 @@ import com.bpdb.dms.procurement.repository.EvaluationRepository;
 import com.bpdb.dms.procurement.repository.InvoiceRepository;
 import com.bpdb.dms.procurement.repository.LetterOfCreditRepository;
 import com.bpdb.dms.procurement.repository.NoaRepository;
+import com.bpdb.dms.procurement.repository.ExtractedFieldRepository;
 import com.bpdb.dms.procurement.repository.PaymentRepository;
+import com.bpdb.dms.procurement.repository.ProcurementPackageRepository;
 import com.bpdb.dms.procurement.repository.PerformanceSecurityRepository;
 import com.bpdb.dms.procurement.repository.TenderOpeningRepository;
 import com.bpdb.dms.procurement.repository.TenderRepository;
@@ -55,6 +58,9 @@ public class ValidationService {
     private final DeliveryRepository deliveryRepository;
     private final InvoiceRepository invoiceRepository;
     private final PaymentRepository paymentRepository;
+    private final MasterListService masterListService;
+    private final ProcurementPackageRepository packageRepository;
+    private final ExtractedFieldRepository fieldRepository;
 
     public ValidationService(TenderRepository tenderRepository,
                              TenderOpeningRepository openingRepository,
@@ -68,7 +74,10 @@ public class ValidationService {
                              LetterOfCreditRepository lcRepository,
                              DeliveryRepository deliveryRepository,
                              InvoiceRepository invoiceRepository,
-                             PaymentRepository paymentRepository) {
+                             PaymentRepository paymentRepository,
+                             MasterListService masterListService,
+                             ProcurementPackageRepository packageRepository,
+                             ExtractedFieldRepository fieldRepository) {
         this.tenderRepository = tenderRepository;
         this.openingRepository = openingRepository;
         this.evaluationRepository = evaluationRepository;
@@ -82,6 +91,9 @@ public class ValidationService {
         this.deliveryRepository = deliveryRepository;
         this.invoiceRepository = invoiceRepository;
         this.paymentRepository = paymentRepository;
+        this.masterListService = masterListService;
+        this.packageRepository = packageRepository;
+        this.fieldRepository = fieldRepository;
     }
 
     /** Hard errors for a stage - these block completion. */
@@ -103,6 +115,8 @@ public class ValidationService {
     public List<String> warningsForStage(Long packageId, short stageCode) {
         List<String> warnings = new ArrayList<>();
         switch (stageCode) {
+            case 1 -> warnCapturedPackageNumberDiffers(packageId, warnings);
+            case 2 -> warnUnmatchedMasterListValues(packageId, warnings);
             case 4 -> warnBidderCount(packageId, warnings);
             case 7 -> warnPerformanceSecurity(packageId, warnings);
             case 9 -> warnLcAgainstContract(packageId, warnings);
@@ -115,7 +129,7 @@ public class ValidationService {
     // -------------------------------------------------------------- hard rules
 
     private void validateTender(Long packageId, List<String> errors) {
-        tenderRepository.findByPackageId(packageId).ifPresent(t -> {
+        tenderRepository.findByPackageIdAndIsCurrentTrue(packageId).ifPresent(t -> {
             if (t.getOpeningDate() != null && t.getClosingDate() != null
                     && t.getOpeningDate().isAfter(t.getClosingDate())) {
                 errors.add("Opening Date is after Closing Date (REQ-2.2)");
@@ -179,10 +193,15 @@ public class ValidationService {
         BigDecimal billed = invoices.stream()
                 .map(i -> i.getInvoiceAmount() == null ? BigDecimal.ZERO : i.getInvoiceAmount())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        if (c.getContractValue() != null && billed.compareTo(c.getContractValue()) > 0) {
-            errors.add("Cumulative invoiced amount " + billed.toPlainString()
-                    + " exceeds the contract value " + c.getContractValue().toPlainString()
-                    + " - an authorised override is required (REQ-13.3)");
+        if (overBilled(c, billed)) {
+            errors.add(overBillingMessage(c, billed));
+        }
+        for (Invoice i : invoices) {
+            if (mismatchedCurrency(c, i.getCurrency())) {
+                errors.add("Invoice " + i.getInvoiceNumber() + " is in " + i.getCurrency()
+                        + " but the contract is in " + c.getCurrency()
+                        + " - a package is single-currency (REQ-B7)");
+            }
         }
     }
 
@@ -199,10 +218,18 @@ public class ValidationService {
                 .map(i -> i.getInvoiceAmount() == null ? BigDecimal.ZERO : i.getInvoiceAmount())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         if (paid.compareTo(billed) > 0) {
+            // Hard block, consistent with over-billing: a payment cannot settle more than
+            // the invoice it is attached to (Q-12, REQ-14.2)
             errors.add("Cumulative payments " + paid.toPlainString()
-                    + " exceed the invoiced total " + billed.toPlainString() + " (REQ-14.2)");
+                    + " exceed the invoiced total " + billed.toPlainString()
+                    + " - over-payment is not permitted (REQ-14.2)");
         }
         for (Payment p : paymentRepository.findByContractId(c.getId())) {
+            if (mismatchedCurrency(c, p.getCurrency())) {
+                errors.add("Payment " + p.getVoucherNumber() + " is in " + p.getCurrency()
+                        + " but the contract is in " + c.getCurrency()
+                        + " - a package is single-currency (REQ-B7)");
+            }
             if (p.getPaymentDate() == null) {
                 continue;
             }
@@ -218,8 +245,63 @@ public class ValidationService {
 
     // ------------------------------------------------------------ soft rules
 
+    /**
+     * The Package Number read from the APP against the one the package carries.
+     *
+     * <p>The package keeps its own number — it is the key every stage, document, budget
+     * line and expiry tracker hangs off, and renaming it silently would cut all of them
+     * adrift. But a document that says something different is worth knowing about: either
+     * the reading is wrong or the document belongs to another package.
+     */
+    private void warnCapturedPackageNumberDiffers(Long packageId, List<String> warnings) {
+        packageRepository.findById(packageId).ifPresent(pkg -> {
+            if (pkg.getPackageNumber() == null) {
+                return;
+            }
+            fieldRepository.findByPackageIdAndStageCode(packageId, (short) 1).stream()
+                    .filter(f -> "package_number".equals(f.getFieldKey()))
+                    .filter(f -> f.displayValue() != null)
+                    .filter(f -> !pkg.getPackageNumber().trim()
+                            .equalsIgnoreCase(f.displayValue().trim()))
+                    .findFirst()
+                    .ifPresent(f -> warnings.add(
+                            "The document reads Package Number '" + f.displayValue()
+                            + "' but this package is '" + pkg.getPackageNumber()
+                            + "'. The package keeps its number - check the document belongs here."));
+        });
+    }
+
+    /**
+     * Procurement Type, Method and Nature against the permitted lists (Q-8, REQ-2.4).
+     *
+     * <p>A warning rather than an error, exactly as the requirement words it: unmatched
+     * values are "flagged for manual selection rather than accepted silently". Blocking
+     * the stage because a tender notice worded something differently would push people
+     * out of the system, which costs more than the inconsistency does.
+     */
+    private void warnUnmatchedMasterListValues(Long packageId, List<String> warnings) {
+        tenderRepository.findByPackageIdAndIsCurrentTrue(packageId).ifPresent(tender -> {
+            checkAgainstList(ProcurementMasterList.PROCUREMENT_TYPE, "Procurement Type",
+                    tender.getProcurementType(), warnings);
+            checkAgainstList(ProcurementMasterList.PROCUREMENT_METHOD, "Procurement Method",
+                    tender.getProcurementMethod(), warnings);
+            checkAgainstList(ProcurementMasterList.PROCUREMENT_NATURE, "Procurement Nature",
+                    tender.getProcurementNature(), warnings);
+        });
+    }
+
+    private void checkAgainstList(String listKey, String label, String captured,
+                                  List<String> warnings) {
+        if (captured == null || captured.isBlank()) {
+            return; // absence is the field gate's business, not this one
+        }
+        if (!masterListService.isPermitted(listKey, captured)) {
+            warnings.add(label + ": " + masterListService.unmatchedMessage(listKey, captured));
+        }
+    }
+
     private void warnBidderCount(Long packageId, List<String> warnings) {
-        Optional<Tender> tender = tenderRepository.findByPackageId(packageId);
+        Optional<Tender> tender = tenderRepository.findByPackageIdAndIsCurrentTrue(packageId);
         if (tender.isEmpty()) {
             return;
         }
@@ -276,11 +358,50 @@ public class ValidationService {
         });
     }
 
+    // ------------------------------------------------- ceilings and currency
+
+    /**
+     * Would this billing total breach the contract value?
+     *
+     * Over-billing is not permitted (client answer Q-12): there is no tolerance band and
+     * no override role. Where a genuine increase is needed - price variation, taxes, a
+     * scope change - the contract value is revised at Stage 8 with its own document trail
+     * and the invoice is then accepted against the revised figure.
+     */
+    public boolean overBilled(Contract contract, BigDecimal cumulativeBilled) {
+        return contract.getContractValue() != null
+                && cumulativeBilled.compareTo(contract.getContractValue()) > 0;
+    }
+
+    /** Names the excess, so the user is told the size of the problem rather than just "no". */
+    public String overBillingMessage(Contract contract, BigDecimal cumulativeBilled) {
+        BigDecimal value = contract.getContractValue();
+        return "Cumulative invoiced amount " + cumulativeBilled.toPlainString()
+                + " exceeds the contract value " + value.toPlainString()
+                + " by " + cumulativeBilled.subtract(value).toPlainString()
+                + ". Over-billing is not permitted (REQ-13.3) - revise the contract value at"
+                + " Stage 8 first if the increase is genuine.";
+    }
+
+    /**
+     * One package, one currency (client answer Q-14). The contract fixes it at Stage 8 and
+     * every LC, invoice and payment below must agree. Nothing is converted - a differing
+     * currency is an error, not an FX problem.
+     */
+    public boolean mismatchedCurrency(Contract contract, String currency) {
+        return contract.getCurrency() != null && currency != null
+                && !contract.getCurrency().equalsIgnoreCase(currency);
+    }
+
     // -------------------------------------------------------------- helpers
 
     /**
-     * The contract for a package. A contract may span several packages (Q-1), so this
-     * resolves through the link table and prefers the row marked primary.
+     * The contract for a package.
+     *
+     * A contract covers exactly one package (client answer Q-1 - the "one contract across
+     * several APP packages" option was not selected). The link table remains because
+     * lot-wise tendering is where that requirement tends to appear later; this resolves
+     * through it and prefers the row marked primary.
      */
     public Optional<Contract> primaryContract(Long packageId) {
         return contractPackageRepository.findByPackageId(packageId).stream()

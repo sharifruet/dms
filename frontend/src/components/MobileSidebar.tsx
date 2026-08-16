@@ -76,6 +76,16 @@ const MobileSidebar: React.FC = () => {
     { label: 'Health', path: '/health', icon: <HealthIcon /> },
     { label: 'Users', path: '/users', icon: <UsersIcon />, role: 'ADMIN' },
     { label: 'Document Fields', path: '/document-type-fields', icon: <FieldsIcon />, role: 'ADMIN' },
+
+    // Kept until Phase 8 pilot sign-off (R-8), same as the desktop sidebar. Bill Entries
+    // is not retired at all - the finance module stays independent (Q-6).
+    { label: 'All Documents', path: '/documents', icon: <DocumentsIcon /> },
+    { label: 'Expiry Tracking', path: '/expiry-tracking', icon: <ExpiryIcon /> },
+    { label: 'Versions', path: '/versioning', icon: <VersioningIcon /> },
+    { label: 'Archive', path: '/archive', icon: <ArchiveIcon /> },
+    { label: 'APP Entries', path: '/app-entries', icon: <AppIcon /> },
+    { label: 'Bill Entries', path: '/bill-entries', icon: <BillIcon /> },
+    { label: 'Document Dashboard', path: '/dashboard', icon: <ReportsIcon /> },
   ];
 
   const filteredNavItems = navItems.filter(

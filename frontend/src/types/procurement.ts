@@ -13,7 +13,12 @@ export type CaptureSource = 'OCR' | 'MANUAL' | 'DERIVED' | 'IMPORT';
 
 export type FieldStatus = 'OCR_SUGGESTED' | 'VERIFIED' | 'MANUAL_OVERRIDE' | 'REJECTED';
 
-export type ValidationState = 'VALID' | 'NEEDS_REVIEW' | 'NOT_FOUND' | 'INVALID';
+/**
+ * CONFLICT: a later OCR pass read something different from the value a person confirmed.
+ * The confirmed value is kept; the disagreement is flagged so someone can check the
+ * document rather than either reading silently winning.
+ */
+export type ValidationState = 'VALID' | 'NEEDS_REVIEW' | 'NOT_FOUND' | 'INVALID' | 'CONFLICT';
 
 export interface ProcurementPackage {
   id: number;
@@ -52,11 +57,84 @@ export interface StageReadiness {
   stageName: string;
   status: StageStatus;
   applicable: boolean;
+  /**
+   * What the system derives this stage's applicability should be (Q-5, REQ-2.5).
+   * Stage 9 uses it to pre-set the LC toggle from the tender's Procurement Type: ICT
+   * suggests an LC is needed. It is a suggestion, not a lock.
+   */
+  applicabilitySuggested?: boolean;
   ready: boolean;
   blockers: string[];
   missingDocuments: string[];
   unconfirmedFields: string[];
   validationErrors: string[];
+}
+
+/**
+ * One tender attempt. A failed tender is re-tendered under the same package rather than
+ * being edited or replaced, so a package may hold several (Q-2, REQ-L14).
+ */
+export interface Tender {
+  id: number;
+  packageId: number;
+  attemptNo: number;
+  isCurrent: boolean;
+  failureReason?: string;
+  procurementType?: string;
+  procurementMethod?: string;
+  procurementNature?: string;
+  openingDate?: string;
+  closingDate?: string;
+  tenderValidityDays?: number;
+  tenderValidityDate?: string;
+}
+
+/** A department's annual budget, which package allocations draw down (Q-13, REQ-B0). */
+export interface DepartmentBudget {
+  id?: number;
+  fiscalYear: number;
+  department: string;
+  allocatedAmount: number;
+  currency?: string;
+  notes?: string;
+  approvedBy?: number;
+  approvedAt?: string;
+}
+
+/** How much of a department's annual budget its packages have committed. */
+export interface DepartmentBudgetPosition {
+  fiscalYear?: number;
+  department?: string;
+  departmentBudgetId?: number;
+  currency: string;
+  allocated: number;
+  committed: number;
+  remaining: number;
+  overCommitted: boolean;
+}
+
+/** One row's fate during an APP import, with enough context to find it in the sheet. */
+export interface AppImportOutcome {
+  origin: string;
+  packageNumber?: string;
+  reason: string;
+}
+
+/** What an APP import did (REQ-1.1). A dry run reports identically but writes nothing. */
+export interface AppImportReport {
+  dryRun: boolean;
+  fiscalYear?: number;
+  profileName?: string;
+  rowsRead: number;
+  skippedSheets: string[];
+  created: AppImportOutcome[];
+  skipped: AppImportOutcome[];
+  failed: AppImportOutcome[];
+  warnings: AppImportOutcome[];
+  createdCount: number;
+  skippedCount: number;
+  failedCount: number;
+  clean: boolean;
 }
 
 export interface ExtractedField {

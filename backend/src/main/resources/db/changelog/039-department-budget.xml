@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+      Client answer Q-13 (2026-08-13): budget is allocated ANNUALLY AT DEPARTMENT LEVEL
+      and drawn down per package. As built, budget_entry was package-scoped only, with no
+      departmental layer above it (REQ-B0).
+
+      Revision approval is a plain permission check, not a routed workflow - so this adds
+      approver columns, not an approval state machine.
+    -->
+
+    <changeSet id="039-001" author="dms">
+        <comment>Q-13: annual departmental budget, drawn down per package</comment>
+        <createTable tableName="department_budget">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_department_budget"/>
+            </column>
+            <column name="fiscal_year" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="department" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="allocated_amount" type="NUMERIC(18,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="currency" type="VARCHAR(3)" defaultValue="BDT"/>
+            <column name="notes" type="TEXT"/>
+            <column name="approved_by" type="BIGINT"/>
+            <column name="approved_at" type="TIMESTAMP"/>
+            <column name="created_by" type="BIGINT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addUniqueConstraint tableName="department_budget" columnNames="fiscal_year, department"
+                             constraintName="uk_dept_budget_year_dept"/>
+        <rollback><dropTable tableName="department_budget"/></rollback>
+    </changeSet>
+
+    <changeSet id="039-002" author="dms">
+        <comment>Q-13: a package allocation records which departmental budget it draws down</comment>
+        <addColumn tableName="budget_entry">
+            <column name="department_budget_id" type="BIGINT"/>
+        </addColumn>
+        <addForeignKeyConstraint baseTableName="budget_entry" baseColumnNames="department_budget_id"
+                                 constraintName="fk_budget_entry_dept_budget"
+                                 referencedTableName="department_budget" referencedColumnNames="id"
+                                 onDelete="SET NULL"/>
+        <createIndex tableName="budget_entry" indexName="idx_budget_entry_dept_budget">
+            <column name="department_budget_id"/>
+        </createIndex>
+        <rollback>
+            <dropColumn tableName="budget_entry" columnName="department_budget_id"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

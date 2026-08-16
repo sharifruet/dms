@@ -29,9 +29,11 @@ public class ProcurementExpiryService {
 
     private static final Logger log = LoggerFactory.getLogger(ProcurementExpiryService.class);
 
-    /** Entity types that carry a tracked expiry, mapped to the matrix rows E-1..E-6. */
+    /**
+     * Entity types that carry a tracked expiry, mapped to the matrix rows E-1..E-6.
+     * E-2 (Bid Security) is absent by design: bid security is out of scope (Q-4).
+     */
     public static final String TENDER = "TENDER";
-    public static final String BID_SECURITY = "BID_SECURITY";
     public static final String PERFORMANCE_SECURITY = "PERFORMANCE_SECURITY";
     public static final String LETTER_OF_CREDIT = "LETTER_OF_CREDIT";
     public static final String CONTRACT = "CONTRACT";
@@ -160,7 +162,7 @@ public class ProcurementExpiryService {
     private ExpiryType mapType(String entityType) {
         return switch (entityType) {
             case TENDER -> ExpiryType.OTHER;
-            case BID_SECURITY, PERFORMANCE_SECURITY -> ExpiryType.BANK_GUARANTEE;
+            case PERFORMANCE_SECURITY -> ExpiryType.BANK_GUARANTEE;
             case LETTER_OF_CREDIT -> ExpiryType.LETTER_OF_CREDIT;
             case CONTRACT -> ExpiryType.CONTRACT;
             case WARRANTY -> ExpiryType.WARRANTY;

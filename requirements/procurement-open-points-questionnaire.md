@@ -33,11 +33,11 @@ Each question gives: what we assumed, why it matters, and what it costs to chang
 
 **Please confirm one:**
 - [ ] One APP line always produces exactly one package (our assumption)
-- [ ] One APP line may be split into multiple packages/lots
+- [X] One APP line may be split into multiple packages/lots
 - [ ] One contract may cover several APP packages
 - [ ] Both of the above
 
-**Answer:** Both of the above
+**Answer:** One APP line may be split into multiple packages/lots
 
 ---
 
@@ -48,11 +48,11 @@ Each question gives: what we assumed, why it matters, and what it costs to chang
 **Why it matters:** re-tendering is common. We need to know whether the second tender is a new Tender record under the *same* package (preserving budget and APP linkage, with tender history) or an entirely new package. This changes the tender-to-package cardinality and the stage rework rules.
 
 **Please confirm one:**
-- [ ] New Tender record under the same package, previous tender retained as history
+- [X] New Tender record under the same package, previous tender retained as history
 - [ ] Entirely new package
 - [ ] Other (describe)
 
-**Answer:** 
+**Answer:** New Tender record under the same package, previous tender retained as history
 
 ---
 
@@ -63,10 +63,10 @@ Each question gives: what we assumed, why it matters, and what it costs to chang
 **Why it matters:** the source matrix lists *Bidder Name* and *Bidding Price* under Stage 3. Under our design those values do not exist in the system between bid opening and BER upload — a gap that can be days or weeks. If anyone needs to query bidders during that window, we must add bidder records back at Stage 3.
 
 **Please confirm one:**
-- [ ] Correct — bidder data is only needed once the BER exists (our current design)
+- [X] Correct — bidder data is only needed once the BER exists (our current design)
 - [ ] We need bidder names and prices visible from Tender Opening, before the BER
 
-**Answer:**
+**Answer:**  Correct — bidder data is only needed once the BER exists (our current design)
 
 ---
 
@@ -80,7 +80,7 @@ Each question gives: what we assumed, why it matters, and what it costs to chang
 - Bid Security tracked for: [ ] all bidders  [ ] responsive bidders only  [ ] awarded bidder only
 - Who records its release, and at which stage?
 
-**Answer:**
+**Answer:** Bid Security stuffs are out of scope of this application
 
 ---
 
@@ -94,7 +94,8 @@ Each question gives: what we assumed, why it matters, and what it costs to chang
 - Which contract categories require an LC?
 - Does marking a stage Not Applicable need approval, or can any authorised user do it?
 
-**Answer:**
+**Answer:** ICT - International Compatible Tender may require LC. We can get this from Tender Notice document Procurement Type field contains the value such as ICT.
+ - Any authorised user do it
 
 ---
 
@@ -107,9 +108,9 @@ Each question gives: what we assumed, why it matters, and what it costs to chang
 **Please confirm one:**
 - [ ] Keep the existing finance module; procurement invoices link to it (our assumption)
 - [ ] Replace it — procurement becomes the system of record for billing
-- [ ] Keep both independently (accepting duplicate entry)
+- [X] Keep both independently (accepting duplicate entry)
 
-**Answer:**
+**Answer:** Keep both independently (accepting duplicate entry)
 
 ---
 
@@ -119,7 +120,7 @@ Each question gives: what we assumed, why it matters, and what it costs to chang
 
 We need a sample APP Excel file and confirmation of its column layout, so package rows can be parsed reliably. Does the layout change between fiscal years?
 
-**Answer:** *(please attach a sample file)*
+**Answer:** APP 22-23 First Revision_2980.xls
 
 ---
 
@@ -127,7 +128,7 @@ We need a sample APP Excel file and confirmation of its column layout, so packag
 
 Please supply the permitted values for **Procurement Type**, **Procurement Method** and **Procurement Nature**. Values not on the list will be flagged for manual selection rather than accepted silently.
 
-**Answer:**
+**Answer:** Procurement Type: NCT|ICT, Procurement Method: OTM|LTM|RFQ|DPM, Procurement Nature: Service|Works|Goods
 
 ---
 
@@ -135,7 +136,7 @@ Please supply the permitted values for **Procurement Type**, **Procurement Metho
 
 *Deviation (%) with OCE* is extracted from the BER. Where does the OCE (Officially Certified Estimate) figure itself come from — is it in the BER, held elsewhere, or entered manually?
 
-**Answer:**
+**Answer:** Manual Input during BER upload
 
 ---
 
@@ -143,7 +144,7 @@ Please supply the permitted values for **Procurement Type**, **Procurement Metho
 
 Which inspections apply to which contract categories, and when is a SAT Report required? We currently support multiple inspection events per contract, each typed PDI or PLI.
 
-**Answer:**
+**Answer:** Keep as it is now
 
 ---
 
@@ -153,7 +154,7 @@ Which inspections apply to which contract categories, and when is a SAT Report r
 
 Is partial delivery allowed for all contract categories, or only some? Who declares a delivery final?
 
-**Answer:**
+**Answer:** For all contract categories. 
 
 ---
 
@@ -165,7 +166,7 @@ Is partial delivery allowed for all contract categories, or only some? Who decla
 - Is any tolerance permitted (e.g. price variation clauses, taxes pushing the total above contract value)?
 - Which role may override?
 
-**Answer:**
+**Answer:** Over-billing is not permitted for now
 
 ---
 
@@ -177,7 +178,7 @@ Is partial delivery allowed for all contract categories, or only some? Who decla
 - Is budget allocated annually at department level and drawn down per package, or allocated per package directly?
 - Who approves a Revised Budget, and does it need a workflow?
 
-**Answer:**
+**Answer:**  budget allocated annually at department level. Who approves a Revised Budget is not significant here. Anyone having aprover role or approver permission can approve. 
 
 ---
 
@@ -185,7 +186,7 @@ Is partial delivery allowed for all contract categories, or only some? Who decla
 
 Do contracts, LCs and invoices ever mix currencies within one package? If so, at what exchange rate do we compute budget consumption — rate on invoice date, rate on payment date, or a fixed contract rate? What is the rate source?
 
-**Answer:**
+**Answer:** NO, one package will not have multiple currency
 
 ---
 
@@ -204,6 +205,7 @@ For each tracked document, confirm the advance-warning intervals and who receive
 | Contract Agreement | Completion Date | | |
 | Warranty Certificate | Warranty End Date | | |
 
+Ans: Use some defaults and keep configurable.
 ---
 
 ### Q-16. Approval workflow engine
@@ -214,7 +216,7 @@ The DMS already has a general-purpose workflow engine. The procurement lifecycle
 
 Do you currently use the existing workflow engine for anything that must keep working?
 
-**Answer:**
+**Answer:** No current / existing workflow engine will no longer needed. You can revamp.
 
 ---
 
@@ -222,7 +224,7 @@ Do you currently use the existing workflow engine for anything that must keep wo
 
 Who may: enter a stage, complete a stage, override a validation, send a stage back for rework, and reopen a closed contract? Please map these to your existing DD1–DD4 roles or supply the intended roles.
 
-**Answer:**
+**Answer:** Create 2 roles maker and checker. Maker will enter and checker will approve everything. 
 
 ---
 
@@ -230,7 +232,7 @@ Who may: enter a stage, complete a stage, override a validation, send a stage ba
 
 How long must documents, OCR results and field-change history be retained? Closure archives but never deletes under our design.
 
-**Answer:**
+**Answer:** 1 year
 
 ---
 
@@ -238,7 +240,7 @@ How long must documents, OCR results and field-change history be retained? Closu
 
 Are procurement documents in English, Bangla, or mixed? This materially affects OCR accuracy and which engine configuration we use — it is the single biggest driver of how much manual correction your staff will face.
 
-**Answer:**
+**Answer:** English only
 
 ---
 
@@ -246,7 +248,7 @@ Are procurement documents in English, Bangla, or mixed? This materially affects 
 
 Which department should pilot the system, and roughly how many live packages would be in scope for the pilot?
 
-**Answer:**
+**Answer:** Keep only one department for now BPDB
 
 ---
 

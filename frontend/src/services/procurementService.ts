@@ -1,8 +1,11 @@
 import api from './api';
 import {
+  AppImportReport,
   BerBidder,
   BudgetEntry,
   Delivery,
+  DepartmentBudget,
+  DepartmentBudgetPosition,
   ExtractedField,
   ExtractedFieldHistory,
   InspectionEvent,
@@ -11,6 +14,7 @@ import {
   ProcurementPackage,
   StageDetail,
   StageReadiness,
+  Tender,
   UploadResult,
 } from '../types/procurement';
 
@@ -197,6 +201,26 @@ const procurementService = {
     return response.data;
   },
 
+  // ------------------------------------------------------------- re-tendering
+
+  /**
+   * Declare the current tender failed and open a fresh attempt under the same package
+   * (Q-2). The failed attempt keeps its documents, bidders and BER.
+   */
+  reTender: async (packageId: number, reason: string): Promise<Tender> => {
+    const response = await api.post(
+      `/procurement/packages/${packageId}/stages/2/re-tender`,
+      { reason },
+    );
+    return response.data;
+  },
+
+  /** Every tender attempt for the package, newest first. */
+  getTenderAttempts: async (packageId: number): Promise<Tender[]> => {
+    const response = await api.get(`/procurement/packages/${packageId}/stages/2/attempts`);
+    return response.data;
+  },
+
   // -------------------------------------------------------- budget and expiry
 
   getBudget: async (packageId: number): Promise<Record<string, any>> => {
@@ -206,6 +230,43 @@ const procurementService = {
 
   addBudgetEntry: async (packageId: number, entry: BudgetEntry): Promise<BudgetEntry> => {
     const response = await api.post(`/procurement/packages/${packageId}/budget`, entry);
+    return response.data;
+  },
+
+  /** The department's annual drawdown position - allocated, committed, remaining. */
+  getDepartmentBudget: async (
+    fiscalYear: number,
+    department: string,
+  ): Promise<DepartmentBudgetPosition> => {
+    const response = await api.get('/procurement/department-budgets', {
+      params: { fiscalYear, department },
+    });
+    return response.data;
+  },
+
+  /** Set a department's annual budget. Checker-only (Q-13, Q-17). */
+  saveDepartmentBudget: async (budget: DepartmentBudget): Promise<DepartmentBudget> => {
+    const response = await api.post('/procurement/department-budgets', budget);
+    return response.data;
+  },
+
+  // ------------------------------------------------------------- APP import
+
+  /**
+   * Create packages in bulk from an APP workbook (Stage 1, REQ-1.1).
+   * With dryRun the report is identical but nothing is written.
+   */
+  importApp: async (
+    file: File,
+    options: { department?: string; dryRun?: boolean } = {},
+  ): Promise<AppImportReport> => {
+    const form = new FormData();
+    form.append('file', file);
+    if (options.department) {
+      form.append('department', options.department);
+    }
+    form.append('dryRun', String(options.dryRun ?? false));
+    const response = await api.post('/procurement/packages/import-app', form);
     return response.data;
   },
 

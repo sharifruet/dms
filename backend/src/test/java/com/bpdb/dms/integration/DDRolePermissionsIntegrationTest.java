@@ -6,7 +6,7 @@ import com.bpdb.dms.repository.RoleRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureWebMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * End-to-end integration tests for DD1-DD4 role upload permissions
  */
 @SpringBootTest
-@AutoConfigureWebMvc
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
 class DDRolePermissionsIntegrationTest {
@@ -33,6 +33,9 @@ class DDRolePermissionsIntegrationTest {
 
     @Autowired
     private RoleRepository roleRepository;
+
+    @Autowired
+    private com.bpdb.dms.repository.UserRepository userRepository;
 
     @BeforeEach
     void setUp() {
@@ -68,10 +71,30 @@ class DDRolePermissionsIntegrationTest {
             role.setIsActive(true);
             return roleRepository.save(role);
         });
+
+        // The upload endpoint resolves the authenticated principal against the user table,
+        // so @WithMockUser alone is not enough - each dd*user must actually exist.
+        ensureUser("dd1user", RoleType.DD1);
+        ensureUser("dd2user", RoleType.DD2);
+        ensureUser("dd3user", RoleType.DD3);
+        ensureUser("dd4user", RoleType.DD4);
+    }
+
+    private void ensureUser(String username, RoleType roleType) {
+        if (userRepository.findByUsername(username).isPresent()) {
+            return;
+        }
+        com.bpdb.dms.entity.User user = new com.bpdb.dms.entity.User();
+        user.setUsername(username);
+        user.setEmail(username + "@example.com");
+        user.setPassword("password");
+        user.setIsActive(true);
+        user.setRole(com.bpdb.dms.support.TestRoles.ensure(roleRepository, roleType));
+        userRepository.save(user);
     }
 
     @Test
-    @WithMockUser(username = "dd1user", roles = "DD1")
+    @WithMockUser(username = "dd1user", authorities = {"ROLE_DD1", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD"})
     void dd1User_CanUploadDocument() throws Exception {
         MockMultipartFile file = new MockMultipartFile(
             "file",
@@ -88,7 +111,7 @@ class DDRolePermissionsIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "dd2user", roles = "DD2")
+    @WithMockUser(username = "dd2user", authorities = {"ROLE_DD2", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD"})
     void dd2User_CanUploadDocument() throws Exception {
         MockMultipartFile file = new MockMultipartFile(
             "file",
@@ -105,7 +128,7 @@ class DDRolePermissionsIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "dd3user", roles = "DD3")
+    @WithMockUser(username = "dd3user", authorities = {"ROLE_DD3", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD"})
     void dd3User_CanUploadDocument() throws Exception {
         MockMultipartFile file = new MockMultipartFile(
             "file",
@@ -122,7 +145,7 @@ class DDRolePermissionsIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "dd4user", roles = "DD4")
+    @WithMockUser(username = "dd4user", authorities = {"ROLE_DD4", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD"})
     void dd4User_CanUploadDocument() throws Exception {
         MockMultipartFile file = new MockMultipartFile(
             "file",
@@ -139,7 +162,7 @@ class DDRolePermissionsIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "dd1user", roles = "DD1")
+    @WithMockUser(username = "dd1user", authorities = {"ROLE_DD1", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD"})
     void dd1User_CanReprocessOCR() throws Exception {
         // This test verifies DD1-DD4 can access OCR reprocessing endpoint
         // The endpoint should be accessible (may return 404 if document doesn't exist, which is acceptable)

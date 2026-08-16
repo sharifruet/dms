@@ -25,7 +25,9 @@ public class Product {
     @Column(name = "model", length = 150)
     private String model;
 
-    @Column(name = "specs_json", columnDefinition = "jsonb")
+    // JSONB in the real schema (010-create-asset-management.xml); see the note on
+    // Asset.customJson for why the type is not repeated here.
+    @Column(name = "specs_json")
     private String specsJson;
 
     @Column(name = "default_warranty_months")

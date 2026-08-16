@@ -79,14 +79,46 @@ public class SecurityConfig {
                 // Search endpoints
                 .requestMatchers("/api/search/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
 
-                // Procurement lifecycle. Reading is open to any authenticated role;
-                // capturing, completing stages and posting budget are officer actions.
+                // Procurement lifecycle - Maker / Checker (client answer Q-17, REQ-X4).
+                // The Maker captures; the Checker approves. Matchers are ordered most
+                // specific first, because Spring Security takes the first one that matches.
+                //
+                // Gated on permissions rather than role names on purpose. A user holds
+                // exactly one role, so naming MAKER and CHECKER here would force every
+                // existing OFFICER or DD account to give up the role that grants its
+                // document access before it could open a package. Changeset 042 grants the
+                // capture permissions to those roles instead, so both can be true at once.
+                //
+                // Approval: completing a stage, declaring it Not Applicable, sending it
+                // back for rework, opening a new tender attempt, and setting budget.
+                .requestMatchers(HttpMethod.POST, "/api/procurement/packages/*/stages/*/complete")
+                    .hasAuthority(PermissionConstants.PROCUREMENT_VERIFY)
+                .requestMatchers(HttpMethod.POST, "/api/procurement/packages/*/stages/*/not-applicable")
+                    .hasAuthority(PermissionConstants.PROCUREMENT_OVERRIDE)
+                .requestMatchers(HttpMethod.POST, "/api/procurement/packages/*/stages/*/rework")
+                    .hasAuthority(PermissionConstants.PROCUREMENT_OVERRIDE)
+                .requestMatchers(HttpMethod.POST, "/api/procurement/packages/*/stages/2/re-tender")
+                    .hasAuthority(PermissionConstants.PROCUREMENT_OVERRIDE)
+                // Declaring a delivery final closes the delivery set and unblocks the
+                // stage, so it is an approval rather than data entry (REQ-12.5)
+                .requestMatchers(HttpMethod.POST, "/api/procurement/packages/*/stages/12/deliveries/*/final")
+                    .hasAuthority(PermissionConstants.PROCUREMENT_VERIFY)
+                .requestMatchers(HttpMethod.POST, "/api/procurement/packages/*/stages/12/deliveries/*/reopen")
+                    .hasAuthority(PermissionConstants.PROCUREMENT_OVERRIDE)
+                .requestMatchers(HttpMethod.POST, "/api/procurement/packages/*/budget")
+                    .hasAuthority(PermissionConstants.BUDGET_APPROVE)
+                .requestMatchers(HttpMethod.POST, "/api/procurement/department-budgets")
+                    .hasAuthority(PermissionConstants.BUDGET_APPROVE)
+                // Deleting retained history is an administrator's act, not a Checker's
+                // (REQ-P17). Nothing else in procurement destroys anything.
+                .requestMatchers(HttpMethod.POST, "/api/procurement/retention/purge")
+                    .hasRole("ADMIN")
+                // Reading is open to anyone who can see the module at all
                 .requestMatchers(HttpMethod.GET, "/api/procurement/**")
-                    .hasAnyRole("ADMIN", "OFFICER", "VIEWER", "DD1", "DD2", "DD3", "DD4")
-                .requestMatchers(HttpMethod.POST, "/api/procurement/documents/upload")
-                    .hasAnyRole("ADMIN", "OFFICER", "DD1", "DD2", "DD3", "DD4")
+                    .hasAuthority(PermissionConstants.PROCUREMENT_VIEW)
+                // Everything else under procurement is capture, which a Maker may do
                 .requestMatchers("/api/procurement/**")
-                    .hasAnyRole("ADMIN", "OFFICER", "DD1", "DD2", "DD3", "DD4")
+                    .hasAuthority(PermissionConstants.PROCUREMENT_CAPTURE)
                 // User management endpoints
                 .requestMatchers("/api/users/**").hasAuthority(PermissionConstants.USER_MANAGEMENT)
                 .requestMatchers("/api/roles/**").hasAuthority(PermissionConstants.USER_MANAGEMENT)

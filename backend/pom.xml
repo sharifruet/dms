@@ -19,9 +19,30 @@
     <description>Document Management System Backend</description>
 
     <properties>
+        <!--
+          Toolchain is JDK 25; emitted bytecode is Java 21.
+
+          Spring Framework 6.1.1 (the version Boot 3.2.0 pins) bundles an ASM that cannot
+          parse class file major 69, so compiling to 25 makes component scanning fail with
+          "ASM ClassReader failed to parse class file" on every @SpringBootTest. Targeting
+          21 keeps the whole suite working while still building and running on JDK 25.
+
+          To emit Java 25 bytecode, Spring Boot has to move to 3.5.x (Spring Framework
+          6.2+), which also pulls in new Hibernate and Spring Security majors - a separate,
+          deliberate upgrade rather than a compiler flag.
+        -->
         <java.version>21</java.version>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <maven.compiler.release>21</maven.compiler.release>
+
+        <!--
+          Spring Boot 3.2.0 pins Mockito 5.7 / Byte Buddy 1.14, which refuse to
+          instrument classes on a JVM they predate - every @MockBean test fails with
+          "Mockito cannot mock this class". These overrides lift both to versions that
+          know about Java 25. Remove them when the Spring Boot parent catches up.
+        -->
+        <byte-buddy.version>1.17.7</byte-buddy.version>
+        <mockito.version>5.20.0</mockito.version>
+        <testcontainers.version>1.19.8</testcontainers.version>
     </properties>
 
     <dependencies>
@@ -194,7 +215,26 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-        
+
+        <!--
+          A real PostgreSQL for the tests that need one. The rest of the suite runs on H2
+          with the schema generated from the entities, which by construction can never
+          disagree with them - so it cannot see a Liquibase changeset that has drifted.
+          Three defects reached a running system that way. See LiquibaseSchemaAgreementTest.
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>${testcontainers.version}</version>
+            <scope>test</scope>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
@@ -214,6 +254,42 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <!--
+                      Stated explicitly because com.bpdb.dms.util.TestProcurementExtraction
+                      also carries a main method, which left the plugin unable to choose:
+                      "Unable to find a single main class". Without this, `mvn spring-boot:run`
+                      fails outright - the application could not be started at all.
+                    -->
+                    <mainClass>com.bpdb.dms.DmsApplication</mainClass>
+                </configuration>
+            </plugin>
+
+            <!--
+              Mockito's inline mock maker needs a JVM agent. Left to itself it self-attaches,
+              which the JDK now warns about and will refuse outright in a future release.
+              Resolving the jar to a property and passing it as -javaagent is the supported
+              route, and it keeps the suite quiet.
+            -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>resolve-mockito-agent</id>
+                        <goals>
+                            <goal>properties</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <argLine>-javaagent:${org.mockito:mockito-core:jar} -Xshare:off</argLine>
+                </configuration>
             </plugin>
         </plugins>
     </build>

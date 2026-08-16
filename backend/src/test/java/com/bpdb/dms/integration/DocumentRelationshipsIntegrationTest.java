@@ -9,7 +9,7 @@ import com.bpdb.dms.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureWebMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
@@ -25,7 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * End-to-end integration tests for Document Relationships feature
  */
 @SpringBootTest
-@AutoConfigureWebMvc
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
 class DocumentRelationshipsIntegrationTest {
@@ -42,6 +42,11 @@ class DocumentRelationshipsIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+
+    @Autowired
+
+    private com.bpdb.dms.repository.RoleRepository roleRepository;
+
     private User testUser;
     private Document sourceDocument;
     private Document targetDocument;
@@ -53,6 +58,7 @@ class DocumentRelationshipsIntegrationTest {
         testUser.setUsername("testuser");
         testUser.setEmail("test@example.com");
         testUser.setPassword("password");
+        testUser.setRole(com.bpdb.dms.support.TestRoles.officer(roleRepository));
         testUser.setIsActive(true);
         testUser = userRepository.save(testUser);
 
@@ -76,7 +82,7 @@ class DocumentRelationshipsIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "OFFICER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_OFFICER", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD", "PERM_DOCUMENT_DELETE"})
     void createRelationship_IntegrationTest() throws Exception {
         // When & Then
         mockMvc.perform(post("/api/documents/" + sourceDocument.getId() + "/relationships")
@@ -90,9 +96,12 @@ class DocumentRelationshipsIntegrationTest {
                     """.formatted(targetDocument.getId()))
                 .with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.relationshipType").value("CONTRACT_TO_BG"))
-                .andExpect(jsonPath("$.sourceDocument.id").value(sourceDocument.getId()))
-                .andExpect(jsonPath("$.targetDocument.id").value(targetDocument.getId()));
+                // The endpoint answers with an envelope - {success, message, relationship}
+                // - so the relationship itself is one level down
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.relationship.relationshipType").value("CONTRACT_TO_BG"))
+                .andExpect(jsonPath("$.relationship.sourceDocument.id").value(sourceDocument.getId()))
+                .andExpect(jsonPath("$.relationship.targetDocument.id").value(targetDocument.getId()));
 
         // Verify relationship was created
         var relationships = relationshipRepository.findAllRelationshipsForDocument(sourceDocument);
@@ -100,7 +109,7 @@ class DocumentRelationshipsIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "VIEWER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_VIEWER", "PERM_DOCUMENT_VIEW"})
     void getRelationships_IntegrationTest() throws Exception {
         // Create a relationship first
         DocumentRelationship relationship = new DocumentRelationship();
@@ -118,7 +127,7 @@ class DocumentRelationshipsIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "OFFICER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_OFFICER", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD", "PERM_DOCUMENT_DELETE"})
     void deleteRelationship_IntegrationTest() throws Exception {
         // Create a relationship first
         DocumentRelationship relationship = new DocumentRelationship();

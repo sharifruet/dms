@@ -42,6 +42,12 @@ public class OCRService {
     @Value("${app.tesseract.data.path:/usr/share/tesseract-ocr/4.00/tessdata}")
     private String tesseractDataPath;
     
+    /**
+     * English only, by client decision (Q-19): all BPDB procurement documents are in
+     * English, so no Bangla language pack is provisioned and no mixed-script handling is
+     * attempted. A document that turns out to be in Bangla falls through to manual entry
+     * rather than being run through the wrong model.
+     */
     @Value("${app.tesseract.language:eng}")
     private String tesseractLanguage;
     

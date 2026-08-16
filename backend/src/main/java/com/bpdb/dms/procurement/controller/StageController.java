@@ -23,12 +23,14 @@ import com.bpdb.dms.procurement.entity.InspectionEvent;
 import com.bpdb.dms.procurement.entity.Invoice;
 import com.bpdb.dms.procurement.entity.PackageStage;
 import com.bpdb.dms.procurement.entity.Payment;
+import com.bpdb.dms.procurement.entity.Tender;
 import com.bpdb.dms.procurement.repository.ExtractedFieldRepository;
 import com.bpdb.dms.procurement.service.LinkageService;
 import com.bpdb.dms.procurement.service.ProcurementRecordService;
 import com.bpdb.dms.procurement.service.StageDataService;
 import com.bpdb.dms.procurement.service.StageDefinitionService;
 import com.bpdb.dms.procurement.service.StageEngine;
+import com.bpdb.dms.procurement.service.TenderService;
 import com.bpdb.dms.procurement.service.ValidationService;
 
 /**
@@ -45,6 +47,7 @@ public class StageController {
     private final ProcurementRecordService recordService;
     private final LinkageService linkageService;
     private final ValidationService validationService;
+    private final TenderService tenderService;
     private final ExtractedFieldRepository fieldRepository;
 
     public StageController(StageEngine stageEngine,
@@ -53,6 +56,7 @@ public class StageController {
                            ProcurementRecordService recordService,
                            LinkageService linkageService,
                            ValidationService validationService,
+                           TenderService tenderService,
                            ExtractedFieldRepository fieldRepository) {
         this.stageEngine = stageEngine;
         this.definitions = definitions;
@@ -60,6 +64,7 @@ public class StageController {
         this.recordService = recordService;
         this.linkageService = linkageService;
         this.validationService = validationService;
+        this.tenderService = tenderService;
         this.fieldRepository = fieldRepository;
     }
 
@@ -166,6 +171,29 @@ public class StageController {
         }
     }
 
+    // ------------------------------------------------------------- re-tendering
+
+    /**
+     * Declare the current tender failed and open a fresh attempt under the same package
+     * (Q-2, REQ-L14). The failed attempt keeps its documents, bidders and BER.
+     */
+    @PostMapping("/2/re-tender")
+    public ResponseEntity<?> reTender(@PathVariable Long packageId,
+                                      @RequestBody Map<String, String> body) {
+        try {
+            return ResponseEntity.ok(
+                    tenderService.reTender(packageId, body.get("reason"), CurrentUser.id()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** Every tender attempt for the package, newest first - the re-tender history. */
+    @GetMapping("/2/attempts")
+    public ResponseEntity<List<Tender>> tenderAttempts(@PathVariable Long packageId) {
+        return ResponseEntity.ok(tenderService.history(packageId));
+    }
+
     // ----------------------------------------------------------- repeating rows
 
     @PutMapping("/4/bidders")
@@ -189,6 +217,36 @@ public class StageController {
                                           @RequestBody Delivery delivery) {
         try {
             return ResponseEntity.ok(recordService.saveDelivery(packageId, delivery));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Declare a delivery final, closing the delivery set (REQ-12.5).
+     *
+     * <p>Its own route rather than a flag on the delivery form, because it is an approval:
+     * it decides the goods are all in and unblocks the stage. Q-11 left who decides
+     * unstated, so it follows the Checker role of Q-17, enforced in SecurityConfig.
+     */
+    @PostMapping("/12/deliveries/{deliveryId}/final")
+    public ResponseEntity<?> declareDeliveryFinal(@PathVariable Long packageId,
+                                                  @PathVariable Long deliveryId) {
+        try {
+            return ResponseEntity.ok(
+                    recordService.declareFinal(packageId, deliveryId, CurrentUser.id()));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/12/deliveries/{deliveryId}/reopen")
+    public ResponseEntity<?> reopenDeliveries(@PathVariable Long packageId,
+                                              @PathVariable Long deliveryId,
+                                              @RequestBody Map<String, String> body) {
+        try {
+            return ResponseEntity.ok(recordService.reopenDeliveries(
+                    packageId, deliveryId, CurrentUser.id(), body.get("reason")));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

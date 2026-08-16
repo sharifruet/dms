@@ -47,4 +47,15 @@
     <include file="db/changelog/035-create-capture-store.xml"/>
     <include file="db/changelog/036-seed-field-catalogue.xml"/>
     <include file="db/changelog/037-align-audit-columns.xml"/>
+
+    <!-- Reconciliation against the 2026-08-13 client answers -->
+    <include file="db/changelog/038-retender-support.xml"/>
+    <include file="db/changelog/039-department-budget.xml"/>
+    <include file="db/changelog/040-client-answer-corrections.xml"/>
+
+    <!-- Found by running the lifecycle end to end against PostgreSQL -->
+    <include file="db/changelog/041-fix-missing-created-at.xml"/>
+    <include file="db/changelog/042-migrate-roles-to-maker-checker.xml"/>
+    <include file="db/changelog/043-fix-document-versions-drift.xml"/>
+    <include file="db/changelog/044-expiry-warning-state.xml"/>
 </databaseChangeLog>

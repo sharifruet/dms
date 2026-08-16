@@ -36,7 +36,10 @@ public class Asset {
     @Column(name = "acquisition_cost", precision = 12, scale = 2)
     private BigDecimal acquisitionCost;
 
-    @Column(name = "custom_json", columnDefinition = "jsonb")
+    // The real column is JSONB, declared in 010-create-asset-management.xml. Repeating
+    // the PostgreSQL type here only affects Hibernate's own DDL generation, which is used
+    // solely by tests on H2 - and H2 has no JSONB, so it made single-class test runs fail.
+    @Column(name = "custom_json")
     private String customJson;
 
     public Long getId() {

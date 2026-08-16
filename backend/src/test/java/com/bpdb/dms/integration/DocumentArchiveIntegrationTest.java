@@ -7,7 +7,7 @@ import com.bpdb.dms.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureWebMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
@@ -25,7 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * End-to-end integration tests for Document Archive and Restore feature
  */
 @SpringBootTest
-@AutoConfigureWebMvc
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
 class DocumentArchiveIntegrationTest {
@@ -39,6 +39,11 @@ class DocumentArchiveIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+
+    @Autowired
+
+    private com.bpdb.dms.repository.RoleRepository roleRepository;
+
     private User testUser;
     private Document testDocument;
 
@@ -49,6 +54,7 @@ class DocumentArchiveIntegrationTest {
         testUser.setUsername("testuser");
         testUser.setEmail("test@example.com");
         testUser.setPassword("password");
+        testUser.setRole(com.bpdb.dms.support.TestRoles.officer(roleRepository));
         testUser.setIsActive(true);
         testUser = userRepository.save(testUser);
 
@@ -64,7 +70,7 @@ class DocumentArchiveIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "OFFICER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_OFFICER", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD", "PERM_DOCUMENT_DELETE", "PERM_DOCUMENT_ARCHIVE", "PERM_DOCUMENT_EDIT"})
     void archiveDocument_IntegrationTest() throws Exception {
         // When & Then
         mockMvc.perform(post("/api/documents/" + testDocument.getId() + "/archive")
@@ -81,7 +87,7 @@ class DocumentArchiveIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "OFFICER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_OFFICER", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD", "PERM_DOCUMENT_DELETE", "PERM_DOCUMENT_ARCHIVE", "PERM_DOCUMENT_EDIT"})
     void restoreArchivedDocument_IntegrationTest() throws Exception {
         // Given - Archive document first
         testDocument.setIsArchived(true);
@@ -102,7 +108,7 @@ class DocumentArchiveIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "OFFICER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_OFFICER", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD", "PERM_DOCUMENT_DELETE", "PERM_DOCUMENT_ARCHIVE", "PERM_DOCUMENT_EDIT"})
     void deleteDocument_IntegrationTest() throws Exception {
         // When & Then
         mockMvc.perform(post("/api/documents/" + testDocument.getId() + "/delete")
@@ -119,7 +125,7 @@ class DocumentArchiveIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "VIEWER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_VIEWER", "PERM_DOCUMENT_VIEW"})
     void getArchivedDocuments_IntegrationTest() throws Exception {
         // Given - Create archived document
         Document archivedDoc = new Document();
@@ -142,7 +148,7 @@ class DocumentArchiveIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "VIEWER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_VIEWER", "PERM_DOCUMENT_VIEW"})
     void getArchiveStatistics_IntegrationTest() throws Exception {
         // When & Then
         mockMvc.perform(get("/api/documents/archive/statistics"))

@@ -18,7 +18,12 @@ import {
   Typography,
 } from '@mui/material';
 import procurementService from '../../services/procurementService';
-import { BudgetSummary } from '../../types/procurement';
+import {
+  BudgetSummary,
+  DepartmentBudget,
+  DepartmentBudgetPosition,
+} from '../../types/procurement';
+import useProcurementRole from '../../hooks/useProcurementRole';
 
 interface Props {
   packageId: number;
@@ -41,6 +46,9 @@ const BudgetPanel: React.FC<Props> = ({ packageId }) => {
   const [consumption, setConsumption] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, any>>({ entryType: 'ALLOCATION', currency: 'BDT' });
+  const [department, setDepartment] = useState<DepartmentBudget | null>(null);
+  const [position, setPosition] = useState<DepartmentBudgetPosition | null>(null);
+  const { canApprove } = useProcurementRole();
 
   const load = useCallback(async () => {
     try {
@@ -48,6 +56,9 @@ const BudgetPanel: React.FC<Props> = ({ packageId }) => {
       setSummary(data.summary);
       setEntries(data.entries || []);
       setConsumption(data.consumption || []);
+      // Present only once the department's annual budget for this fiscal year exists
+      setDepartment(data.departmentBudget || null);
+      setPosition(data.departmentPosition || null);
     } catch (e: any) {
       setError(e?.response?.data?.error || 'Could not load the budget');
     }
@@ -99,6 +110,48 @@ const BudgetPanel: React.FC<Props> = ({ packageId }) => {
         </Alert>
       )}
 
+      {/*
+        Q-13: budget is allocated annually at department level and drawn down per package.
+        Showing only the package figure hides whether there is anything left to draw from.
+      */}
+      {position && (
+        <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            {department?.department ?? position.department} — annual budget
+            {position.fiscalYear ? ` for FY ${position.fiscalYear}` : ''}
+          </Typography>
+          {position.overCommitted && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              Packages in this department have been allocated more than the annual budget
+              holds. This is a planning control rather than a payment gate — nothing is
+              blocked — but the figures no longer add up.
+            </Alert>
+          )}
+          <Grid container spacing={2}>
+            {tile('Department allocated', position.allocated)}
+            {tile('Committed to packages', position.committed)}
+            {tile(
+              'Left to draw down',
+              position.remaining,
+              position.overCommitted ? '#d32f2f' : '#2e7d32',
+            )}
+          </Grid>
+        </Paper>
+      )}
+
+      {!position && (
+        <Alert severity="info" sx={{ mb: 3 }}>
+          No annual budget is on file for this department and fiscal year, so there is
+          nothing for this package to draw down from.
+          {canApprove
+            ? ' Set one to track the departmental position.'
+            : ' A Checker can set one.'}
+        </Alert>
+      )}
+
+      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+        This package
+      </Typography>
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {tile('Allocation', summary?.totalAllocation)}
         {tile('Released', summary?.totalRelease)}
@@ -110,7 +163,8 @@ const BudgetPanel: React.FC<Props> = ({ packageId }) => {
         )}
       </Grid>
 
-      <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+      {/* Budget entry and approval are Checker actions (Q-13, Q-17) */}
+      <Paper variant="outlined" sx={{ p: 2, mb: 3, display: canApprove ? 'block' : 'none' }}>
         <Typography variant="subtitle2" sx={{ mb: 1 }}>Add a budget entry</Typography>
         <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center">
           <TextField

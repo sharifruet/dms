@@ -11,33 +11,53 @@ import java.io.FileInputStream;
 import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Standalone test class for OCRService to verify Tesseract OCR functionality
- * This test doesn't require full Spring Boot context
+ * This test doesn't require full Spring Boot context.
+ *
+ * <p>This test needs a real Tesseract installation and a sample image, neither of which
+ * exists on a plain checkout or on CI. It used to hard-code one developer's Mac
+ * ({@code /Users/til/Downloads/test.png}, {@code /opt/homebrew}), so it failed everywhere
+ * else and taught everyone to ignore a red suite. It now <em>skips</em> when the tools are
+ * absent, and the paths come from system properties so it can be pointed anywhere:
+ *
+ * <pre>
+ *   mvn test -Dtest=OCRServiceStandaloneTest \
+ *     -Docr.test.image=/path/to/test.png \
+ *     -Docr.test.tessdata=/usr/share/tesseract-ocr/4.00 \
+ *     -Docr.test.binary=/usr/bin/tesseract
+ * </pre>
  */
 class OCRServiceStandaloneTest {
 
-    private static final String TEST_IMAGE_PATH = "/Users/til/Downloads/test.png";
+    private static final String TEST_IMAGE_PATH =
+            System.getProperty("ocr.test.image", "src/test/resources/ocr/test.png");
+    private static final String TESSDATA_PATH =
+            System.getProperty("ocr.test.tessdata", "/opt/homebrew/share");
+    private static final String TESSERACT_BINARY =
+            System.getProperty("ocr.test.binary", "/opt/homebrew/bin/tesseract");
 
     @Test
     void testExtractTextFromTestImage() throws IOException, TesseractException {
-        // Check if test image exists
         File testImageFile = new File(TEST_IMAGE_PATH);
-        assertTrue(testImageFile.exists(), 
-            "Test image file should exist at: " + TEST_IMAGE_PATH);
+        assumeTrue(testImageFile.exists(),
+            "No sample image at " + TEST_IMAGE_PATH + " - set -Docr.test.image to run this");
+        assumeTrue(new File(TESSERACT_BINARY).exists(),
+            "Tesseract not installed at " + TESSERACT_BINARY + " - set -Docr.test.binary to run this");
 
         // Create OCRService instance and configure it
         OCRService ocrService = new OCRService();
-        
+
         // Set configuration using reflection (mimicking Spring's @Value injection)
-        setPrivateField(ocrService, "tesseractDataPath", "/opt/homebrew/share");
+        setPrivateField(ocrService, "tesseractDataPath", TESSDATA_PATH);
         setPrivateField(ocrService, "tesseractLanguage", "eng");
-        setPrivateField(ocrService, "tesseractBinary", "/opt/homebrew/bin/tesseract");
+        setPrivateField(ocrService, "tesseractBinary", TESSERACT_BINARY);
         setPrivateField(ocrService, "ocrEnabled", true);
         setPrivateField(ocrService, "processImages", true);
         setPrivateField(ocrService, "pageSegMode", 6);
-        
+
         // Initialize OCR service
         try {
             java.lang.reflect.Method setUpMethod = OCRService.class.getDeclaredMethod("setUp");

@@ -8,13 +8,29 @@ import jakarta.persistence.Table;
 
 /**
  * Tender - procurement lifecycle entity mapped to tender.
+ *
+ * A package may hold several tenders: a failed tender is re-tendered as a new attempt
+ * under the same package, with the previous attempt kept as history (Q-2, REQ-L14).
+ * Exactly one attempt is current at a time, and Stages 3-7 always resolve to it.
  */
 @Entity
 @Table(name = "tender")
 public class Tender extends BaseProcurementEntity {
 
+    /** Procurement Type values that make a Letter of Credit applicable (Q-5, REQ-2.5). */
+    public static final String TYPE_ICT = "ICT";
+
     @Column(name = "package_id")
     private Long packageId;
+
+    @Column(name = "attempt_no")
+    private Integer attemptNo = 1;
+
+    @Column(name = "is_current")
+    private Boolean isCurrent = Boolean.TRUE;
+
+    @Column(name = "failure_reason")
+    private String failureReason;
 
     @Column(name = "procurement_type")
     private String procurementType;
@@ -39,6 +55,20 @@ public class Tender extends BaseProcurementEntity {
 
     public Long getPackageId() { return packageId; }
     public void setPackageId(Long packageId) { this.packageId = packageId; }
+
+    public Integer getAttemptNo() { return attemptNo; }
+    public void setAttemptNo(Integer attemptNo) { this.attemptNo = attemptNo; }
+
+    public Boolean getIsCurrent() { return isCurrent; }
+    public void setIsCurrent(Boolean isCurrent) { this.isCurrent = isCurrent; }
+
+    public String getFailureReason() { return failureReason; }
+    public void setFailureReason(String failureReason) { this.failureReason = failureReason; }
+
+    /** True when this tender is an international competitive tender, which may need an LC. */
+    public boolean isInternational() {
+        return TYPE_ICT.equalsIgnoreCase(procurementType == null ? null : procurementType.trim());
+    }
 
     public String getProcurementType() { return procurementType; }
     public void setProcurementType(String procurementType) { this.procurementType = procurementType; }

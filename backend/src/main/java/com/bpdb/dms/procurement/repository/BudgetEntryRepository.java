@@ -14,4 +14,7 @@ public interface BudgetEntryRepository extends JpaRepository<BudgetEntry, Long> 
     List<BudgetEntry> findByPackageId(Long packageId);
 
     List<BudgetEntry> findByPackageIdAndEntryType(Long packageId, String entryType);
+
+    /** Every package line drawn against one department's annual budget (REQ-B0, Q-13). */
+    List<BudgetEntry> findByDepartmentBudgetId(Long departmentBudgetId);
 }

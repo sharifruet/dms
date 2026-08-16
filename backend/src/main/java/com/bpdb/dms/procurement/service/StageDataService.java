@@ -125,6 +125,14 @@ public class StageDataService {
             if (entity == null) {
                 log.warn("No entity resolver for {} - value for {} recorded without a typed column",
                         def.getEntityType(), def.getFieldKey());
+            } else if (rewritesTheCorrelationKey(def, entity, value)) {
+                // Package Number is the key every stage, document, budget line and expiry
+                // tracker hangs off (REQ-L2). Capturing a different one must not silently
+                // rename the package out from under all of them - a mismatch is something
+                // to resolve, the way REQ-2.1 treats it at Stage 2, not something to apply.
+                log.warn("Captured Package Number '{}' differs from package {}'s own number "
+                        + "'{}' - the package keeps its number and the reading is recorded",
+                        value, packageId, ((ProcurementPackage) entity).getPackageNumber());
             } else {
                 applyToEntity(entity, def, value);
             }
@@ -161,9 +169,13 @@ public class StageDataService {
                 return packageRepository.findById(packageId).orElse(null);
 
             case "TENDER": {
-                return tenderRepository.findByPackageId(packageId).orElseGet(() -> {
+                // The current attempt. A failed attempt is superseded, never written into
+                // again, so the form always lands on the live tender (Q-2, REQ-L15).
+                return tenderRepository.findByPackageIdAndIsCurrentTrue(packageId).orElseGet(() -> {
                     Tender t = new Tender();
                     t.setPackageId(packageId);
+                    t.setAttemptNo(1);
+                    t.setIsCurrent(Boolean.TRUE);
                     return tenderRepository.save(t);
                 });
             }
@@ -219,11 +231,7 @@ public class StageDataService {
                 // placeholder until the user supplies the real number in the same save
                 c.setContractNumber("DRAFT-" + packageId + "-" + System.nanoTime());
                 Contract savedContract = contractRepository.save(c);
-                ContractPackage cp = new ContractPackage();
-                cp.setContractId(savedContract.getId());
-                cp.setPackageId(packageId);
-                cp.setIsPrimary(Boolean.TRUE);
-                contractPackageRepository.save(cp);
+                linkContractToPackage(savedContract.getId(), packageId);
                 return savedContract;
             }
             case "LETTER_OF_CREDIT": {
@@ -265,10 +273,39 @@ public class StageDataService {
                 });
             }
             default:
-                // BER_BIDDER, DELIVERY, INVOICE, PAYMENT, INSPECTION_EVENT and BID_SECURITY
-                // are repeating rows - they are created explicitly, not by form save.
+                // BER_BIDDER, DELIVERY, INVOICE, PAYMENT and INSPECTION_EVENT are repeating
+                // rows - they are created explicitly, not by form save.
                 return null;
         }
+    }
+
+    /**
+     * Attach a contract to its package.
+     *
+     * A contract covers exactly one package (client answer Q-1 - the option for one
+     * contract spanning several APP packages was not selected). The link table stays,
+     * because lot-wise tendering is where multi-package contracts tend to appear later
+     * and re-adding it would be the same work twice; the rule is enforced here instead
+     * of by a database constraint, so relaxing it is a one-line change.
+     */
+    @Transactional
+    public ContractPackage linkContractToPackage(Long contractId, Long packageId) {
+        List<ContractPackage> existing = contractPackageRepository.findByContractId(contractId);
+        for (ContractPackage link : existing) {
+            if (link.getPackageId().equals(packageId)) {
+                return link;
+            }
+        }
+        if (!existing.isEmpty()) {
+            throw new IllegalStateException("Contract " + contractId + " is already linked to package "
+                    + existing.get(0).getPackageId()
+                    + " - a contract covers exactly one package (Q-1)");
+        }
+        ContractPackage cp = new ContractPackage();
+        cp.setContractId(contractId);
+        cp.setPackageId(packageId);
+        cp.setIsPrimary(Boolean.TRUE);
+        return contractPackageRepository.save(cp);
     }
 
     public Optional<Contract> findContract(Long packageId) {
@@ -277,6 +314,26 @@ public class StageDataService {
                         Boolean.TRUE.equals(b.getIsPrimary()), Boolean.TRUE.equals(a.getIsPrimary())))
                 .findFirst()
                 .flatMap(cp -> contractRepository.findById(cp.getContractId()));
+    }
+
+    /**
+     * Would applying this value rename the package?
+     *
+     * <p>True only when the field is the package number, the package already has one, and
+     * the captured value differs. A package that has not been given a number yet — created
+     * from a form before Stage 1 was captured — still takes the value.
+     */
+    private boolean rewritesTheCorrelationKey(DocumentTypeField def, Object entity, String value) {
+        if (!(entity instanceof ProcurementPackage pkg)) {
+            return false;
+        }
+        if (!"packageNumber".equals(def.getEntityColumn())) {
+            return false;
+        }
+        String current = pkg.getPackageNumber();
+        return current != null && !current.isBlank()
+                && value != null && !value.isBlank()
+                && !current.trim().equalsIgnoreCase(value.trim());
     }
 
     /** Set the catalogue-named property, coercing the text to the property's type. */

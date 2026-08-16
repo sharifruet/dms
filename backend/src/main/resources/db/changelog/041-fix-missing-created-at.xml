@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+      Every procurement entity extends BaseProcurementEntity, which maps created_at and
+      updated_at. Changeset 037 added the missing updated_at columns across the board but
+      added created_at to only three tables; these three were left without it.
+
+      The consequence was not cosmetic. Each of these sits on a path the lifecycle cannot
+      work without:
+
+        extracted_field_history  every field capture and correction appends here, so no
+                                 value could be entered or changed on any stage
+        budget_consumption       posted from a verified invoice, so Stage 13 could not
+                                 record consumption
+        ocr_page                 written per page when an OCR result is stored
+
+      Hibernate issues INSERTs naming created_at, PostgreSQL rejects them with
+      "column created_at does not exist", and the request fails. The unit tests could not
+      catch it: they run on H2 with ddl-auto=create-drop, which builds the schema from the
+      entities themselves, so the column is always present there. Only the real
+      Liquibase-built schema diverges.
+    -->
+
+    <changeSet id="041-001" author="dms">
+        <comment>Add the created_at columns that 037 missed</comment>
+        <addColumn tableName="extracted_field_history">
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </addColumn>
+        <addColumn tableName="budget_consumption">
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </addColumn>
+        <addColumn tableName="ocr_page">
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="extracted_field_history" columnName="created_at"/>
+            <dropColumn tableName="budget_consumption" columnName="created_at"/>
+            <dropColumn tableName="ocr_page" columnName="created_at"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

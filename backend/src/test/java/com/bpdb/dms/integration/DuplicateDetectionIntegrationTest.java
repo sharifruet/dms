@@ -7,7 +7,7 @@ import com.bpdb.dms.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureWebMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -26,7 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * End-to-end integration tests for Duplicate Detection feature
  */
 @SpringBootTest
-@AutoConfigureWebMvc
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
 class DuplicateDetectionIntegrationTest {
@@ -40,6 +40,11 @@ class DuplicateDetectionIntegrationTest {
     @Autowired
     private UserRepository userRepository;
 
+
+    @Autowired
+
+    private com.bpdb.dms.repository.RoleRepository roleRepository;
+
     private User testUser;
     private byte[] testFileContent;
     private String testFileHash;
@@ -51,6 +56,7 @@ class DuplicateDetectionIntegrationTest {
         testUser.setUsername("testuser");
         testUser.setEmail("test@example.com");
         testUser.setPassword("password");
+        testUser.setRole(com.bpdb.dms.support.TestRoles.officer(roleRepository));
         testUser.setIsActive(true);
         testUser = userRepository.save(testUser);
 
@@ -70,7 +76,7 @@ class DuplicateDetectionIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "OFFICER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_OFFICER", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD", "PERM_DOCUMENT_DELETE"})
     void uploadDuplicateFile_ShouldDetectDuplicate() throws Exception {
         // Given - Create an existing document with the same hash
         Document existingDocument = new Document();
@@ -97,13 +103,15 @@ class DuplicateDetectionIntegrationTest {
                 .param("description", "Duplicate test")
                 .with(csrf()))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.isDuplicate").value(true))
+                // The getter is isDuplicate(), which Jackson exposes as "duplicate" -
+                // there is no "isDuplicate" key in the JSON
+                .andExpect(jsonPath("$.duplicate").value(true))
                 .andExpect(jsonPath("$.duplicateDocumentId").value(existingDocument.getId()))
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("identical content")));
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "OFFICER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_OFFICER", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD", "PERM_DOCUMENT_DELETE"})
     void handleDuplicateUpload_AsVersion() throws Exception {
         // Given - Create an existing document
         Document existingDocument = new Document();
@@ -134,7 +142,7 @@ class DuplicateDetectionIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "OFFICER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_OFFICER", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD", "PERM_DOCUMENT_DELETE"})
     void handleDuplicateUpload_Replace() throws Exception {
         // Given - Create an existing document
         Document existingDocument = new Document();

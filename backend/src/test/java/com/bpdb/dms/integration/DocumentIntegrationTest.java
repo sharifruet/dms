@@ -8,7 +8,7 @@ import com.bpdb.dms.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureWebMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -23,7 +23,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
-@AutoConfigureWebMvc
+@AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
 class DocumentIntegrationTest {
@@ -50,6 +50,7 @@ class DocumentIntegrationTest {
         testUser.setUsername("testuser");
         testUser.setEmail("test@example.com");
         testUser.setPassword("password");
+        testUser.setRole(com.bpdb.dms.support.TestRoles.officer(roleRepository));
         testUser.setIsActive(true);
         testUser = userRepository.save(testUser);
 
@@ -66,7 +67,7 @@ class DocumentIntegrationTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "OFFICER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_OFFICER", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD", "PERM_DOCUMENT_DELETE"})
     void uploadDocument_IntegrationTest() throws Exception {
         // Given
         MockMultipartFile file = new MockMultipartFile(
@@ -76,19 +77,24 @@ class DocumentIntegrationTest {
             "Integration test PDF content".getBytes()
         );
 
-        // When & Then
+        // OTHER, not BILL: Phase 2 made BILL a follow-up document that must land in a
+        // folder already carrying a tender workflow. That gate is worth testing, but not
+        // here - this test is about the upload endpoint itself, and FileUploadServiceTest
+        // already covers the workflow-gated types.
         mockMvc.perform(multipart("/api/documents/upload")
                 .file(file)
-                .param("documentType", "BILL")
+                .param("documentType", "OTHER")
                 .param("description", "Integration Test Document")
                 .with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.fileName").value("integration-test.pdf"))
-                .andExpect(jsonPath("$.documentType").value("BILL"));
+                // fileName is the generated storage name (timestamp + hash); the name the
+                // user uploaded is preserved separately as originalName
+                .andExpect(jsonPath("$.originalName").value("integration-test.pdf"))
+                .andExpect(jsonPath("$.documentType").value("OTHER"));
     }
 
     @Test
-    @WithMockUser(roles = "VIEWER")
+    @WithMockUser(authorities = {"ROLE_VIEWER", "PERM_DOCUMENT_VIEW"})
     void getDocuments_IntegrationTest() throws Exception {
         // When & Then
         mockMvc.perform(get("/api/documents")
@@ -100,10 +106,13 @@ class DocumentIntegrationTest {
     }
 
     @Test
-    @WithMockUser(roles = "OFFICER")
+    // username matters: the endpoint resolves the principal against the user table, and
+    // the default "user" from @WithMockUser was never created by setUp
+    @WithMockUser(username = "testuser", authorities = {"ROLE_OFFICER", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD", "PERM_DOCUMENT_DELETE"})
     void deleteDocument_IntegrationTest() throws Exception {
-        // When & Then
-        mockMvc.perform(delete("/api/documents/" + testDocument.getId())
+        // Deletion is a soft delete and is exposed as POST /{id}/delete, not DELETE /{id}
+        // - the record is retained with is_active = false rather than removed
+        mockMvc.perform(post("/api/documents/" + testDocument.getId() + "/delete")
                 .with(csrf()))
                 .andExpect(status().isOk());
 

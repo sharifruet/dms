@@ -54,6 +54,14 @@ public class ExpiryTracking {
     
     @Column(name = "notes", length = 1000)
     private String notes;
+
+    /**
+     * Which configured warning thresholds have already gone out, comma-separated
+     * (REQ-E2). The fixed alert_* booleans cannot express an arbitrary configured set -
+     * there is nowhere to record a 90 or 60 day warning - so this carries it.
+     */
+    @Column(name = "sent_warnings", length = 100)
+    private String sentWarnings;
     
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "assigned_to")
@@ -139,6 +147,9 @@ public class ExpiryTracking {
     public Long getRenewalDocumentId() { return renewalDocumentId; }
     public void setRenewalDocumentId(Long renewalDocumentId) { this.renewalDocumentId = renewalDocumentId; }
     
+    public String getSentWarnings() { return sentWarnings; }
+    public void setSentWarnings(String sentWarnings) { this.sentWarnings = sentWarnings; }
+
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
     

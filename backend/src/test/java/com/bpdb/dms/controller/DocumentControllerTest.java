@@ -6,10 +6,18 @@ import com.bpdb.dms.entity.DocumentCategory;
 import com.bpdb.dms.entity.Role;
 import com.bpdb.dms.entity.Role.RoleType;
 import com.bpdb.dms.entity.User;
+import com.bpdb.dms.repository.AppDocumentEntryRepository;
+import com.bpdb.dms.repository.DocumentIndexRepository;
 import com.bpdb.dms.repository.DocumentRepository;
+import com.bpdb.dms.repository.FolderRepository;
 import com.bpdb.dms.repository.UserRepository;
+import com.bpdb.dms.service.DatabaseMetadataExtractionService;
+import com.bpdb.dms.service.DocumentArchiveService;
 import com.bpdb.dms.service.DocumentCategoryService;
+import com.bpdb.dms.service.DocumentMetadataService;
+import com.bpdb.dms.service.DocumentTypeFieldService;
 import com.bpdb.dms.service.FileUploadService;
+import com.bpdb.dms.service.StationeryTrackingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +37,11 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+// The real rules are imported deliberately: uploadDocument_Unauthorized asserts a 403,
+// and without SecurityConfig the slice falls back to Boot's default "any authenticated
+// user" chain, which would let the request through and make the assertion meaningless.
 @WebMvcTest(DocumentController.class)
+@org.springframework.context.annotation.Import(com.bpdb.dms.security.SecurityConfig.class)
 class DocumentControllerTest {
 
     @Autowired
@@ -46,6 +58,41 @@ class DocumentControllerTest {
 
     @MockBean
     private UserRepository userRepository;
+
+    // @WebMvcTest builds no repositories or services, so every collaborator the
+    // controller autowires has to be mocked or the context will not start. These are the
+    // ones the controller grew after this test was written.
+    @MockBean
+    private DocumentIndexRepository documentIndexRepository;
+
+    @MockBean
+    private DocumentArchiveService documentArchiveService;
+
+    @MockBean
+    private StationeryTrackingService stationeryTrackingService;
+
+    @MockBean
+    private AppDocumentEntryRepository appDocumentEntryRepository;
+
+    @MockBean
+    private DocumentTypeFieldService documentTypeFieldService;
+
+    @MockBean
+    private DocumentMetadataService documentMetadataService;
+
+    @MockBean
+    private FolderRepository folderRepository;
+
+    @MockBean
+    private DatabaseMetadataExtractionService databaseMetadataExtractionService;
+
+    // The security filter chain is part of a @WebMvcTest slice, and the JWT filter pulls
+    // in the user-details lookup and token utility, neither of which exists in the slice.
+    @MockBean
+    private com.bpdb.dms.security.JwtUtil jwtUtil;
+
+    @MockBean
+    private org.springframework.security.core.userdetails.UserDetailsService userDetailsService;
 
     private User testUser;
     private Document testDocument;
@@ -74,7 +121,7 @@ class DocumentControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "OFFICER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_OFFICER", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD", "PERM_DOCUMENT_DELETE"})
     void uploadDocument_Success() throws Exception {
         // Given
         MockMultipartFile file = new MockMultipartFile(
@@ -109,7 +156,7 @@ class DocumentControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "VIEWER")
+    @WithMockUser(authorities = {"ROLE_VIEWER", "PERM_DOCUMENT_VIEW"})
     void uploadDocument_Unauthorized() throws Exception {
         // Given
         MockMultipartFile file = new MockMultipartFile(
@@ -128,7 +175,7 @@ class DocumentControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "testuser", roles = "OFFICER")
+    @WithMockUser(username = "testuser", authorities = {"ROLE_OFFICER", "PERM_DOCUMENT_VIEW", "PERM_DOCUMENT_UPLOAD", "PERM_DOCUMENT_DELETE"})
     void uploadDocument_InvalidFile() throws Exception {
         // Given
         MockMultipartFile invalidFile = new MockMultipartFile(

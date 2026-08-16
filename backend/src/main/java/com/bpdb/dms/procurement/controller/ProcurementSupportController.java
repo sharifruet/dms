@@ -21,7 +21,11 @@ import com.bpdb.dms.procurement.entity.BudgetEntry;
 import com.bpdb.dms.procurement.service.BudgetService;
 import com.bpdb.dms.procurement.service.ExtractionService;
 import com.bpdb.dms.procurement.service.LinkageService;
+import com.bpdb.dms.procurement.service.MasterListService;
+import com.bpdb.dms.procurement.service.ProcurementExpiryAlertService;
 import com.bpdb.dms.procurement.service.ProcurementExpiryService;
+import com.bpdb.dms.procurement.service.ProcurementPackageService;
+import com.bpdb.dms.procurement.service.RetentionService;
 
 /**
  * Budget, expiries and the exceptions dashboard - the cross-cutting views that sit
@@ -36,15 +40,27 @@ public class ProcurementSupportController {
     private final ProcurementExpiryService expiryService;
     private final LinkageService linkageService;
     private final ExtractionService extractionService;
+    private final MasterListService masterListService;
+    private final ProcurementExpiryAlertService alertService;
+    private final ProcurementPackageService packageService;
+    private final RetentionService retentionService;
 
     public ProcurementSupportController(BudgetService budgetService,
                                         ProcurementExpiryService expiryService,
                                         LinkageService linkageService,
-                                        ExtractionService extractionService) {
+                                        ExtractionService extractionService,
+                                        MasterListService masterListService,
+                                        ProcurementExpiryAlertService alertService,
+                                        ProcurementPackageService packageService,
+                                        RetentionService retentionService) {
         this.budgetService = budgetService;
         this.expiryService = expiryService;
         this.linkageService = linkageService;
         this.extractionService = extractionService;
+        this.masterListService = masterListService;
+        this.alertService = alertService;
+        this.packageService = packageService;
+        this.retentionService = retentionService;
     }
 
     // ------------------------------------------------------------------ budget
@@ -55,7 +71,35 @@ public class ProcurementSupportController {
         result.put("summary", budgetService.summary(packageId));
         result.put("entries", budgetService.entries(packageId));
         result.put("consumption", budgetService.consumption(packageId));
+        // The annual departmental budget this package draws down (Q-13, REQ-B0)
+        budgetService.departmentBudgetFor(packageId).ifPresent(db -> {
+            result.put("departmentBudget", db);
+            result.put("departmentPosition",
+                    budgetService.departmentPosition(db.getFiscalYear(), db.getDepartment()));
+        });
         return ResponseEntity.ok(result);
+    }
+
+    /** The department's annual budget position - allocated, committed, remaining (REQ-B0). */
+    @GetMapping("/department-budgets")
+    public ResponseEntity<BudgetService.DepartmentBudgetPosition> departmentBudget(
+            @RequestParam Integer fiscalYear, @RequestParam String department) {
+        return ResponseEntity.ok(budgetService.departmentPosition(fiscalYear, department));
+    }
+
+    /**
+     * Set a department's annual budget. Approval is a permission check on the caller, not
+     * a routed workflow (Q-13) - anyone holding BUDGET_APPROVE may do this.
+     */
+    @PostMapping("/department-budgets")
+    public ResponseEntity<?> saveDepartmentBudget(@RequestBody DepartmentBudgetRequest request) {
+        try {
+            return ResponseEntity.ok(budgetService.saveDepartmentBudget(
+                    request.fiscalYear, request.department, request.allocatedAmount,
+                    request.currency, request.notes, CurrentUser.id()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PostMapping("/packages/{packageId}/budget")
@@ -71,6 +115,17 @@ public class ProcurementSupportController {
         }
     }
 
+    // -------------------------------------------------------------- master lists
+
+    /**
+     * The permitted values for Procurement Type, Method and Nature (Q-8, REQ-2.4), so the
+     * Stage 2 form can offer them rather than leaving the user to guess the spelling.
+     */
+    @GetMapping("/master-lists")
+    public ResponseEntity<Map<String, ?>> masterLists() {
+        return ResponseEntity.ok(masterListService.allLists());
+    }
+
     // ----------------------------------------------------------------- expiries
 
     @GetMapping("/expiries")
@@ -84,12 +139,94 @@ public class ProcurementSupportController {
         return ResponseEntity.ok(expiryService.forPackage(packageId));
     }
 
+    /**
+     * The expiry dashboard as a file (REQ-E7).
+     *
+     * <p>CSV, which every spreadsheet opens and which survives being mailed around a
+     * ministry. A PDF would look better and be harder to work with; the people who ask for
+     * this export are the ones who then want to sort and filter it.
+     */
+    @GetMapping("/expiries/export")
+    public ResponseEntity<byte[]> exportExpiries(
+            @RequestParam(defaultValue = "365") int withinDays) {
+        List<ExpiryTracking> rows = expiryService.expiringWithin(withinDays);
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("Package,Instrument,Expiry Date,Days Remaining,Status,Department,Notes\n");
+        LocalDate today = LocalDate.now();
+        for (ExpiryTracking row : rows) {
+            LocalDate expiry = row.getExpiryDate() == null ? null : row.getExpiryDate().toLocalDate();
+            long days = expiry == null ? 0 : java.time.temporal.ChronoUnit.DAYS.between(today, expiry);
+            csv.append(csvCell(packageNumberOf(row))).append(',')
+               .append(csvCell(row.getEntityType())).append(',')
+               .append(csvCell(expiry == null ? "" : expiry.toString())).append(',')
+               .append(expiry == null ? "" : String.valueOf(days)).append(',')
+               .append(csvCell(row.getStatus() == null ? "" : row.getStatus().name())).append(',')
+               .append(csvCell(row.getDepartment())).append(',')
+               .append(csvCell(row.getNotes())).append('\n');
+        }
+
+        byte[] body = csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        return ResponseEntity.ok()
+                .header("Content-Type", "text/csv; charset=UTF-8")
+                .header("Content-Disposition",
+                        "attachment; filename=\"procurement-expiries-" + today + ".csv\"")
+                .body(body);
+    }
+
+    /**
+     * Run the expiry warning pass now (REQ-E2/E3).
+     *
+     * <p>The scheduler is opt-in — see SchedulingConfig for why — so this is how the
+     * warnings are exercised in an environment where it is off, and how they are tested.
+     */
+    @PostMapping("/expiries/run-warnings")
+    public ResponseEntity<Map<String, Object>> runExpiryWarnings() {
+        int sent = alertService.run(LocalDate.now());
+        return ResponseEntity.ok(Map.of("notificationsSent", sent));
+    }
+
+    private String packageNumberOf(ExpiryTracking row) {
+        return row.getPackageId() == null ? "" : packageService.findById(row.getPackageId())
+                .map(p -> p.getPackageNumber()).orElse("");
+    }
+
+    /** Quote anything containing a comma, quote or newline, per RFC 4180. */
+    private static String csvCell(String value) {
+        if (value == null || value.isEmpty()) {
+            return "";
+        }
+        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+            return '"' + value.replace("\"", "\"\"") + '"';
+        }
+        return value;
+    }
+
     /** Extend or amend an instrument: supersede rather than overwrite (REQ-E5). */
     @PostMapping("/expiries/{id}/supersede")
     public ResponseEntity<?> supersede(@PathVariable Long id, @RequestBody Map<String, String> body) {
         try {
             LocalDate newDate = LocalDate.parse(body.get("expiryDate"));
             return ResponseEntity.ok(expiryService.supersede(id, newDate, body.get("reason")));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ---------------------------------------------------------------- retention
+
+    /**
+     * Retention purge (REQ-P17, Q-18).
+     *
+     * <p>Defaults to a dry run: you get the counts and have to come back with
+     * {@code dryRun=false} to remove anything. Never scheduled — the client's one-year
+     * answer is shorter than the warranty on many of these contracts, so nothing here
+     * happens on a clock.
+     */
+    @PostMapping("/retention/purge")
+    public ResponseEntity<?> purge(@RequestParam(defaultValue = "true") boolean dryRun) {
+        try {
+            return ResponseEntity.ok(retentionService.purge(dryRun, CurrentUser.id()));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -116,5 +253,13 @@ public class ProcurementSupportController {
         public String currency;
         public LocalDate effectiveDate;
         public String reason;
+    }
+
+    public static class DepartmentBudgetRequest {
+        public Integer fiscalYear;
+        public String department;
+        public BigDecimal allocatedAmount;
+        public String currency;
+        public String notes;
     }
 }
