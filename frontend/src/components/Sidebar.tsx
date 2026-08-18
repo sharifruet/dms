@@ -64,23 +64,15 @@ const Sidebar: React.FC = () => {
     { label: 'Reports', path: '/reports', icon: <AppIcon /> },
     { label: 'Assets', path: '/assets', icon: <AssetsIcon /> },
     { label: 'Assignments', path: '/asset-assignments', icon: <AssignmentsIcon /> },
-    { label: 'Workflows', path: '/workflows', icon: <WorkflowsIcon /> },
     { label: 'Health', path: '/health', icon: <HealthIcon /> },
     { label: 'Stationery', path: '/stationery', icon: <StationeryIcon /> },
     { label: 'Users', path: '/users', icon: <UsersIcon />, role: 'ADMIN' },
     { label: 'Field Catalogue', path: '/document-type-fields', icon: <FieldsIcon />, role: 'ADMIN' },
 
-    // The document-centric pages the procurement workspace supersedes. They are removed
-    // from the navigation in Phase 8, after pilot sign-off (R-8) — keeping them here means
-    // a user blocked by a stage gate still has somewhere to go. Bill Entries is not
-    // retired at all: the finance module stays independent (Q-6).
-    { section: 'Documents', label: 'All Documents', path: '/documents', icon: <DocumentsIcon /> },
-    { label: 'Expiry Tracking', path: '/expiry-tracking', icon: <ExpiryIcon /> },
-    { label: 'Versions', path: '/versioning', icon: <VersioningIcon /> },
-    { label: 'Archive', path: '/archive', icon: <ArchiveIcon /> },
-    { label: 'APP Entries', path: '/app-entries', icon: <AppIcon /> },
-    { label: 'Bill Entries', path: '/bill-entries', icon: <BillIcon /> },
-    { label: 'Document Dashboard', path: '/dashboard', icon: <ReportsIcon /> },
+    // Bill Entries is the one document-era page still here: the finance module stays
+    // independent of the Stage 13 invoice path (Q-6). The rest were superseded by the
+    // procurement workspace and are gone.
+    { section: 'Finance', label: 'Bill Entries', path: '/bill-entries', icon: <BillIcon /> },
   ];
 
   const filteredNavItems = navItems.filter(

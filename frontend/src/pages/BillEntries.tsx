@@ -41,7 +41,6 @@ import { useAppSelector } from '../hooks/redux';
 import BillFieldsEditor from '../components/BillFieldsEditor';
 import DocumentViewer from '../components/DocumentViewer';
 import { folderService } from '../services/folderService';
-import { workflowService, Workflow, AppEntry } from '../services/workflowService';
 import { useNavigate } from 'react-router-dom';
 
 const BillEntries: React.FC = () => {
@@ -60,11 +59,6 @@ const BillEntries: React.FC = () => {
   const [amountMinFilter, setAmountMinFilter] = useState('');
   const [amountMaxFilter, setAmountMaxFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  
-  // Workflow and APP entry states
-  const [selectedBillWorkflow, setSelectedBillWorkflow] = useState<Workflow | null>(null);
-  const [selectedBillAppEntry, setSelectedBillAppEntry] = useState<AppEntry | null>(null);
-  const [loadingWorkflowInfo, setLoadingWorkflowInfo] = useState(false);
   
   // Upload states
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -160,44 +154,8 @@ const BillEntries: React.FC = () => {
       const metadata = (bill as any).metadata || {};
       setSelectedBill(doc as Document);
       setBillMetadata(metadata);
-      
-      // Load workflow and APP entry info if bill is in a folder
-      if (doc.folder?.id) {
-        await loadWorkflowAndAppEntryInfo(doc.folder.id);
-      } else {
-        setSelectedBillWorkflow(null);
-        setSelectedBillAppEntry(null);
-      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to load bill details');
-    }
-  };
-
-  const loadWorkflowAndAppEntryInfo = async (folderId: number) => {
-    try {
-      setLoadingWorkflowInfo(true);
-      const workflow = await folderService.getFolderWorkflow(folderId);
-      if (workflow) {
-        setSelectedBillWorkflow(workflow);
-        // Get APP entry for this workflow
-        if (workflow.id) {
-          const appEntryResponse = await workflowService.getAppEntryForWorkflow(workflow.id);
-          if (appEntryResponse.success && appEntryResponse.appEntry) {
-            setSelectedBillAppEntry(appEntryResponse.appEntry);
-          } else {
-            setSelectedBillAppEntry(null);
-          }
-        }
-      } else {
-        setSelectedBillWorkflow(null);
-        setSelectedBillAppEntry(null);
-      }
-    } catch (err: any) {
-      console.error('Failed to load workflow info:', err);
-      setSelectedBillWorkflow(null);
-      setSelectedBillAppEntry(null);
-    } finally {
-      setLoadingWorkflowInfo(false);
     }
   };
 
@@ -669,136 +627,10 @@ const BillEntries: React.FC = () => {
                     </Grid>
                   </Box>
 
-                  {/* Workflow and APP Entry Information */}
-                  {(selectedBillWorkflow || selectedBillAppEntry || loadingWorkflowInfo) && (
-                    <>
-                      <Divider sx={{ my: 3 }} />
-                      <Box>
-                        <Typography variant="subtitle1" fontWeight={600} gutterBottom>
-                          Workflow & Budget Information
-                        </Typography>
-                        {loadingWorkflowInfo ? (
-                          <Box display="flex" justifyContent="center" p={2}>
-                            <CircularProgress size={24} />
-                          </Box>
-                        ) : (
-                          <Grid container spacing={2}>
-                            {selectedBillWorkflow && (
-                              <Grid item xs={12}>
-                                <Card variant="outlined" sx={{ bgcolor: 'action.hover' }}>
-                                  <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                                    <Box display="flex" alignItems="center" gap={1} mb={1}>
-                                      <WorkflowIcon color="primary" />
-                                      <Typography variant="subtitle2" fontWeight={600}>
-                                        Workflow: {selectedBillWorkflow.name}
-                                      </Typography>
-                                    </Box>
-                                    {selectedBillWorkflow.description && (
-                                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                                        {selectedBillWorkflow.description}
-                                      </Typography>
-                                    )}
-                                    <Box display="flex" gap={1} flexWrap="wrap">
-                                      <Chip label={selectedBillWorkflow.status} size="small" />
-                                      <Chip label={selectedBillWorkflow.type} size="small" variant="outlined" />
-                                      <Button
-                                        size="small"
-                                        variant="outlined"
-                                        startIcon={<WorkflowIcon />}
-                                        onClick={() => navigate(`/workflows?selected=${selectedBillWorkflow.id}`)}
-                                      >
-                                        View Workflow
-                                      </Button>
-                                    </Box>
-                                  </CardContent>
-                                </Card>
-                              </Grid>
-                            )}
-                            {selectedBillAppEntry && (
-                              <Grid item xs={12}>
-                                <Card variant="outlined" sx={{ bgcolor: 'rgba(76, 175, 80, 0.1)' }}>
-                                  <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                                    <Box display="flex" alignItems="center" gap={1} mb={1}>
-                                      <AppIcon color="success" />
-                                      <Typography variant="subtitle2" fontWeight={600}>
-                                        Linked Budget Entry (APP)
-                                      </Typography>
-                                    </Box>
-                                    <Grid container spacing={1}>
-                                      <Grid item xs={12} sm={6}>
-                                        <Typography variant="body2" color="text.secondary">
-                                          Fiscal Year
-                                        </Typography>
-                                        <Typography variant="body1" fontWeight={500}>
-                                          FY {selectedBillAppEntry.fiscalYear}-{((selectedBillAppEntry.fiscalYear + 1) % 100).toString().padStart(2, '0')}
-                                        </Typography>
-                                      </Grid>
-                                      <Grid item xs={12} sm={6}>
-                                        <Typography variant="body2" color="text.secondary">
-                                          Allocation Type
-                                        </Typography>
-                                        <Typography variant="body1" fontWeight={500}>
-                                          {selectedBillAppEntry.allocationType || '-'}
-                                        </Typography>
-                                      </Grid>
-                                      {selectedBillAppEntry.releaseInstallmentNo && (
-                                        <Grid item xs={12} sm={6}>
-                                          <Typography variant="body2" color="text.secondary">
-                                            Installment
-                                          </Typography>
-                                          <Typography variant="body1" fontWeight={500}>
-                                            {selectedBillAppEntry.releaseInstallmentNo}
-                                          </Typography>
-                                        </Grid>
-                                      )}
-                                      {selectedBillAppEntry.allocationAmount && (
-                                        <Grid item xs={12} sm={6}>
-                                          <Typography variant="body2" color="text.secondary">
-                                            Allocation Amount
-                                          </Typography>
-                                          <Typography variant="body1" fontWeight={600} color="success.main">
-                                            {formatCurrency(selectedBillAppEntry.allocationAmount)}
-                                          </Typography>
-                                        </Grid>
-                                      )}
-                                      {selectedBillAppEntry.referenceMemoNumber && (
-                                        <Grid item xs={12}>
-                                          <Typography variant="body2" color="text.secondary">
-                                            Reference/Memo Number
-                                          </Typography>
-                                          <Typography variant="body1">
-                                            {selectedBillAppEntry.referenceMemoNumber}
-                                          </Typography>
-                                        </Grid>
-                                      )}
-                                    </Grid>
-                                    <Box mt={2}>
-                                      <Button
-                                        size="small"
-                                        variant="outlined"
-                                        color="success"
-                                        startIcon={<AppIcon />}
-                                        onClick={() => navigate(`/app-entries?selected=${selectedBillAppEntry.id}`)}
-                                      >
-                                        View APP Entry
-                                      </Button>
-                                    </Box>
-                                  </CardContent>
-                                </Card>
-                              </Grid>
-                            )}
-                            {!selectedBillWorkflow && !selectedBillAppEntry && (
-                              <Grid item xs={12}>
-                                <Alert severity="info">
-                                  This bill is not part of a workflow or linked to a budget entry.
-                                </Alert>
-                              </Grid>
-                            )}
-                          </Grid>
-                        )}
-                      </Box>
-                    </>
-                  )}
+                  {/* The workflow & budget panel that sat here is gone: it read the
+                      folder -> workflow -> APP entry chain, and that chain retired with the
+                      generic workflow engine (Q-16). Budget now lives on the procurement
+                      package (BudgetPanel), not on the bill. */}
 
                   <Divider sx={{ my: 3 }} />
 

@@ -19,7 +19,6 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 /**
@@ -28,7 +27,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 @Entity
 @Table(name = "folders")
 @EntityListeners(AuditingEntityListener.class)
-@JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "parentFolder", "workflow"})
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler", "parentFolder"})
 public class Folder {
     
     @Id
@@ -47,7 +46,7 @@ public class Folder {
     private Folder parentFolder;
     
     @OneToMany(mappedBy = "parentFolder", fetch = FetchType.LAZY)
-    @JsonIgnoreProperties({"parentFolder", "documents", "workflow", "hibernateLazyInitializer", "handler"})
+    @JsonIgnoreProperties({"parentFolder", "documents", "hibernateLazyInitializer", "handler"})
     private List<Folder> subFolders;
     
     @Column(name = "folder_path", length = 1000)
@@ -61,11 +60,11 @@ public class Folder {
     @JsonIgnoreProperties({"role", "hibernateLazyInitializer", "handler"})
     private User createdBy;
     
-    @OneToOne(mappedBy = "folder", fetch = FetchType.LAZY)
-    @JsonIgnoreProperties({"folder", "hibernateLazyInitializer", "handler"})
-    @JsonIgnore
-    private Workflow workflow;
-    
+    // The folder -> workflow mapping is gone with the generic workflow engine (Q-16):
+    // StageEngine is the sole workflow authority, and it keys off the procurement package,
+    // not the folder a document happens to sit in. The folders.workflow_id column from
+    // changeset 025 is left in place rather than dropped - nothing maps it now.
+
     @Column(name = "is_active")
     private Boolean isActive = true;
     
@@ -183,14 +182,6 @@ public class Folder {
     
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
-    }
-    
-    public Workflow getWorkflow() {
-        return workflow;
-    }
-    
-    public void setWorkflow(Workflow workflow) {
-        this.workflow = workflow;
     }
 }
 

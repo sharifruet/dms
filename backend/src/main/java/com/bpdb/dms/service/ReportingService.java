@@ -29,12 +29,6 @@ public class ReportingService {
     public ReportRepository reportRepository;
     
     @Autowired
-    private AnalyticsRepository analyticsRepository;
-    
-    @Autowired
-    private DashboardRepository dashboardRepository;
-    
-    @Autowired
     private DocumentRepository documentRepository;
     
     @Autowired
@@ -317,46 +311,10 @@ public class ReportingService {
         return data;
     }
     
-    /**
-     * Record analytics data
-     */
-    public void recordAnalytics(MetricType metricType, String metricName, Double metricValue, 
-                               String dimensionKey, String dimensionValue) {
-        try {
-            Analytics analytics = new Analytics(metricType, metricName, metricValue, dimensionKey, dimensionValue);
-            analyticsRepository.save(analytics);
-            
-            logger.debug("Analytics recorded: {} = {} for {} = {}", metricName, metricValue, dimensionKey, dimensionValue);
-            
-        } catch (Exception e) {
-            logger.error("Failed to record analytics: {}", e.getMessage());
-        }
-    }
-    
-    /**
-     * Get analytics data for dashboard
-     */
-    public Map<String, Object> getAnalyticsData(MetricType metricType, String dimensionKey) {
-        Map<String, Object> data = new HashMap<>();
-        
-        try {
-            List<Object[]> aggregatedData = analyticsRepository.getAggregatedMetricsByDimension(metricType, dimensionKey);
-            
-            Map<String, Double> metrics = new HashMap<>();
-            for (Object[] row : aggregatedData) {
-                metrics.put((String) row[0], (Double) row[1]);
-            }
-            
-            data.put("metrics", metrics);
-            data.put("total", metrics.values().stream().mapToDouble(Double::doubleValue).sum());
-            
-        } catch (Exception e) {
-            logger.error("Failed to get analytics data: {}", e.getMessage());
-        }
-        
-        return data;
-    }
-    
+    // recordAnalytics / getAnalyticsData retired with the analytics module: nothing in the
+    // procurement requirements asked for the generic metric store, and the dashboards that read
+    // it are gone. Report generation below is unaffected (Reports is reworked, not retired).
+
     /**
      * Process scheduled reports
      */
@@ -395,10 +353,7 @@ public class ReportingService {
             // Clean up old reports
             reportRepository.deleteOldReports(cutoffDate);
             
-            // Clean up old analytics
-            analyticsRepository.deleteOldAnalytics(cutoffDate);
-            
-            logger.info("Cleaned up old reports and analytics data");
+            logger.info("Cleaned up old report data");
             
         } catch (Exception e) {
             logger.error("Failed to cleanup old data: {}", e.getMessage());

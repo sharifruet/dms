@@ -7,11 +7,6 @@ import com.bpdb.dms.entity.User;
 import com.bpdb.dms.model.DocumentType;
 import com.bpdb.dms.repository.DocumentRepository;
 import com.bpdb.dms.repository.FolderRepository;
-import com.bpdb.dms.entity.Workflow;
-import com.bpdb.dms.entity.WorkflowInstance;
-import com.bpdb.dms.entity.WorkflowInstanceStatus;
-import com.bpdb.dms.entity.WorkflowType;
-import com.bpdb.dms.repository.WorkflowInstanceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -79,26 +74,11 @@ public class FileUploadService {
     private DocumentIndexingService documentIndexingService;
     
     @Autowired
-    private AppDocumentService appDocumentService;
-
-    @Autowired
-    private AppExcelImportService appExcelImportService;
-
-    @Autowired
     private DocumentMetadataService documentMetadataService;
 
     @Autowired
-    private WorkflowService workflowService;
-
-    @Autowired
-    private WorkflowInstanceRepository workflowInstanceRepository;
-    
-    @Autowired
     private DocumentVersioningService documentVersioningService;
-    
-    @Autowired
-    private TenderWorkflowService tenderWorkflowService;
-    
+
     @Autowired(required = false)
     private DocumentClassificationService documentClassificationService;
     
@@ -128,56 +108,11 @@ public class FileUploadService {
                 return FileUploadResponse.error(message);
             }
 
-            // Phase 2: Folder-based workflow logic
-            // For Tender Notice: folder is mandatory, workflow is auto-created
-            if (resolvedType == DocumentType.TENDER_NOTICE) {
-                if (folderId == null) {
-                    return FileUploadResponse.error("Folder selection is required for Tender Notice uploads");
-                }
-                try {
-                    tenderWorkflowService.validateFolderForTenderNotice(folderId);
-                } catch (IllegalArgumentException e) {
-                    return FileUploadResponse.error(e.getMessage());
-                }
-            }
-            
-            // For follow-up documents: folder must have a workflow (from Tender Notice)
-            boolean requiresTenderWorkflow = requiresTenderWorkflow(resolvedType);
-            if (requiresTenderWorkflow) {
-                if (folderId == null) {
-                    return FileUploadResponse.error("Folder selection is required for this document type. " +
-                        "Please select the folder used for the Tender Notice upload.");
-                }
-                try {
-                    tenderWorkflowService.validateFolderHasWorkflow(folderId);
-                } catch (IllegalArgumentException e) {
-                    return FileUploadResponse.error(e.getMessage());
-                }
-            }
-            
-            // Legacy support: if tenderWorkflowInstanceId is provided manually, validate it
-            // But folder-based workflow is now the preferred method
-            Long providedWorkflowInstanceId = null;
-            if (manualMetadata != null && manualMetadata.containsKey("tenderWorkflowInstanceId")) {
-                try {
-                    providedWorkflowInstanceId = Long.parseLong(manualMetadata.get("tenderWorkflowInstanceId"));
-                    WorkflowInstance instance = workflowInstanceRepository.findById(providedWorkflowInstanceId)
-                        .orElse(null);
-                    if (instance == null) {
-                        logger.warn("Manual workflow instance ID {} not found, will use folder-based workflow", providedWorkflowInstanceId);
-                        providedWorkflowInstanceId = null;
-                    } else if (instance.getStatus() == WorkflowInstanceStatus.COMPLETED ||
-                        instance.getStatus() == WorkflowInstanceStatus.CANCELLED ||
-                        instance.getStatus() == WorkflowInstanceStatus.REJECTED) {
-                        logger.warn("Manual workflow instance {} is not active, will use folder-based workflow", providedWorkflowInstanceId);
-                        providedWorkflowInstanceId = null;
-                    }
-                } catch (NumberFormatException nfe) {
-                    logger.warn("Invalid manual workflow instance ID, will use folder-based workflow");
-                    providedWorkflowInstanceId = null;
-                }
-            }
-            
+            // The folder-based tender workflow that used to gate this upload is gone with the
+            // generic workflow engine (Q-16). Uploading is no longer conditional on a folder
+            // carrying a workflow: sequencing is the procurement StageEngine's job, and a
+            // document reaches a package through document_link, not through folder identity.
+
             // Calculate file hash for duplicate detection
             String fileHash = calculateFileHash(file);
             
@@ -241,133 +176,11 @@ public class FileUploadService {
                 combinedMetadata.putAll(documentMetadataService.applyManualMetadata(savedDocument, manualMetadata));
             }
 
-            // Phase 2: Folder-based workflow creation and association
-            // If Tender Notice, create or get workflow for folder, then create workflow instance
-            if (resolvedType == DocumentType.TENDER_NOTICE && folderId != null) {
-                try {
-                    Folder folder = folderRepository.findById(folderId).orElse(null);
-                    if (folder == null) {
-                        return FileUploadResponse.error("Folder not found: " + folderId);
-                    }
-                    
-                    // Extract APP entry ID from metadata if provided
-                    Long appEntryId = null;
-                    if (manualMetadata != null && manualMetadata.containsKey("appEntryId")) {
-                        try {
-                            appEntryId = Long.parseLong(manualMetadata.get("appEntryId"));
-                            logger.info("APP entry ID {} provided for workflow creation", appEntryId);
-                        } catch (NumberFormatException e) {
-                            logger.warn("Invalid appEntryId in metadata: {}", manualMetadata.get("appEntryId"));
-                        }
-                    }
-                    
-                    // Create or get workflow for this folder (uses folder name as workflow name)
-                    // Link APP entry if provided
-                    Workflow workflow = tenderWorkflowService.createOrGetWorkflowForFolder(
-                        folderId,
-                        folder.getName(), // Use folder name as workflow name
-                        user,
-                        appEntryId // Pass APP entry ID to link during creation
-                    );
-                    
-                    // Create workflow instance for the Tender Notice document
-                    WorkflowInstance instance = tenderWorkflowService.createWorkflowInstanceForTenderNotice(
-                        workflow,
-                        savedDocument,
-                        user
-                    );
-                    
-                    String instanceIdStr = String.valueOf(instance.getId());
-                    combinedMetadata.put("tenderWorkflowInstanceId", instanceIdStr);
-                    documentMetadataService.applyManualMetadata(savedDocument, Map.of("tenderWorkflowInstanceId", instanceIdStr));
-                    
-                    logger.info("Created folder-based workflow {} for Tender Notice {} in folder {}", 
-                        workflow.getId(), savedDocument.getId(), folderId);
-                } catch (IllegalArgumentException e) {
-                    return FileUploadResponse.error(e.getMessage());
-                } catch (Exception e) {
-                    logger.error("Failed to create folder-based workflow for Tender Notice: {}", e.getMessage());
-                    return FileUploadResponse.error("Failed to create workflow: " + e.getMessage());
-                }
-            }
-
-            // For follow-up documents, associate with folder's workflow automatically
-            // Store workflow instance ID in metadata for backward compatibility
-            if (requiresTenderWorkflow && folderId != null) {
-                try {
-                    Optional<Workflow> workflowOpt = tenderWorkflowService.getWorkflowByFolder(folderId);
-                    if (workflowOpt.isPresent()) {
-                        Workflow workflow = workflowOpt.get();
-                        // Find existing workflow instance for this workflow (usually from Tender Notice)
-                        List<WorkflowInstance> instances = workflowInstanceRepository.findByWorkflow(
-                            workflow, 
-                            org.springframework.data.domain.PageRequest.of(0, 1)
-                        ).getContent();
-                        
-                        if (!instances.isEmpty()) {
-                            WorkflowInstance instance = instances.get(0);
-                            String instanceIdStr = String.valueOf(instance.getId());
-                            combinedMetadata.put("tenderWorkflowInstanceId", instanceIdStr);
-                            documentMetadataService.applyManualMetadata(savedDocument, Map.of("tenderWorkflowInstanceId", instanceIdStr));
-                            logger.info("Associated document {} with folder workflow {} via folder {}", 
-                                savedDocument.getId(), workflow.getId(), folderId);
-                        }
-                    }
-                } catch (Exception e) {
-                    logger.warn("Failed to associate document with folder workflow: {}", e.getMessage());
-                    // Don't fail the upload, just log a warning
-                }
-            }
-            
-            // Legacy support: if manual workflow instance ID was provided, use it
-            if (providedWorkflowInstanceId != null) {
-                String instanceIdStr = String.valueOf(providedWorkflowInstanceId);
-                combinedMetadata.put("tenderWorkflowInstanceId", instanceIdStr);
-                documentMetadataService.applyManualMetadata(savedDocument, Map.of("tenderWorkflowInstanceId", instanceIdStr));
-            }
-
             Map<String, String> additionalMetadata = new HashMap<>();
-            // Note: APP is no longer a document type. APP entries are now entered manually via form.
-            // Excel import functionality for APP has been removed. See Phase 3 implementation.
-            // Legacy APP documents in the system will be handled gracefully but new APP uploads are not supported.
-            
-            // Process app_document_entries for legacy APP documents (if any exist)
-            // This code handles legacy documents that may still be in the system
-            if (isExcelFile(file.getContentType(), originalFilename)) {
-                // Only process if it's an Excel file (for legacy compatibility)
-                // Read from saved file path since MultipartFile stream can only be read once
-                try {
-                    Path savedFilePath = Paths.get(savedDocument.getFilePath());
-                    if (Files.exists(savedFilePath)) {
-                        // Create a simple MultipartFile implementation from saved file
-                        MultipartFile savedFile = createMultipartFileFromPath(savedFilePath, savedDocument);
-                        Map<String, String> appDocMetadata = appDocumentService.processAndStoreEntries(savedDocument, savedFile);
-                        additionalMetadata.putAll(appDocMetadata);
-                        logger.info("Legacy APP document entries processed for document: {} ({}), status: {}, entryCount: {}", 
-                            savedDocument.getId(), savedDocument.getOriginalName(), 
-                            appDocMetadata.get("appStatus"), appDocMetadata.get("appEntryCount"));
-                        
-                        // Log any errors
-                        if ("failed".equals(appDocMetadata.get("appStatus")) || 
-                            "unsupported_format".equals(appDocMetadata.get("appStatus"))) {
-                            logger.error("Legacy APP document processing failed for {}: status={}, error={}, headers={}", 
-                                savedDocument.getOriginalName(), 
-                                appDocMetadata.get("appStatus"),
-                                appDocMetadata.get("appError"),
-                                appDocMetadata.get("appHeadersDetected"));
-                        }
-                    } else {
-                        logger.warn("Saved file not found at path: {} for document {}", 
-                            savedDocument.getFilePath(), savedDocument.getId());
-                        additionalMetadata.put("appDocStatus", "file_not_found");
-                    }
-                } catch (Exception e) {
-                    logger.error("Failed to process legacy APP document entries for document {}: {}", 
-                        savedDocument.getId(), e.getMessage(), e);
-                    additionalMetadata.put("appDocStatus", "failed");
-                    additionalMetadata.put("appDocError", e.getMessage());
-                }
-            }
+            // The legacy APP-Excel side channel that used to run here is gone with
+            // AppDocumentService. APP workbooks are imported through the procurement Stage 1
+            // path (AppWorkbookParser -> AppPackageImportService), which creates packages
+            // rather than scattering entries across document metadata.
             combinedMetadata.putAll(additionalMetadata);
             
             // High Priority Feature: Bill OCR Extraction for BILL document type
@@ -813,84 +626,6 @@ public class FileUploadService {
         } catch (Exception e) {
             logger.error("Error re-processing OCR for all documents: {}", e.getMessage(), e);
         }
-    }
-    
-    /**
-     * Create a MultipartFile from a saved file path
-     */
-    private MultipartFile createMultipartFileFromPath(Path filePath, Document document) {
-        return new MultipartFile() {
-            @Override
-            public String getName() {
-                return "file";
-            }
-
-            @Override
-            public String getOriginalFilename() {
-                return document.getOriginalName();
-            }
-
-            @Override
-            public String getContentType() {
-                return document.getMimeType();
-            }
-
-            @Override
-            public boolean isEmpty() {
-                try {
-                    return Files.size(filePath) == 0;
-                } catch (IOException e) {
-                    return true;
-                }
-            }
-
-            @Override
-            public long getSize() {
-                try {
-                    return Files.size(filePath);
-                } catch (IOException e) {
-                    return 0;
-                }
-            }
-
-            @Override
-            public byte[] getBytes() throws IOException {
-                return Files.readAllBytes(filePath);
-            }
-
-            @Override
-            public InputStream getInputStream() throws IOException {
-                return Files.newInputStream(filePath);
-            }
-
-            @Override
-            public void transferTo(File dest) throws IOException, IllegalStateException {
-                Files.copy(filePath, dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
-            }
-        };
-    }
-
-    private boolean requiresTenderWorkflow(DocumentType type) {
-        // Phase 2: Documents that should be part of a tender workflow
-        // Multiple PS, PG, Bills, and Correspondence allowed per workflow
-        return type == DocumentType.TENDER_DOCUMENT
-            || type == DocumentType.CONTRACT_AGREEMENT
-            || type == DocumentType.BANK_GUARANTEE_BG
-            || type == DocumentType.PERFORMANCE_SECURITY_PS
-            || type == DocumentType.PERFORMANCE_GUARANTEE_PG
-            || type == DocumentType.BILL
-            || type == DocumentType.CORRESPONDENCE;
-    }
-
-    private boolean isExcelFile(String contentType, String originalFilename) {
-        if (contentType != null && contentType.contains("excel")) {
-            return true;
-        }
-        if (originalFilename == null) {
-            return false;
-        }
-        String lowerName = originalFilename.toLowerCase();
-        return lowerName.endsWith(".xls") || lowerName.endsWith(".xlsx");
     }
     
     /**

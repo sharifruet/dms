@@ -1,13 +1,5 @@
 package com.bpdb.dms.service;
 
-import com.bpdb.dms.dto.AppBudgetSummaryDto;
-import com.bpdb.dms.entity.AppHeader;
-import com.bpdb.dms.entity.Document;
-import com.bpdb.dms.entity.Folder;
-import com.bpdb.dms.entity.Workflow;
-import com.bpdb.dms.repository.AppHeaderRepository;
-import com.bpdb.dms.repository.DocumentRepository;
-import com.bpdb.dms.repository.WorkflowRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -22,17 +14,10 @@ public class FinanceDashboardService {
     @Autowired
     private FinanceReportService financeReportService;
 
-    @Autowired
-    private AppHeaderRepository appHeaderRepository;
-
-    @Autowired
-    private WorkflowRepository workflowRepository;
-
-    @Autowired
-    private DocumentRepository documentRepository;
-
-    @Autowired
-    private DocumentMetadataService documentMetadataService;
+    // The per-APP budget-vs-billed aggregation that used to live here is gone. It derived
+    // "billed" by walking workflow -> folder -> bill documents, and that linkage retired with
+    // the generic workflow engine (Q-16). Procurement budget tracking is BudgetService's job
+    // (REQ-B6); the year/department report below is unaffected and still serves finance (Q-6).
 
     public Map<String, Object> summary(Integer year, String department) {
         List<Map<String, Object>> rows = financeReportService.appVsBillsByYear(year, department, null);
@@ -75,126 +60,4 @@ public class FinanceDashboardService {
         return result;
     }
 
-    /**
-     * Legacy aggregate summary across all APP entries.
-     * Kept for compatibility but now delegates to per-APP summaries.
-     */
-    public Map<String, Object> getBudgetSummary() {
-        java.util.List<AppBudgetSummaryDto> perApp = getBudgetByApp();
-
-        BigDecimal totalBudget = BigDecimal.ZERO;
-        BigDecimal totalBilled = BigDecimal.ZERO;
-        for (AppBudgetSummaryDto dto : perApp) {
-            if (dto.getAllocationAmount() != null) {
-                totalBudget = totalBudget.add(dto.getAllocationAmount());
-            }
-            if (dto.getTotalBilled() != null) {
-                totalBilled = totalBilled.add(dto.getTotalBilled());
-            }
-        }
-
-        BigDecimal remaining = totalBudget.subtract(totalBilled);
-        BigDecimal utilizationPct = totalBudget.compareTo(BigDecimal.ZERO) == 0
-            ? BigDecimal.ZERO
-            : totalBilled.multiply(BigDecimal.valueOf(100))
-                .divide(totalBudget, 2, java.math.RoundingMode.HALF_UP);
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("totalBudget", totalBudget);
-        result.put("totalBilled", totalBilled);
-        result.put("remaining", remaining);
-        result.put("utilizationPct", utilizationPct);
-        return result;
-    }
-
-    /**
-     * Get per-APP budget vs billed summary.
-     * Budget = allocation_amount from AppHeader.
-     * Billed = sum of bill amounts from BILL documents in workflows linked to that APP.
-     */
-    public java.util.List<AppBudgetSummaryDto> getBudgetByApp() {
-        // Load all workflows that are linked to an APP entry and group by APP ID
-        java.util.List<Workflow> workflowsWithApp = workflowRepository.findWithAppEntry();
-        Map<Long, java.util.List<Workflow>> workflowsByAppId = new HashMap<>();
-        for (Workflow workflow : workflowsWithApp) {
-            if (workflow.getAppEntry() == null) {
-                continue;
-            }
-            Long appId = workflow.getAppEntry().getId();
-            workflowsByAppId.computeIfAbsent(appId, k -> new java.util.ArrayList<>()).add(workflow);
-        }
-
-        java.util.List<AppHeader> appHeaders = appHeaderRepository.findAll();
-        java.util.List<AppBudgetSummaryDto> result = new java.util.ArrayList<>();
-
-        for (AppHeader appHeader : appHeaders) {
-            Long appId = appHeader.getId();
-
-            BigDecimal allocation = appHeader.getAllocationAmount() != null
-                ? appHeader.getAllocationAmount()
-                : BigDecimal.ZERO;
-
-            BigDecimal totalBilled = BigDecimal.ZERO;
-
-            java.util.List<Workflow> workflows = workflowsByAppId.get(appId);
-            if (workflows != null && !workflows.isEmpty()) {
-                for (Workflow workflow : workflows) {
-                    Folder folder = workflow.getFolder();
-                    if (folder == null) {
-                        continue;
-                    }
-
-                    java.util.List<Document> bills = documentRepository.findBillDocumentsByFolder(folder);
-                    for (Document billDoc : bills) {
-                        BigDecimal billAmount = extractBillAmountFromMetadata(billDoc);
-                        totalBilled = totalBilled.add(billAmount);
-                    }
-                }
-            }
-
-            BigDecimal remaining = allocation.subtract(totalBilled);
-            BigDecimal utilizationPct = allocation.compareTo(BigDecimal.ZERO) == 0
-                ? BigDecimal.ZERO
-                : totalBilled.multiply(BigDecimal.valueOf(100))
-                    .divide(allocation, 2, java.math.RoundingMode.HALF_UP);
-
-            AppBudgetSummaryDto dto = new AppBudgetSummaryDto();
-            dto.setAppId(appId);
-            dto.setFiscalYear(appHeader.getFiscalYear());
-            dto.setReleaseInstallmentNo(appHeader.getReleaseInstallmentNo());
-            dto.setAllocationType(appHeader.getAllocationType());
-            dto.setAllocationAmount(allocation);
-            dto.setTotalBilled(totalBilled);
-            dto.setRemaining(remaining);
-            dto.setUtilizationPct(utilizationPct);
-
-            result.add(dto);
-        }
-
-        return result;
-    }
-
-    /**
-     * Extract bill amount from document metadata.
-     * Prefer netAmount, then totalAmount, otherwise 0.
-     */
-    private BigDecimal extractBillAmountFromMetadata(Document document) {
-        try {
-            Map<String, String> metadata = documentMetadataService.getMetadataMap(document);
-            String netAmountStr = metadata.get("netAmount");
-            String totalAmountStr = metadata.get("totalAmount");
-
-            if (netAmountStr != null && !netAmountStr.isBlank()) {
-                return new BigDecimal(netAmountStr.trim());
-            }
-            if (totalAmountStr != null && !totalAmountStr.isBlank()) {
-                return new BigDecimal(totalAmountStr.trim());
-            }
-        } catch (Exception ignored) {
-            // Fallback to zero if anything goes wrong
-        }
-        return BigDecimal.ZERO;
-    }
 }
-
-

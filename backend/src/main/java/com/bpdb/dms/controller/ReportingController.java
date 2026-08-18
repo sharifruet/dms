@@ -3,7 +3,6 @@ package com.bpdb.dms.controller;
 import com.bpdb.dms.entity.*;
 import com.bpdb.dms.repository.UserRepository;
 import com.bpdb.dms.service.ReportingService;
-import com.bpdb.dms.service.DashboardService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -27,9 +26,6 @@ public class ReportingController {
     
     @Autowired
     private ReportingService reportingService;
-    
-    @Autowired
-    private DashboardService dashboardService;
     
     @Autowired
     private UserRepository userRepository;
@@ -194,48 +190,6 @@ public class ReportingController {
     }
     
     /**
-     * Get analytics data
-     */
-    @GetMapping("/analytics")
-    public ResponseEntity<Map<String, Object>> getAnalyticsData(
-            @RequestParam String metricType,
-            @RequestParam String dimensionKey) {
-        
-        try {
-            MetricType type = MetricType.valueOf(metricType);
-            Map<String, Object> data = reportingService.getAnalyticsData(type, dimensionKey);
-            return ResponseEntity.ok(data);
-            
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().build();
-        }
-    }
-    
-    /**
-     * Record analytics data
-     */
-    @PostMapping("/analytics")
-    public ResponseEntity<Map<String, String>> recordAnalytics(
-            @RequestBody RecordAnalyticsRequest request) {
-        
-        try {
-            reportingService.recordAnalytics(
-                request.getMetricType(),
-                request.getMetricName(),
-                request.getMetricValue(),
-                request.getDimensionKey(),
-                request.getDimensionValue()
-            );
-            
-            return ResponseEntity.ok(Map.of("message", "Analytics recorded successfully"));
-            
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError()
-                .body(Map.of("error", "Failed to record analytics"));
-        }
-    }
-    
-    /**
      * Create report request DTO
      */
     public static class CreateReportRequest {
@@ -258,26 +212,4 @@ public class ReportingController {
         public void setParameters(Map<String, Object> parameters) { this.parameters = parameters; }
     }
     
-    /**
-     * Record analytics request DTO
-     */
-    public static class RecordAnalyticsRequest {
-        private MetricType metricType;
-        private String metricName;
-        private Double metricValue;
-        private String dimensionKey;
-        private String dimensionValue;
-        
-        // Getters and setters
-        public MetricType getMetricType() { return metricType; }
-        public void setMetricType(MetricType metricType) { this.metricType = metricType; }
-        public String getMetricName() { return metricName; }
-        public void setMetricName(String metricName) { this.metricName = metricName; }
-        public Double getMetricValue() { return metricValue; }
-        public void setMetricValue(Double metricValue) { this.metricValue = metricValue; }
-        public String getDimensionKey() { return dimensionKey; }
-        public void setDimensionKey(String dimensionKey) { this.dimensionKey = dimensionKey; }
-        public String getDimensionValue() { return dimensionValue; }
-        public void setDimensionValue(String dimensionValue) { this.dimensionValue = dimensionValue; }
-    }
 }

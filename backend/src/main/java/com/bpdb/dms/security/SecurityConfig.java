@@ -160,24 +160,16 @@ public class SecurityConfig {
                 .requestMatchers("/api/permissions/**").hasAuthority(PermissionConstants.USER_MANAGEMENT)
                 // Audit log endpoints
                 .requestMatchers("/api/audit/**").hasAuthority(PermissionConstants.AUDIT_VIEW)
-                // Workflow endpoints - allow all authenticated users to GET workflow data (must come before general workflow matcher)
-                .requestMatchers(HttpMethod.GET, "/api/workflows/**").authenticated()
-                .requestMatchers("/api/workflows/**").hasAnyRole("ADMIN", "OFFICER")
                 // Document type fields endpoints
                 .requestMatchers(HttpMethod.GET, "/api/document-type-fields/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
                 .requestMatchers("/api/document-type-fields/**").hasAnyRole("ADMIN", "OFFICER")
                 // Document versioning endpoints
                 .requestMatchers("/api/documents/*/versions/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
-                // Webhook endpoints
-                .requestMatchers("/api/webhooks/**").hasRole("ADMIN")
-                // Template endpoints
-                .requestMatchers("/api/templates/**").hasAnyRole("ADMIN", "OFFICER")
                 // Enterprise integration endpoints
                 .requestMatchers("/api/integrations/**").hasAnyRole("ADMIN", "OFFICER")
-                // Advanced analytics endpoints
-                .requestMatchers("/api/analytics/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
-                // Machine learning endpoints
-                .requestMatchers("/api/ml/**").hasAnyRole("ADMIN", "OFFICER")
+                // /api/workflows, /api/webhooks, /api/templates, /api/analytics and /api/ml are
+                // gone with their modules. No matcher is left behind for them: a rule guarding a
+                // route that does not exist reads as though the feature is merely locked down.
                 // System health monitoring endpoints
                 .requestMatchers("/api/health/**").hasAnyRole("ADMIN", "OFFICER", "VIEWER")
                 // Reporting endpoints

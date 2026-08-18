@@ -28,17 +28,6 @@ export interface BillLine {
   };
 }
 
-export interface AppBudgetSummary {
-  appId: number;
-  fiscalYear: number;
-  releaseInstallmentNo?: number;
-  allocationType?: string;
-  allocationAmount: number;
-  totalBilled: number;
-  remaining: number;
-  utilizationPct: number;
-}
-
 export const financeService = {
   // Get all bills
   getBills: async (fiscalYear?: number, vendor?: string, page: number = 0, size: number = 100): Promise<{ content: BillHeader[]; totalElements: number; totalPages: number }> => {
@@ -67,22 +56,9 @@ export const financeService = {
     return response.data;
   },
 
-  // Get budget summary (budget and billed amounts)
-  getBudgetSummary: async (): Promise<{
-    totalBudget: number;
-    totalBilled: number;
-    remaining: number;
-    utilizationPct: number;
-  }> => {
-    const response = await api.get('/finance/dashboard/budget-summary');
-    return response.data;
-  },
-
-  // Get per-APP budget vs billed summary
-  getBudgetByApp: async (): Promise<AppBudgetSummary[]> => {
-    const response = await api.get('/finance/dashboard/budget-by-app');
-    return response.data;
-  },
+  // The budget-summary / budget-by-app calls are gone with their endpoints: both derived
+  // "billed" through the retired workflow -> folder -> bills hop (Q-16). Procurement budget
+  // figures come from procurementService (BudgetPanel) instead.
 
   // Create a new bill
   createBill: async (bill: {
