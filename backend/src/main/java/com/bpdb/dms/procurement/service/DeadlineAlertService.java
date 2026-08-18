@@ -353,6 +353,22 @@ public class DeadlineAlertService {
         public final long daysRemaining;
         public final boolean overdue;
 
+        /**
+         * Public so callers outside this package can state a deadline directly — the
+         * executive rollup's "delayed" count is defined by these rows, and pinning that
+         * definition in a test means being able to hand one in.
+         */
+        public PackageDeadline(Long packageId, String packageNumber, String deadlineKey,
+                               String label, LocalDate dueDate, long daysRemaining, boolean overdue) {
+            this.packageId = packageId;
+            this.packageNumber = packageNumber;
+            this.deadlineKey = deadlineKey;
+            this.label = label;
+            this.dueDate = dueDate;
+            this.daysRemaining = daysRemaining;
+            this.overdue = overdue;
+        }
+
         PackageDeadline(ProcurementPackage pkg, Deadline deadline, LocalDate today) {
             this.packageId = pkg.getId();
             this.packageNumber = pkg.getPackageNumber();

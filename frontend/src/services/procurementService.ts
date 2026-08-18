@@ -6,6 +6,7 @@ import {
   Delivery,
   DepartmentBudget,
   DepartmentBudgetPosition,
+  ExecutiveSnapshot,
   ExtractedField,
   ExtractedFieldHistory,
   InspectionEvent,
@@ -73,6 +74,14 @@ const procurementService = {
 
   getDashboard: async (): Promise<Record<string, any>> => {
     const response = await api.get('/procurement/packages/dashboard');
+    return response.data;
+  },
+
+  /** The executive rollup (REQ-X5). Omit the year for the estate as a whole. */
+  getExecutiveDashboard: async (fiscalYear?: number): Promise<ExecutiveSnapshot> => {
+    const response = await api.get('/procurement/executive-dashboard', {
+      params: fiscalYear === undefined ? {} : { fiscalYear },
+    });
     return response.data;
   },
 

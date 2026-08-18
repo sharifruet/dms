@@ -385,6 +385,91 @@ export interface UploadResult {
   sourceRegionsAvailable?: boolean;
 }
 
+/**
+ * The executive rollup (REQ-X5). Every figure is derived from the lifecycle records by
+ * ExecutiveDashboardService — see that class for what each count means.
+ *
+ * Money arrives twice: the raw BDT amount and the same figure in crore, because the
+ * client reports in crore and rounding in the browser would not survive review.
+ */
+export interface ExecutiveSnapshot {
+  generatedAt: string;
+  fiscalYear: number | null;
+  /** Years that actually have packages, newest first — the FY selector's options. */
+  fiscalYears: number[];
+  currency: string;
+  kpis: {
+    totalContracts: number;
+    liveTenders: number;
+    runningContracts: number;
+    completedContracts: number;
+    approvedBudget: number;
+    allocatedBudget: number;
+    expenditure: number;
+    remainingBudget: number;
+  };
+  appProgress: {
+    totalPackages: number;
+    plannedBudget: number;
+    plannedBudgetCrore: number;
+    publishedTenders: number;
+    awarded: number;
+    underExecution: number;
+    completed: number;
+    delayed: number;
+    completionPct: number;
+    /** Null when the previous year holds no packages — no comparison, not "no change". */
+    previousYearCompletionPct: number | null;
+    completionTrendPct: number | null;
+  };
+  tenderStatistics: ChartBucket[];
+  procurementNature: ChartBucket[];
+  procurementMethod: ChartBucket[];
+  budget: {
+    approved: number;
+    released: number;
+    expenditure: number;
+    remaining: number;
+    approvedCrore: number;
+    releasedCrore: number;
+    expenditureCrore: number;
+    remainingCrore: number;
+    utilizationPct: number;
+  };
+  performanceSecurity: {
+    active: number;
+    expiringIn30Days: number;
+    expiringIn15Days: number;
+    expiringIn7Days: number;
+    expired: number;
+    renewed: number;
+  };
+  documents: {
+    total: number;
+    todayUploads: number;
+    ocrProcessed: number;
+    ocrPending: number;
+    ocrFailed: number;
+    archived: number;
+    /** Null when Elasticsearch is unreachable. */
+    indexed: number | null;
+  };
+  alerts: ExecutiveAlert[];
+}
+
+export interface ChartBucket {
+  label: string;
+  value: number;
+}
+
+export interface ExecutiveAlert {
+  key: string;
+  tone: 'danger' | 'warn' | 'info' | 'neutral';
+  title: string;
+  description: string;
+  count: number;
+}
+
 export const STAGE_NAMES: string[] = [
   '',
   'APP Approved',

@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.bpdb.dms.entity.ExpiryTracking;
 import com.bpdb.dms.procurement.entity.BudgetEntry;
 import com.bpdb.dms.procurement.service.BudgetService;
+import com.bpdb.dms.procurement.service.ExecutiveDashboardService;
 import com.bpdb.dms.procurement.service.ExtractionService;
 import com.bpdb.dms.procurement.service.LegacyMigrationService;
 import com.bpdb.dms.procurement.service.LinkageService;
@@ -48,6 +49,7 @@ public class ProcurementSupportController {
     private final RetentionService retentionService;
     private final LegacyMigrationService migrationService;
     private final PackageAccessService accessService;
+    private final ExecutiveDashboardService executiveDashboardService;
 
     public ProcurementSupportController(BudgetService budgetService,
                                         ProcurementExpiryService expiryService,
@@ -58,8 +60,10 @@ public class ProcurementSupportController {
                                         ProcurementPackageService packageService,
                                         RetentionService retentionService,
                                         LegacyMigrationService migrationService,
-                                        PackageAccessService accessService) {
+                                        PackageAccessService accessService,
+                                        ExecutiveDashboardService executiveDashboardService) {
         this.budgetService = budgetService;
+        this.executiveDashboardService = executiveDashboardService;
         this.expiryService = expiryService;
         this.linkageService = linkageService;
         this.extractionService = extractionService;
@@ -69,6 +73,23 @@ public class ProcurementSupportController {
         this.retentionService = retentionService;
         this.migrationService = migrationService;
         this.accessService = accessService;
+    }
+
+    // ------------------------------------------------------- executive dashboard
+
+    /**
+     * The estate on one page (REQ-X5): contract and tender counts, the APP funnel, the
+     * money position, PS/BG expiries and the document repository's own numbers, all
+     * derived from the lifecycle records rather than stored as dashboard figures.
+     *
+     * @param fiscalYear restrict the package-derived panels to one APP year; omit for the
+     *                   estate as a whole. The response carries the years that actually
+     *                   have packages, so the year selector offers real options.
+     */
+    @GetMapping("/executive-dashboard")
+    public ResponseEntity<Map<String, Object>> executiveDashboard(
+            @RequestParam(required = false) Integer fiscalYear) {
+        return ResponseEntity.ok(executiveDashboardService.snapshot(fiscalYear));
     }
 
     // ------------------------------------------------------------------ budget
