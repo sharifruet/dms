@@ -14,3 +14,6 @@ frontend/node_modules/
 # Build output
 backend/target/
 uploads
+
+# Local secrets - never committed
+.env

@@ -72,6 +72,8 @@ services:
       - SPRING_REDIS_HOST=redis
       - SPRING_REDIS_PORT=6379
       - SPRING_ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      # Required: the application refuses to start without a signing key (see .env.example)
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set - copy .env.example to .env}
       - MAIL_HOST=mail.i2gether.com
       - MAIL_PORT=465
       - MAIL_USERNAME=easyops@i2gether.com

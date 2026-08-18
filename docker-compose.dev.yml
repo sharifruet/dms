@@ -11,6 +11,7 @@ services:
       - /app/target
     environment:
       - SPRING_PROFILES_ACTIVE=docker
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set - copy .env.example to .env}
     command: ["./mvnw", "spring-boot:run"]
 
   # Frontend with hot reload
