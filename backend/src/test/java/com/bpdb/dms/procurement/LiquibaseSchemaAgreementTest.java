@@ -63,12 +63,15 @@ class LiquibaseSchemaAgreementTest extends PostgresLiquibaseTest {
             // entities themselves in changeset 045, so they have left this list. Their
             // features remain unverified — a table lets them start, it does not make them
             // correct — but the schema and the mappings now agree.
-            "backup_records",
-            "dashboards",
+            //
+            // backup_records, dashboards and tenants have since left the list for a blunter
+            // reason: the entities that mapped them are gone. Nothing in the procurement
+            // requirements asked for backup records, custom dashboards or multi-tenancy, so
+            // the code was removed. The tables are still in the database — a changeset that
+            // has run is not rewritten — but nothing maps them, so they cannot drift.
             "integration_configs",
             "reports",
-            "system_health_checks",
-            "tenants");
+            "system_health_checks");
 
     @Autowired
     private EntityManagerFactory entityManagerFactory;

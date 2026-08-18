@@ -164,13 +164,15 @@ const NotificationBell: React.FC = () => {
     handleMarkAsRead(notification.id);
     handleClose();
     
-    // Navigate based on notification type
+    // Navigate based on notification type. The document, workflow and expiry pages these
+    // used to open are retired; the procurement workspace is where the equivalent work
+    // happens now, so these land there rather than on a redirect hop.
     if (notification.type === 'DOCUMENT_UPLOADED' || notification.type === 'DOCUMENT_SHARED') {
-      navigate('/documents');
+      navigate('/procurement/packages');
     } else if (notification.type === 'WORKFLOW_ASSIGNED') {
-      navigate('/workflows');
+      navigate('/procurement/packages');
     } else if (notification.type === 'EXPIRY_ALERT') {
-      navigate('/expiry-tracking');
+      navigate('/procurement/expiries');
     } else {
       navigate('/notifications');
     }

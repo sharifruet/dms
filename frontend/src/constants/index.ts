@@ -4,18 +4,16 @@ export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8
 
 export const ROUTES = {
   LOGIN: '/login',
-  DASHBOARD: '/dashboard',
-  DOCUMENTS: '/documents',
+  PROCUREMENT: '/procurement',
+  PACKAGES: '/procurement/packages',
+  EXPIRIES: '/procurement/expiries',
+  EXCEPTIONS: '/procurement/exceptions',
+  BILL_ENTRIES: '/bill-entries',
   USERS: '/users',
   SEARCH: '/search',
   NOTIFICATIONS: '/notifications',
-  EXPIRY_TRACKING: '/expiry-tracking',
   REPORTS: '/reports',
-  ANALYTICS: '/analytics',
-  WORKFLOWS: '/workflows',
-  VERSIONING: '/versioning',
   INTEGRATIONS: '/integrations',
-  ML_MODELS: '/ml',
   HEALTH: '/health'
 } as const;
 

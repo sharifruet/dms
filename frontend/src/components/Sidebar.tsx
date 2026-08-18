@@ -33,6 +33,7 @@ import {
   Inventory as StationeryIcon,
   TableChart as AppIcon,
   Receipt as BillIcon,
+  SpaceDashboard as ExecutiveIcon,
 } from '@mui/icons-material';
 import { useAppSelector, useAppDispatch } from '../hooks/redux';
 import { logout } from '../store/slices/authSlice';
@@ -54,6 +55,7 @@ const Sidebar: React.FC = () => {
   const { user } = useAppSelector((state) => state.auth);
 
   const navItems: NavItem[] = [
+    { label: 'Executive Dashboard', path: '/executive', icon: <ExecutiveIcon /> },
     // The procurement lifecycle is the spine of the system, so it leads the nav.
     { label: 'Procurement', path: '/procurement', icon: <DashboardIcon /> },
     { label: 'Packages', path: '/procurement/packages', icon: <DocumentsIcon /> },

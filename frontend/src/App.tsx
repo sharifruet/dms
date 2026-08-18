@@ -8,6 +8,7 @@ import Login from './pages/Login';
 // The finance module stays independent of the Stage 13 invoice path (Q-6), so BillEntries
 // is the one document-era page that was never scheduled for retirement.
 import BillEntries from './pages/BillEntries';
+import ExecutiveDashboard from './pages/ExecutiveDashboard';
 import ProcurementDashboard from './pages/procurement/ProcurementDashboard';
 import PackageList from './pages/procurement/PackageList';
 import PackageWorkspace from './pages/procurement/PackageWorkspace';
@@ -45,8 +46,15 @@ function App() {
         }}
       >
         <Routes>
-          <Route 
-            path="/login" 
+          {/* Executive Dashboard — the governance-wide rollup. It carries its own
+              topbar/status strip/footer because it is a port of the signed-off
+              dboard/ mock-up and keeps that theme intact. */}
+          <Route
+            path="/executive"
+            element={isAuthenticated ? <ExecutiveDashboard /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/login"
             element={!isAuthenticated ? <Login /> : <Navigate to="/procurement" />}
           />
           <Route 

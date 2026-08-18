@@ -154,7 +154,7 @@ class PushNotificationService {
       icon: '/logo192.png',
       tag: 'workflow-update',
       requireInteraction: true,
-      data: { url: '/workflows' },
+      data: { url: '/procurement/packages' },
     });
   }
 

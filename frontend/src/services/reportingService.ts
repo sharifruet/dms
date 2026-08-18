@@ -113,30 +113,8 @@ class ReportingService {
     }
   }
 
-  async getAnalyticsData(metricType: string, dimensionKey: string) {
-    try {
-      const response = await axios.get(`${API_BASE_URL}/reports/analytics`, {
-        headers: this.getAuthHeaders(),
-        params: { metricType, dimensionKey }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching analytics data:', error);
-      throw error;
-    }
-  }
-
-  async recordAnalytics(analytics: RecordAnalyticsRequest) {
-    try {
-      const response = await axios.post(`${API_BASE_URL}/reports/analytics`, analytics, {
-        headers: this.getAuthHeaders()
-      });
-      return response.data;
-    } catch (error) {
-      console.error('Error recording analytics:', error);
-      throw error;
-    }
-  }
+  // getAnalyticsData / recordAnalytics are gone with the /reports/analytics endpoints and
+  // the metric store behind them - no requirement asked for a generic analytics sink.
 }
 
 export interface Report {
@@ -170,14 +148,6 @@ export interface CreateReportRequest {
   parameters?: Record<string, any>;
 }
 
-export interface RecordAnalyticsRequest {
-  metricType: MetricType;
-  metricName: string;
-  metricValue: number;
-  dimensionKey?: string;
-  dimensionValue?: string;
-}
-
 export enum ReportType {
   DOCUMENT_SUMMARY = 'DOCUMENT_SUMMARY',
   USER_ACTIVITY = 'USER_ACTIVITY',
@@ -207,19 +177,6 @@ export enum ReportStatus {
   FAILED = 'FAILED',
   EXPIRED = 'EXPIRED',
   CANCELLED = 'CANCELLED'
-}
-
-export enum MetricType {
-  DOCUMENT_COUNT = 'DOCUMENT_COUNT',
-  USER_ACTIVITY = 'USER_ACTIVITY',
-  STORAGE_USAGE = 'STORAGE_USAGE',
-  SYSTEM_PERFORMANCE = 'SYSTEM_PERFORMANCE',
-  EXPIRY_METRICS = 'EXPIRY_METRICS',
-  SEARCH_METRICS = 'SEARCH_METRICS',
-  UPLOAD_METRICS = 'UPLOAD_METRICS',
-  ACCESS_METRICS = 'ACCESS_METRICS',
-  COMPLIANCE_METRICS = 'COMPLIANCE_METRICS',
-  CUSTOM_METRIC = 'CUSTOM_METRIC'
 }
 
 export default new ReportingService();
