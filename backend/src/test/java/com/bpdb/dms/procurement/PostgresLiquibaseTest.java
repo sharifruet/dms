@@ -60,6 +60,11 @@ public abstract class PostgresLiquibaseTest {
         registry.add("spring.liquibase.enabled", () -> "true");
         registry.add("spring.liquibase.change-log", () -> "classpath:db/changelog/db.changelog-master.xml");
         registry.add("spring.jpa.hibernate.ddl-auto", () -> "none");
+
+        // These run on the default profile, which no longer carries a signing key: it is
+        // taken from the environment now, and the application refuses to start without one.
+        // Supplying a throwaway key here keeps that check honest rather than weakening it.
+        registry.add("jwt.secret", () -> "test-only-signing-key-not-used-outside-this-suite");
         registry.add("spring.jpa.properties.hibernate.dialect",
                 () -> "org.hibernate.dialect.PostgreSQLDialect");
     }

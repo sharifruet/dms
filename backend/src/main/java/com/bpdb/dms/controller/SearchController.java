@@ -1,5 +1,6 @@
 package com.bpdb.dms.controller;
 
+import com.bpdb.dms.procurement.service.SearchContextService;
 import com.bpdb.dms.service.DocumentIndexingService;
 import com.bpdb.dms.service.DocumentIndexingService.SearchFilters;
 import com.bpdb.dms.service.DocumentIndexingService.SearchResult;
@@ -38,6 +39,9 @@ public class SearchController {
     
     @Autowired
     private SearchExportService searchExportService;
+
+    @Autowired
+    private SearchContextService searchContextService;
     
     /**
      * Search documents with advanced query
@@ -72,6 +76,8 @@ public class SearchController {
             
             // Perform search
             SearchResult result = documentIndexingService.searchDocuments(query, filters, pageable);
+            // A hit carries where it sits in the lifecycle, not just its filename (REQ-L9)
+            searchContextService.decorate(result.getItems());
             
             // Log search activity
             auditService.logActivity(
@@ -188,6 +194,8 @@ public class SearchController {
             
             // Perform search
             SearchResult result = documentIndexingService.searchDocuments(request.getQuery(), filters, pageable);
+            // Same lifecycle context on the advanced route (REQ-L9)
+            searchContextService.decorate(result.getItems());
             
             // Log advanced search activity
             auditService.logActivity(

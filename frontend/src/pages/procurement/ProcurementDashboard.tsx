@@ -50,6 +50,19 @@ const ProcurementDashboard: React.FC = () => {
   const countFor = (stage: number) =>
     byStage.find((s) => Number(s.stageCode) === stage)?.count || 0;
 
+  // REQ-X5 wants the lifecycle answerable at a glance: not just how many packages sit at
+  // each stage, but which ones are stuck, what is overdue and where the money stands
+  const ageing: any[] = data.stageAgeing || [];
+  const deadlines: any[] = data.deadlines || [];
+  const overdue: any[] = data.overdueDeadlines || [];
+  const budget = data.budget || {};
+  const stuck = ageing.filter((row) => (row.daysInStage ?? 0) >= 30);
+
+  const money = (value?: number) =>
+    value === undefined || value === null
+      ? '—'
+      : Number(value).toLocaleString(undefined, { maximumFractionDigits: 0 });
+
   const exceptionCount =
     (exceptions?.orphanedDocuments?.length || 0) +
     (exceptions?.brokenLinks?.length || 0) +
@@ -84,7 +97,77 @@ const ProcurementDashboard: React.FC = () => {
         {tile('Needs attention', exceptionCount,
           () => navigate('/procurement/exceptions'),
           exceptionCount > 0 ? '#d32f2f' : undefined)}
+        {tile('Overdue deadlines', overdue.length, undefined,
+          overdue.length > 0 ? '#d32f2f' : undefined)}
+        {tile('Stuck 30+ days', stuck.length, undefined,
+          stuck.length > 0 ? '#ed6c02' : undefined)}
+        {tile('Budget remaining', money(budget.remaining))}
+        {tile('Packages low on budget', budget.packagesBelowThreshold ?? 0, undefined,
+          (budget.packagesBelowThreshold ?? 0) > 0 ? '#ed6c02' : undefined)}
       </Grid>
+
+      {/* Deadlines somebody has to act before, soonest first (REQ-X8) */}
+      <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>Deadlines</Typography>
+        {deadlines.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            Nothing outstanding — no package is waiting on a performance security, a
+            signature or a delivery window.
+          </Typography>
+        ) : (
+          <Stack spacing={1}>
+            {deadlines.slice(0, 8).map((d) => (
+              <Stack
+                key={`${d.packageId}-${d.deadlineKey}`}
+                direction="row" spacing={1} alignItems="center"
+                sx={{ cursor: 'pointer' }}
+                onClick={() => navigate(`/procurement/packages/${d.packageId}`)}
+              >
+                <Chip size="small" color={d.overdue ? 'error' : 'default'}
+                      label={d.overdue ? `${Math.abs(d.daysRemaining)}d overdue`
+                                       : `${d.daysRemaining}d`} />
+                <Typography variant="body2" sx={{ minWidth: 120 }}>
+                  {d.packageNumber || `#${d.packageId}`}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {d.label} — due {String(d.dueDate).substring(0, 10)}
+                </Typography>
+              </Stack>
+            ))}
+          </Stack>
+        )}
+      </Paper>
+
+      {/* How long each package has sat where it is (REQ-X5) */}
+      <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>Longest in stage</Typography>
+        {ageing.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">No active packages.</Typography>
+        ) : (
+          <Stack spacing={1}>
+            {ageing.slice(0, 8).map((row) => (
+              <Stack
+                key={row.packageId} direction="row" spacing={1} alignItems="center"
+                sx={{ cursor: 'pointer' }}
+                onClick={() => navigate(`/procurement/packages/${row.packageId}`)}
+              >
+                <Chip
+                  size="small"
+                  color={(row.daysInStage ?? 0) >= 30 ? 'warning' : 'default'}
+                  label={row.daysInStage === null || row.daysInStage === undefined
+                    ? '—' : `${row.daysInStage}d`}
+                />
+                <Typography variant="body2" sx={{ minWidth: 120 }}>
+                  {row.packageNumber || `#${row.packageId}`}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Stage {row.stageCode} — {row.stageName}
+                </Typography>
+              </Stack>
+            ))}
+          </Stack>
+        )}
+      </Paper>
 
       <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
         <Typography variant="subtitle2" sx={{ mb: 2 }}>Packages by stage</Typography>

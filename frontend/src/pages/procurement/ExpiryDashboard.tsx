@@ -42,6 +42,10 @@ const ExpiryDashboard: React.FC = () => {
   const [target, setTarget] = useState<any | null>(null);
   const [newDate, setNewDate] = useState('');
   const [reason, setReason] = useState('');
+  // REQ-E4 asks for filtering by document type, package and stage, not only by date
+  const [typeFilter, setTypeFilter] = useState('ALL');
+  const [packageFilter, setPackageFilter] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,6 +74,37 @@ const ExpiryDashboard: React.FC = () => {
     }
   };
 
+  /** Export what the dashboard shows, as a file people can sort (REQ-E7). */
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      await procurementService.exportExpiries(withinDays);
+    } catch (e: any) {
+      setError('Could not export the expiry list');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  /**
+   * The instrument types present in the data, rather than a hard-coded list: the expiry
+   * matrix changes (bid security left it entirely, per Q-4) and a filter offering types
+   * nobody tracks any more is worse than no filter.
+   */
+  const entityTypes = Array.from(
+    new Set(rows.map((r) => r.entityType).filter(Boolean)),
+  ).sort();
+
+  const visible = rows.filter((row) => {
+    if (typeFilter !== 'ALL' && row.entityType !== typeFilter) return false;
+    if (packageFilter.trim()) {
+      const needle = packageFilter.trim().toLowerCase();
+      const haystack = `${row.packageNumber || ''} ${row.notes || ''}`.toLowerCase();
+      if (!haystack.includes(needle)) return false;
+    }
+    return true;
+  });
+
   const urgency = (days: number | null) => {
     if (days === null) return 'default' as const;
     if (days < 0) return 'error' as const;
@@ -92,6 +127,22 @@ const ExpiryDashboard: React.FC = () => {
           <MenuItem value={90}>Next 90 days</MenuItem>
           <MenuItem value={365}>Next year</MenuItem>
         </TextField>
+        <TextField
+          select size="small" label="Instrument" sx={{ minWidth: 180 }}
+          value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}
+        >
+          <MenuItem value="ALL">All instruments</MenuItem>
+          {entityTypes.map((type) => (
+            <MenuItem key={type} value={type}>{type}</MenuItem>
+          ))}
+        </TextField>
+        <TextField
+          size="small" label="Package" placeholder="e.g. GRL-24" sx={{ minWidth: 160 }}
+          value={packageFilter} onChange={(e) => setPackageFilter(e.target.value)}
+        />
+        <Button variant="outlined" onClick={exportCsv} disabled={exporting || rows.length === 0}>
+          {exporting ? 'Exporting…' : 'Export CSV'}
+        </Button>
       </Stack>
 
       {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>{error}</Alert>}
@@ -110,7 +161,7 @@ const ExpiryDashboard: React.FC = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {rows.map((row) => {
+            {visible.map((row) => {
               const days = daysUntil(row.expiryDate);
               return (
                 <TableRow key={row.id}>
@@ -131,12 +182,14 @@ const ExpiryDashboard: React.FC = () => {
                 </TableRow>
               );
             })}
-            {!loading && rows.length === 0 && (
+            {!loading && visible.length === 0 && (
               <TableRow>
                 <TableCell colSpan={6}>
                   <Box sx={{ py: 4, textAlign: 'center' }}>
                     <Typography variant="body2" color="text.secondary">
-                      Nothing expiring in this window.
+                      {rows.length === 0
+                        ? 'Nothing expiring in this window.'
+                        : 'Nothing matches these filters.'}
                     </Typography>
                   </Box>
                 </TableCell>

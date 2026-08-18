@@ -128,6 +128,12 @@ public class ProcurementPackageController {
         return ResponseEntity.ok(packageService.graph(id));
     }
 
+    /** Stage by stage in time order, with how long each one took (REQ-X5). */
+    @GetMapping("/{id}/timeline")
+    public ResponseEntity<List<Map<String, Object>>> timeline(@PathVariable Long id) {
+        return ResponseEntity.ok(packageService.timeline(id));
+    }
+
     @GetMapping("/dashboard")
     public ResponseEntity<Map<String, Object>> dashboard() {
         return ResponseEntity.ok(packageService.dashboard());

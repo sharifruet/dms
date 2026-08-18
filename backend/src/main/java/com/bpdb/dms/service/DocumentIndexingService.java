@@ -438,7 +438,31 @@ public class DocumentIndexingService {
         private Double classificationConfidence;
         private float score;
         private Map<String, List<String>> highlights;
-        
+
+        /**
+         * Where this document sits in the procurement lifecycle (REQ-L9).
+         *
+         * <p>A search hit that is only a filename makes the user open the document to find
+         * out what it belongs to. The requirement is that the answer travels with the hit:
+         * which package, which contract, which stage.
+         */
+        private Long packageId;
+        private String packageNumber;
+        private String contractNumber;
+        private Short stageCode;
+        private String stageName;
+
+        public Long getPackageId() { return packageId; }
+        public void setPackageId(Long packageId) { this.packageId = packageId; }
+        public String getPackageNumber() { return packageNumber; }
+        public void setPackageNumber(String packageNumber) { this.packageNumber = packageNumber; }
+        public String getContractNumber() { return contractNumber; }
+        public void setContractNumber(String contractNumber) { this.contractNumber = contractNumber; }
+        public Short getStageCode() { return stageCode; }
+        public void setStageCode(Short stageCode) { this.stageCode = stageCode; }
+        public String getStageName() { return stageName; }
+        public void setStageName(String stageName) { this.stageName = stageName; }
+
         // Getters and setters
         public Long getDocumentId() { return documentId; }
         public void setDocumentId(Long documentId) { this.documentId = documentId; }

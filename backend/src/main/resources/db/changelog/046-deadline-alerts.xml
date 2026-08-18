@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+      REQ-X8. Expiry dates drive alerts; the other half of that requirement - the deadline
+      fields - did not. PG Submission Last Date, Contract Signing Last Date and the
+      contractual delivery window are dates somebody must act BEFORE, and until now they
+      were captured and then sat there.
+
+      They cannot reuse expiry_tracking: that table requires a source document and models
+      an instrument that expires, whereas a deadline is an obligation that is either met or
+      missed. This table records only what is needed to avoid telling somebody the same
+      thing twice, and to stop talking once the deadline has been met.
+    -->
+
+    <changeSet id="046-001" author="dms">
+        <comment>Track which deadline warnings have been sent, per package and deadline</comment>
+        <createTable tableName="deadline_alert_state">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="package_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <!-- PG_SUBMISSION | CONTRACT_SIGNING | DELIVERY_WINDOW -->
+            <column name="deadline_key" type="VARCHAR(40)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="deadline_date" type="DATE"/>
+            <!-- comma-separated days-before, plus "overdue"; mirrors expiry_tracking.sent_warnings -->
+            <column name="sent_warnings" type="VARCHAR(100)"/>
+            <column name="satisfied" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="satisfied_at" type="TIMESTAMP"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <rollback>
+            <dropTable tableName="deadline_alert_state"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="046-002" author="dms">
+        <comment>One state row per deadline per package</comment>
+        <addUniqueConstraint tableName="deadline_alert_state"
+                             columnNames="package_id, deadline_key"
+                             constraintName="uk_deadline_alert_state"/>
+        <rollback>
+            <dropUniqueConstraint tableName="deadline_alert_state"
+                                  constraintName="uk_deadline_alert_state"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="046-003" author="dms">
+        <comment>Find the deadlines that are still open without scanning the table</comment>
+        <createIndex tableName="deadline_alert_state" indexName="idx_deadline_alert_open">
+            <column name="satisfied"/>
+            <column name="deadline_date"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="deadline_alert_state" indexName="idx_deadline_alert_open"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

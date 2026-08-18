@@ -99,6 +99,14 @@ public class LinkageService {
         return linkRepository.findByPackageIdAndStageCode(packageId, stageCode);
     }
 
+    /**
+     * The link that says where a document belongs. A document filed against a stage has
+     * one; re-OCR needs it to know which package and stage the fields belong to.
+     */
+    public Optional<DocumentLink> linkFor(Long documentId) {
+        return linkRepository.findByDocumentId(documentId).stream().findFirst();
+    }
+
     public List<DocumentLink> documentsForEntity(String entityType, Long entityId) {
         return linkRepository.findByEntityTypeAndEntityId(entityType, entityId);
     }

@@ -3,6 +3,7 @@ package com.bpdb.dms.security;
 import java.util.Arrays;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -42,6 +43,30 @@ public class SecurityConfig {
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
+
+    /**
+     * Keep the JWT filter out of the servlet container's own filter chain.
+     *
+     * <p>{@link JwtAuthenticationFilter} is a {@code @Component}, so Spring Boot registers
+     * it with the container automatically - on top of the {@code addFilterBefore} below.
+     * The request therefore met it twice, and because it extends {@code OncePerRequestFilter}
+     * only the first copy ever ran. That copy sits outside the security chain, so the
+     * authentication it established was wiped by {@code SecurityContextHolderFilter}, and
+     * the copy inside the chain skipped itself as already-filtered.
+     *
+     * <p>The effect was that every authority-gated endpoint returned an empty 403 to a
+     * correctly authenticated caller: the filter logged "JWT Auth Success", and
+     * authorization a few filters later saw an anonymous user. Registering the bean here
+     * with {@code setEnabled(false)} leaves exactly one copy, the one in the chain.
+     */
+    @Bean
+    public FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterNotInServletChain(
+            JwtAuthenticationFilter filter) {
+        FilterRegistrationBean<JwtAuthenticationFilter> registration =
+                new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
     
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
@@ -58,6 +83,12 @@ public class SecurityConfig {
                 // WebSocket endpoints - must come early to allow handshake requests
                 .requestMatchers("/ws/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()
+                // When a handler throws, the container re-dispatches to /error. That
+                // dispatch carries no authentication, so with /error secured every 500
+                // reached the client as an empty 403 - the status said "you may not",
+                // the truth was "it broke". A listing failure spent an afternoon looking
+                // like a permissions problem for exactly this reason.
+                .requestMatchers("/error").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/api/users/register").permitAll()
@@ -112,6 +143,10 @@ public class SecurityConfig {
                 // Deleting retained history is an administrator's act, not a Checker's
                 // (REQ-P17). Nothing else in procurement destroys anything.
                 .requestMatchers(HttpMethod.POST, "/api/procurement/retention/purge")
+                    .hasRole("ADMIN")
+                // Migration rewrites the store wholesale; an administrator's job, not a
+                // Checker's, and one that happens once per environment
+                .requestMatchers(HttpMethod.POST, "/api/procurement/migration/**")
                     .hasRole("ADMIN")
                 // Reading is open to anyone who can see the module at all
                 .requestMatchers(HttpMethod.GET, "/api/procurement/**")

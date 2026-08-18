@@ -19,6 +19,7 @@ import com.bpdb.dms.procurement.entity.ExtractedField;
 import com.bpdb.dms.procurement.entity.OcrJob;
 import com.bpdb.dms.procurement.entity.OcrPage;
 import com.bpdb.dms.procurement.entity.OcrResult;
+import com.bpdb.dms.service.OCRService;
 import com.bpdb.dms.procurement.repository.OcrJobRepository;
 import com.bpdb.dms.procurement.repository.OcrPageRepository;
 import com.bpdb.dms.procurement.repository.OcrResultRepository;
@@ -142,6 +143,17 @@ public class ExtractionService {
     @Transactional
     public List<ExtractedField> extractFields(Long packageId, short stageCode, String documentType,
                                               Long documentId, OcrResult result) {
+        return extractFields(packageId, stageCode, documentType, documentId, result, List.of());
+    }
+
+    /**
+     * As above, but with the word boxes the OCR engine produced, so each value can record
+     * where on the page it was read from (REQ-P6).
+     */
+    @Transactional
+    public List<ExtractedField> extractFields(Long packageId, short stageCode, String documentType,
+                                              Long documentId, OcrResult result,
+                                              List<OCRService.WordBox> words) {
         List<ExtractedField> captured = new ArrayList<>();
         List<DocumentTypeField> catalogue = definitions.fieldsForDocumentType(documentType);
         if (catalogue.isEmpty()) {
@@ -171,6 +183,12 @@ public class ExtractionService {
             req.ocrResultId = result == null ? null : result.getId();
             req.rawValue = match == null ? null : match.value;
             req.confidence = match == null ? null : match.confidence;
+            // Where on the page this reading came from, where the engine could say (REQ-P6)
+            OCRService.WordBox where = match == null ? null : locate(match.value, words);
+            if (where != null) {
+                req.pageNo = where.getPageNo();
+                req.bbox = where.asBbox();
+            }
             captured.add(captureService.captureFromOcr(req));
         }
         log.info("Extracted {} candidate fields from document {} ({})",
@@ -188,6 +206,55 @@ public class ExtractionService {
 
     public List<OcrJob> failedJobs() {
         return jobRepository.findByStatus("FAILED");
+    }
+
+    /**
+     * Find the words that make up an extracted value, and return the box around them
+     * (REQ-P6).
+     *
+     * <p>The value came out of a regex over the full text, so it has no position of its
+     * own; the words do. Matching is on the word sequence, and multi-word values return
+     * the union of their boxes — a date read as "12 March 2025" should highlight the whole
+     * date, not the "12".
+     *
+     * <p>Returns null rather than guessing when the words cannot be found: a highlight in
+     * the wrong place is worse than none, because it invites a person to confirm the wrong
+     * region of the page.
+     */
+    public static OCRService.WordBox locate(String value, List<OCRService.WordBox> words) {
+        if (value == null || value.isBlank() || words == null || words.isEmpty()) {
+            return null;
+        }
+        String[] parts = value.trim().split("\\s+");
+        for (int i = 0; i + parts.length <= words.size(); i++) {
+            OCRService.WordBox box = null;
+            boolean matched = true;
+            for (int j = 0; j < parts.length; j++) {
+                OCRService.WordBox word = words.get(i + j);
+                if (word.getPageNo() != words.get(i).getPageNo()
+                        || !sameToken(word.getText(), parts[j])) {
+                    matched = false;
+                    break;
+                }
+                box = box == null ? word : box.union(word);
+            }
+            if (matched && box != null) {
+                return box;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Words as OCR returns them carry trailing punctuation and inconsistent case, neither
+     * of which means the word is a different word.
+     */
+    private static boolean sameToken(String a, String b) {
+        return strip(a).equalsIgnoreCase(strip(b));
+    }
+
+    private static String strip(String s) {
+        return s == null ? "" : s.replaceAll("^[^\\p{L}\\p{N}]+|[^\\p{L}\\p{N}]+$", "");
     }
 
     private Match findValue(String text, String patternSource) {

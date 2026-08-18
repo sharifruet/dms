@@ -58,4 +58,8 @@
     <include file="db/changelog/042-migrate-roles-to-maker-checker.xml"/>
     <include file="db/changelog/043-fix-document-versions-drift.xml"/>
     <include file="db/changelog/044-expiry-warning-state.xml"/>
+    <include file="db/changelog/045-create-missing-feature-tables.xml"/>
+
+    <!-- Deadline alerts, the other half of REQ-X8 -->
+    <include file="db/changelog/046-deadline-alerts.xml"/>
 </databaseChangeLog>

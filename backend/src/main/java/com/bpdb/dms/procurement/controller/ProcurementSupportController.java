@@ -20,8 +20,10 @@ import com.bpdb.dms.entity.ExpiryTracking;
 import com.bpdb.dms.procurement.entity.BudgetEntry;
 import com.bpdb.dms.procurement.service.BudgetService;
 import com.bpdb.dms.procurement.service.ExtractionService;
+import com.bpdb.dms.procurement.service.LegacyMigrationService;
 import com.bpdb.dms.procurement.service.LinkageService;
 import com.bpdb.dms.procurement.service.MasterListService;
+import com.bpdb.dms.procurement.service.PackageAccessService;
 import com.bpdb.dms.procurement.service.ProcurementExpiryAlertService;
 import com.bpdb.dms.procurement.service.ProcurementExpiryService;
 import com.bpdb.dms.procurement.service.ProcurementPackageService;
@@ -44,6 +46,8 @@ public class ProcurementSupportController {
     private final ProcurementExpiryAlertService alertService;
     private final ProcurementPackageService packageService;
     private final RetentionService retentionService;
+    private final LegacyMigrationService migrationService;
+    private final PackageAccessService accessService;
 
     public ProcurementSupportController(BudgetService budgetService,
                                         ProcurementExpiryService expiryService,
@@ -52,7 +56,9 @@ public class ProcurementSupportController {
                                         MasterListService masterListService,
                                         ProcurementExpiryAlertService alertService,
                                         ProcurementPackageService packageService,
-                                        RetentionService retentionService) {
+                                        RetentionService retentionService,
+                                        LegacyMigrationService migrationService,
+                                        PackageAccessService accessService) {
         this.budgetService = budgetService;
         this.expiryService = expiryService;
         this.linkageService = linkageService;
@@ -61,6 +67,8 @@ public class ProcurementSupportController {
         this.alertService = alertService;
         this.packageService = packageService;
         this.retentionService = retentionService;
+        this.migrationService = migrationService;
+        this.accessService = accessService;
     }
 
     // ------------------------------------------------------------------ budget
@@ -84,7 +92,10 @@ public class ProcurementSupportController {
     @GetMapping("/department-budgets")
     public ResponseEntity<BudgetService.DepartmentBudgetPosition> departmentBudget(
             @RequestParam Integer fiscalYear, @RequestParam String department) {
-        return ResponseEntity.ok(budgetService.departmentPosition(fiscalYear, department));
+        // The department comes from the caller's identity when scoping is on, not from
+        // the query string - otherwise anyone reads any department by asking (REQ-P20)
+        return ResponseEntity.ok(budgetService.departmentPosition(
+                fiscalYear, accessService.scopeDepartment(department)));
     }
 
     /**
@@ -209,6 +220,33 @@ public class ProcurementSupportController {
             LocalDate newDate = LocalDate.parse(body.get("expiryDate"));
             return ResponseEntity.ok(expiryService.supersede(id, newDate, body.get("reason")));
         } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ---------------------------------------------------------------- migration
+
+    /**
+     * Phase 7 migration. Dry run by default — run it, read the report, then run it again
+     * with {@code dryRun=false}. The steps are independent and safe to repeat.
+     *
+     * @param step one of {@code metadata}, {@code app-lines}, {@code relink}
+     */
+    @PostMapping("/migration/{step}")
+    public ResponseEntity<?> migrate(@PathVariable String step,
+                                     @RequestParam(defaultValue = "true") boolean dryRun,
+                                     @RequestParam(defaultValue = "BPDB") String department) {
+        Long userId = CurrentUser.id();
+        try {
+            return ResponseEntity.ok(switch (step) {
+                case "metadata" -> migrationService.migrateDocumentMetadata(dryRun, userId);
+                case "app-lines" -> migrationService.backfillPackagesFromAppLines(
+                        dryRun, department, userId);
+                case "relink" -> migrationService.relinkOrphanDocuments(dryRun, userId);
+                default -> throw new IllegalArgumentException(
+                        "Unknown migration step '" + step + "'. Expected metadata, app-lines or relink.");
+            });
+        } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }

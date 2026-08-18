@@ -23,12 +23,18 @@ public interface ProcurementPackageRepository extends JpaRepository<ProcurementP
 
     List<ProcurementPackage> findByStatus(String status);
 
+    // CAST(:search AS string) is load-bearing on PostgreSQL, not decoration. An unfilterd
+    // listing passes null for every filter, and PostgreSQL will not infer the type of a
+    // null parameter: it settles on bytea, then fails with "function lower(bytea) does not
+    // exist" and takes the whole listing down with it. The cast tells it the parameter is
+    // text. H2 never needed telling, which is why the unit tests were happy.
     @Query("SELECT p FROM ProcurementPackage p WHERE "
-         + "(:search IS NULL OR LOWER(p.packageNumber) LIKE LOWER(CONCAT('%', :search, '%')) "
-         + "   OR LOWER(p.packageDescription) LIKE LOWER(CONCAT('%', :search, '%'))) "
-         + "AND (:stage IS NULL OR p.currentStage = :stage) "
-         + "AND (:status IS NULL OR p.status = :status) "
-         + "AND (:department IS NULL OR p.department = :department)")
+         + "(CAST(:search AS string) IS NULL "
+         + "   OR LOWER(p.packageNumber) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) "
+         + "   OR LOWER(p.packageDescription) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))) "
+         + "AND (CAST(:stage AS short) IS NULL OR p.currentStage = :stage) "
+         + "AND (CAST(:status AS string) IS NULL OR p.status = :status) "
+         + "AND (CAST(:department AS string) IS NULL OR p.department = :department)")
     Page<ProcurementPackage> search(@Param("search") String search,
                                     @Param("stage") Short stage,
                                     @Param("status") String status,

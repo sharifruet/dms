@@ -5,7 +5,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
@@ -309,6 +311,109 @@ public class OCRService {
     /**
      * Process image files with OCR
      */
+    /**
+     * Word boxes for a document, so an extracted value can be pointed at on the page
+     * (REQ-P6).
+     *
+     * <p>Tesseract knows where every word sat; the text-only path threw that away. Without
+     * it the verify screen can show a value and its confidence but not <em>where it came
+     * from</em>, which is the one thing that makes checking a low-confidence reading quick
+     * rather than a hunt through a scan.
+     *
+     * <p>Best-effort by design: a PDF with an embedded text layer never reaches Tesseract,
+     * and an unavailable engine returns nothing. Both cases give an empty list, and the
+     * caller stores a value with no bbox — exactly what REQ-P6 asks for with its "where
+     * the OCR engine provides them".
+     */
+    public List<WordBox> extractWords(MultipartFile file) {
+        List<WordBox> words = new ArrayList<>();
+        if (!ocrAvailable || !ocrEnabled) {
+            return words;
+        }
+        try {
+            String contentType = file.getContentType();
+            if (isImageFile(contentType)) {
+                BufferedImage image = ImageIO.read(file.getInputStream());
+                if (image != null) {
+                    collectWords(preprocessImage(image), 1, words);
+                }
+            } else if (contentType != null && contentType.contains("pdf")) {
+                try (PDDocument document = PDDocument.load(file.getBytes())) {
+                    PDFRenderer renderer = new PDFRenderer(document);
+                    for (int i = 0; i < document.getNumberOfPages(); i++) {
+                        collectWords(renderer.renderImageWithDPI(i, 300), i + 1, words);
+                    }
+                }
+            }
+        } catch (Exception | UnsatisfiedLinkError | NoClassDefFoundError e) {
+            // Word boxes are an enhancement to the value, never a precondition for it
+            logger.warn("Word-box extraction unavailable for {}: {}",
+                    file.getOriginalFilename(), e.getMessage());
+        }
+        return words;
+    }
+
+    private void collectWords(BufferedImage image, int pageNo, List<WordBox> into) {
+        List<net.sourceforge.tess4j.Word> found =
+                tesseract.getWords(image, net.sourceforge.tess4j.ITessAPI.TessPageIteratorLevel.RIL_WORD);
+        if (found == null) {
+            return;
+        }
+        for (net.sourceforge.tess4j.Word word : found) {
+            if (word.getText() == null || word.getText().isBlank()) {
+                continue;
+            }
+            java.awt.Rectangle box = word.getBoundingBox();
+            into.add(new WordBox(word.getText().trim(), pageNo,
+                    box.x, box.y, box.width, box.height, word.getConfidence()));
+        }
+    }
+
+    /** One word and where it sat on the page. */
+    public static class WordBox {
+        private final String text;
+        private final int pageNo;
+        private final int x;
+        private final int y;
+        private final int width;
+        private final int height;
+        private final double confidence;
+
+        public WordBox(String text, int pageNo, int x, int y, int width, int height,
+                       double confidence) {
+            this.text = text;
+            this.pageNo = pageNo;
+            this.x = x;
+            this.y = y;
+            this.width = width;
+            this.height = height;
+            this.confidence = confidence;
+        }
+
+        public String getText() { return text; }
+        public int getPageNo() { return pageNo; }
+        public int getX() { return x; }
+        public int getY() { return y; }
+        public int getWidth() { return width; }
+        public int getHeight() { return height; }
+        public double getConfidence() { return confidence; }
+
+        /** The shape extracted_field.bbox stores: {@code x,y,w,h} (REQ-P6). */
+        public String asBbox() {
+            return x + "," + y + "," + width + "," + height;
+        }
+
+        /** The smallest box containing this one and another - for multi-word values. */
+        public WordBox union(WordBox other) {
+            int minX = Math.min(x, other.x);
+            int minY = Math.min(y, other.y);
+            int maxX = Math.max(x + width, other.x + other.width);
+            int maxY = Math.max(y + height, other.y + other.height);
+            return new WordBox(text + " " + other.text, pageNo, minX, minY,
+                    maxX - minX, maxY - minY, Math.min(confidence, other.confidence));
+        }
+    }
+
     private String processImageWithOCR(MultipartFile file) throws IOException, TesseractException {
         BufferedImage image = ImageIO.read(file.getInputStream());
         if (image == null) {

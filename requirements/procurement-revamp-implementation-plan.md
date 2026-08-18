@@ -522,21 +522,22 @@ as further along than they were; the table below is what is actually true.
 
 ### 11.2 Seeded but not yet wired
 
-Data exists; no code reads it. These look complete from the database side, which is
-exactly why they are called out separately.
+*Closed — both were wired in §18. Kept here because the shape of the problem recurs: data
+that exists with no code reading it looks complete from the database side, and that is
+exactly why it needs calling out separately.*
 
-| Item | Gap |
-|---|---|
-| **D-6** master lists | `procurement_master_list` holds the nine values, but nothing validates against it. REQ-2.4 ("unmatched OCR values are flagged for manual selection") is not implemented |
-| **D-13** expiry intervals | `expiry_policy` holds 90/60/30/15/7 per document type, but `ProcurementExpiryService` and the notification scheduler still use their own hard-coded defaults |
+| Item | Then | Now |
+|---|---|---|
+| **D-6** master lists | `procurement_master_list` held the nine values and nothing validated against them | `ValidationService.warnUnmatchedMasterListValues` flags unmatched values at Stage 2, and the manual field form offers the list (§18.3, §22) |
+| **D-13** expiry intervals | `expiry_policy` held the intervals and the scheduler used its own | `ProcurementExpiryAlertService` reads the policy (§18.2) |
 
 ### 11.3 Not started
 
 | Item | Note |
 |---|---|
 | **D-10** workflow-engine retirement | Documented in §2.4 only — deliberately deferred to Phase 8, after pilot sign-off |
-| **Phase 7** | Migration and backfill |
-| **Phase 8** | Integration tests over the 16-stage path, performance, security review, UAT, rollout |
+| ~~**Phase 7**~~ | *Built in §21.1; still needs a production copy in staging to be signed off* |
+| **Phase 8** | Performance under volume, UAT, rollout. Integration tests over the 16-stage path are done (§19); the security review is done (§21.2) |
 
 ### 11.4 One migration task this created
 
@@ -1133,3 +1134,316 @@ the warranty period on many of these contracts, so nothing here happens on a clo
   deliveries, invoices, payments, warranty and closure remain unexercised
 - The five reachable table-less features (§17.2) still need a fix-or-remove decision
 - Phases 7 and 8: migration, performance, security review, UAT
+
+---
+
+## 19. Stages 3–16, driven (2026-08-16)
+
+The last piece of unexamined ground. Stages 3 to 16 had never been executed — not by a
+test, not by a person — and every stage previously driven had yielded a defect the unit
+suite could not see.
+
+### 19.1 How it is written
+
+`FullLifecycleSmokeTest` walks one package from Stage 1 to Stage 16 against the real
+Liquibase-built PostgreSQL schema.
+
+Deliberately **generic**: rather than hard-coding what each stage wants, it reads the
+document requirements and the field catalogue from the database and satisfies whatever it
+finds, filling each field with a value of the right shape. A stage that gains a mandatory
+field is covered without anyone remembering to update the test — and the walk exercises
+what the system actually asks for rather than what the test author assumed.
+
+It also **collects failures rather than stopping at the first**, forcing past a broken
+stage so one run reports every stage that breaks. A walk that dies at Stage 3 tells you far
+less than one that tells you about 3, 7 and 12 at once.
+
+The walk fails if any stage needs an override to complete, so a green run means all sixteen
+gates opened on their own.
+
+### 19.2 The defect it found
+
+**Capturing Stage 1 renamed the package.**
+
+`package_number` is a mandatory catalogue field, and `StageDataService.saveStageValues`
+writes captured values straight onto the typed column — so saving Stage 1 rewrote
+`procurement_package.package_number`. In the first run the package became
+`"Smoke test value"` and every subsequent lookup failed.
+
+That is not a test artefact. Package Number is the correlation key that every stage,
+document link, budget line and expiry tracker hangs off (REQ-L2, REQ-1.2). A user
+correcting the field, or OCR reading it differently, would silently rename the package out
+from under all of them — with no uniqueness check and nothing in the audit trail saying it
+had happened.
+
+**The fix follows what the requirements already say elsewhere.** REQ-2.1 handles the same
+situation at Stage 2 by *comparing* rather than overwriting: a mismatched Package Number
+"shall raise a validation warning and block completion until resolved". Stage 1 now behaves
+the same way — the package keeps its number, the reading is still recorded in
+`extracted_field` with full provenance, and the difference is surfaced as a warning naming
+both values, because either the reading is wrong or the document belongs to another package.
+
+A package that has no number yet still takes the captured value, so creating a package from
+a document is unaffected.
+
+### 19.3 What now works, proven rather than assumed
+
+All sixteen stages complete in order on the real schema, with the gates opening on their
+own. Along the way the walk exercises, for the first time:
+
+- the BER bidder table and carrying the awarded bidder into Contract Approval (L-08)
+- NOA, performance security, contract signing
+- the LC stage on an ICT package
+- price and production schedules, inspection events
+- delivery, and declaring it final through the Checker-gated route (REQ-12.5)
+- invoicing, **and budget consumption posting from it** (REQ-B5) — asserted separately,
+  because if the money never reaches the budget the whole budget view is decorative
+- payment, warranty, and closure setting the package to CLOSED (REQ-16.4)
+
+### 19.4 Verified
+
+**152 backend tests, 0 failures, 0 errors, 3 skipped** (from 146).
+
+### 19.5 What this changes about the honest status
+
+The lifecycle now runs end to end, and the claim is backed by a build rather than by
+inspection. What remains is genuinely outside the stage engine:
+
+- the five reachable table-less features (§17.2) — fix or remove
+- Phase 7 migration, and Phase 8 performance, security review and UAT
+- no frontend tests, and the frontend for stages 3–16 is the Phase 5–6 original — the walk
+  proves the *services* work, not the screens
+
+---
+
+## 20. The table-less features, and a frontend safety net (2026-08-17)
+
+### 20.1 The five features: the evidence changed the call
+
+In §17.2 these were left as a decision, on the grounds that writing ~70 columns of schema
+for features outside the procurement revamp was the scope creep R-5 warns about. Checking
+what the frontend actually reaches changed that:
+
+| Entity | Reachable from the UI? |
+|---|---|
+| `MLModel` | **Yes.** `/ml` is a routed page in the shipped navigation, and it calls `GET /ml/models` on load |
+| `Webhook` | No — a page file exists but is not routed |
+| `DocumentTemplate` | No — a service, no page |
+| `SmartFolderDefinition` | No |
+| `OptimizationTask` | No |
+
+So one of them is not hypothetical: **a user clicking Machine Learning gets a 500 today**,
+because `ml_models` does not exist. That is a live defect in shipped navigation, not
+speculative feature work, and it tips the balance.
+
+Changeset **045** creates all five tables. Two things made this safe to do rather than
+argue about:
+
+- The definitions were **generated from the entities** — a throwaway run with
+  `ddl-auto=create` against a scratch container, dumped from `information_schema` — rather
+  than transcribed by hand. Schema and mappings agree by construction, and
+  `LiquibaseSchemaAgreementTest` now holds them to it.
+- Creating a table cannot break anything that currently works, because none of this
+  currently works.
+
+**What it does not claim:** that these features are correct. A table lets them start; it
+does not make them right. Each still needs someone to exercise it or decide it is not
+wanted — that decision is now cheap and no longer urgent, because nothing 500s.
+
+The quarantine list is down from **15 tables to 6**.
+
+### 20.2 Frontend tests, where there were none
+
+This project had one test file, broken since the initial commit, and nothing else. Every
+frontend rule built in the last few sessions rested on inspection alone.
+
+`@testing-library/react` is now installed with a `setupTests.ts`, and there are **15 passing
+tests** covering the places where the UI is the only thing between a user and a wrong
+impression:
+
+- **A field OCR disagrees with** — the confirmed value stands, the competing reading is
+  visible, and it reads as a disagreement rather than an ordinary caution
+- **Manual field entry** — an input exists for a mandatory field with no value, the
+  outstanding count is right, a captured value pre-fills so the form doubles as a
+  correction, and OCR-sourced fields are left alone
+- **`useProcurementRole`** — Maker captures but cannot approve, Checker and Admin can,
+  the `ROLE_` prefix is tolerated either way, and a signed-out user gets nothing rather
+  than an exception. If this drifts from `SecurityConfig`, Makers get dead buttons again
+
+**The long-broken Login test now passes too.** Three separate faults, each hiding the next:
+relative paths that resolved a directory too high, a missing `@testing-library/jest-dom`
+so `toBeInTheDocument` did not exist, an assertion looking for a button called "Login" when
+the button says "Sign in" — and finally a mock shaped `{ login }` when the component imports
+the named `authService` object and calls `authService.login(...)`. It could never have
+passed as written.
+
+### 20.3 Still to come
+
+Phase 7 migration and Phase 8 performance/security/UAT, and the screens for stages 3–16 are
+still the Phase 5–6 originals — the lifecycle walk proves the services, not the UI.
+
+---
+
+## 21. Phase 7 migration, and a security review (2026-08-17)
+
+### 21.1 Phase 7 — built, but not yet met real data
+
+`LegacyMigrationService` covers the three moves the plan names, each independently runnable
+and each **dry run by default** — the plan's own instruction on this phase is "do not skip
+the dry run", and a migration that cannot tell you what it is about to do is not one anyone
+can sign off:
+
+| Step | What it does |
+|---|---|
+| `document_metadata` → `extracted_field` | Untyped key/value with a confidence becomes a captured field with provenance |
+| `app_lines` → packages | Backfills packages for APP rows imported before the module existed |
+| Document re-linking | Attaches orphan documents to a package by the package number in their extracted text |
+
+Three properties are what make it safe to run on data nobody can get back, and each is
+pinned by a test:
+
+- **Migrated values arrive as `OCR_SUGGESTED`, not confirmed.** Nobody ever reviewed them.
+  Importing them as verified would fabricate a review that never happened and leave the
+  verify screen with nothing to ask.
+- **Running it twice changes nothing.** It will be run twice — once in staging, once for
+  real — and if the first run is interrupted somebody will start it again.
+- **Rows it cannot place are reported, never dropped.** A document naming two package
+  numbers is left for a person: a wrong link is worse than an absent one, because nobody
+  goes looking for a document that is already filed somewhere plausible.
+
+**What this does not establish.** Every legacy table is empty in the environments reachable
+from here — `document_metadata`, `app_lines` and `expiry_tracking` all have zero rows — so
+the tests use synthetic data. That proves the mechanics; it does not prove BPDB's data
+survives the trip. The reconciliation report the plan asks for still needs a production copy
+in staging.
+
+### 21.2 Security review — four findings, two fixed
+
+**Fixed — the JWT signing key was committed to the repository.** The same string,
+`mySecretKey123…`, hard-coded identically in `application.properties`,
+`application-docker.properties` and `application-local.properties`. Anyone who could read
+the repository could mint a valid token for any user, administrators included. For a
+government procurement system this was the most serious thing in the review.
+
+It now comes from `JWT_SECRET`, and `JwtUtil` **refuses to start** without one of at least
+32 bytes. Failing at startup is deliberate: a missing key that falls back to a default is
+the same vulnerability wearing a different hat, and nobody notices a warning in a log.
+An application that will not start gets fixed. *(This immediately proved its worth — it
+broke 26 tests that had been quietly running on the production profile's key.)*
+
+**Fixed — the procurement upload accepted anything.** No size limit, no type check, not even
+an empty-file check, while the ordinary document upload validated all three. The same file
+rejected at one door was accepted at the other. It now applies the same ceiling and an
+extension allow-list.
+
+**Reported — CORS allows any origin with credentials.** `setAllowedOriginPatterns("*")`
+together with `setAllowCredentials(true)`, and CSRF disabled. Left alone because narrowing
+it will break whatever hosts the frontend today, and that list is the client's to supply.
+It should be an explicit list before go-live.
+
+**Reported — no row-level access control (REQ-P20).** Package ids are taken straight from
+the path with no ownership check, and `department` is a filter the *caller* supplies rather
+than one derived from their identity. Any authenticated user holding `PROCUREMENT_VIEW` can
+read and act on any package. Q-20 puts one department in the pilot, so the impact today is
+nil — but the requirement is explicit, and this is the kind of gap that stops being
+theoretical the moment a second department is added.
+
+**Checked and clean:** no SQL built by concatenation anywhere in the module (JPA and
+parameterised `JdbcTemplate` throughout, including the migration); no credentials or tokens
+in log statements; upload paths generated rather than taken from the filename, so no
+traversal.
+
+### 21.3 Verified
+
+**160 backend tests, 0 failures, 0 errors, 3 skipped** (from 152); 15 frontend tests.
+
+### 21.4 What remains
+
+- **Phase 8 proper**: performance under expected volume, and UAT — which needs BPDB
+- The Phase 7 reconciliation against a real production copy (§21.1)
+- CORS origins and row-level access (§21.2)
+- The screens for stages 3–16 are still the Phase 5–6 originals
+
+---
+
+## 22. The requirements nothing implemented (2026-08-18)
+
+An audit of all 135 REQ ids against the code found 58 never referenced anywhere. Most were
+satisfied generically — the catalogue-driven capture covers "capture field X at stage Y"
+without naming the id — but eleven were genuinely absent, and they clustered in a
+revealing way: **everything that reports, warns or reconciles**, as opposed to everything
+that captures and gates.
+
+That is not a coincidence. The stage engine gets exercised by every test and every run;
+the reporting layer gets exercised by nobody until a user asks where their money went.
+
+### 22.1 What was missing, and what it now does
+
+| Requirement | Was | Now |
+|---|---|---|
+| **REQ-10.3** e-GP price schedule as the item baseline | `price_schedule_line` had a table, an entity and no writer. Stages 12 and 13 had quantities and amounts with nothing to compare them against | `savePriceSchedule` stores the schedule against the contract; a delivery names the lines it fulfils and is refused if it names a line that is not on the schedule; over-delivery per item and billing past the baseline total are both flagged. `PriceScheduleTable` enters it as a grid, because that is the shape of the source document |
+| **REQ-12.3** late delivery | Nothing compared a delivery date to anything | `warnLateDelivery` measures against the contract date plus the delivery period — the schedule's period where it has one, the contract's otherwise — and names how many days late. Flagged, never blocked: it describes a delivery that already happened |
+| **REQ-13.5** supplier vs awarded bidder | No reconciliation | `warnSupplierDiffersFromAward` compares leniently, so "Ltd." against "Limited" is not a discrepancy. What it is looking for is an invoice from a company nobody recognises |
+| **REQ-16.1** closure gate | The gate checked only the *previous* stage, so rework could leave Stage 7 open while 8–15 were done and closure would still pass | Closing checks every prior stage and names each one outstanding |
+| **REQ-16.3** closure reconciliation | Absent | `reconcileAtClosure` reports released, consumed and the residual, written onto the closure record. Recorded rather than derived on demand, because every input to it can move afterwards |
+| **REQ-11.3** SAT applicability | `sat_applicable` was a column with no logic | The catalogue's `is_conditional` flag now means something: `ConditionalRequirementService` makes the SAT Report block completion once a user declares SAT applies |
+| **REQ-B8** budget threshold alert | `BudgetSummary.lowBudget` was a flag on a screen nobody had open | `BudgetAlertService` raises a notification when a budget line or an invoice moves the position below the threshold, or past zero. Event-driven rather than a nightly sweep: the position only moves when somebody acts, and alerting on the action reaches them while they can still do something |
+| **REQ-X5** lifecycle dashboard | Stage distribution and two counts | Elapsed days per package in its current stage, overdue deadlines, the estate's budget position, and open expiries — plus a `/timeline` endpoint answering "how long did tendering actually take" |
+| **REQ-X8** deadline alerts | Only expiry dates drove alerts | PG Submission, Contract Signing and the delivery window now do too. Three rules make it bearable: a met deadline goes quiet, a moved deadline starts its warnings again, and overdue is said once |
+| **REQ-P6** source regions | `bbox` was a column nothing ever wrote | `OCRService.extractWords` returns Tesseract's word boxes; `ExtractionService.locate` finds the words behind a matched value and stores the box around them |
+| **REQ-P20** row-level access | Package ids taken from the path with no ownership check | `PackageAccessService` plus an interceptor over `/api/procurement/**`. See §22.3 — it is deliberately off by default |
+| **REQ-L9** search package context | Search returned filenames | `SearchContextService` decorates each hit with package number, contract number and stage |
+
+Two further gaps found while implementing: the field **history** endpoint existed and was
+unreachable (REQ-P5), and there was no way to **re-run OCR** on a filed document (REQ-P10)
+short of uploading it twice. Both now have a UI.
+
+### 22.2 What the audit got wrong
+
+Worth recording, because it was an error in the review rather than in the code.
+
+**REQ-P9–P12 were reported as "extraction is synchronous, no async, no retry".** The
+requirement text says nothing about async. It asks that OCR text be persisted per document
+and per page (P9), that re-running be additive with an `is_current` flip (P10), that failed
+jobs persist with their error and attempt count (P11), and that unusable scans be flagged
+for manual entry (P12). Three of those were already implemented correctly. Only P12's flag
+and a route to trigger P10 were missing. The "async with retry" phrasing came from this
+plan's own Phase 3 task list, not from the requirements — a good reminder that an
+implementation plan is not a substitute for the thing it plans.
+
+### 22.3 Row-level access is built and switched off
+
+`app.procurement.enforce-department-scope` defaults to **false**.
+
+Q-20 puts a single department in the pilot. In a single-department deployment, turning
+cross-department refusal on can only produce false refusals — a user whose department is
+spelled differently, or blank, loses access to work that is plainly theirs. The rule is
+built, tested and dormant; the day a second department arrives it is a configuration
+change rather than a project.
+
+Administrators are unscoped, and a package with no department belongs to nobody in
+particular and stays visible. Where a caller supplies a department as a query parameter,
+the identity wins over the parameter — otherwise anyone reads any department by asking.
+
+### 22.4 Deliberately not done
+
+- **No bbox overlay on the scan.** The coordinates are recorded against the image the
+  engine saw — a PDF page rendered at 300 DPI, or a pre-processed photograph — and the
+  browser renders something else at a different scale. A box drawn a centimetre off is
+  worse than no box, because it invites somebody to confirm the wrong line. `SourcePreview`
+  shows the page, the coordinates, and the OCR text with the value marked in it. The data
+  REQ-P6 asks for is now persisted, so a true overlay is a UI change whenever the scaling
+  is worth solving properly.
+- **Delivery line entry in the UI.** The API accepts item lines against a delivery and the
+  validation uses them; the delivery form still captures a single total quantity. The
+  baseline works for the checks that matter today; per-line delivery entry is the natural
+  next step.
+
+### 22.5 Verified
+
+- Changeset **046** (`deadline_alert_state`) with rollback
+- **16 new unit tests** in `CrossStageRulesTest`: name matching, closure arithmetic, word
+  location including the multi-word and cross-page cases, unusable-scan detection, deadline
+  state transitions, and the delivery window
+- `ContractCloseTest` extended to pin that closure reconciles the money
+- Full backend suite and frontend tests green; frontend typechecks clean

@@ -19,11 +19,14 @@ import org.mockito.MockitoAnnotations;
 
 import com.bpdb.dms.procurement.entity.PackageStage;
 import com.bpdb.dms.procurement.entity.ProcurementPackage;
+import com.bpdb.dms.procurement.repository.ContractClosureRepository;
 import com.bpdb.dms.procurement.repository.DocumentLinkRepository;
 import com.bpdb.dms.procurement.repository.ExtractedFieldRepository;
 import com.bpdb.dms.procurement.repository.PackageStageRepository;
 import com.bpdb.dms.procurement.repository.ProcurementPackageRepository;
 import com.bpdb.dms.procurement.repository.TenderRepository;
+import com.bpdb.dms.procurement.service.BudgetService;
+import com.bpdb.dms.procurement.service.ConditionalRequirementService;
 import com.bpdb.dms.procurement.service.ProcurementAuditService;
 import com.bpdb.dms.procurement.service.ProcurementExpiryService;
 import com.bpdb.dms.procurement.service.StageDefinitionService;
@@ -53,6 +56,9 @@ class ContractCloseTest {
     @Mock private ValidationService validationService;
     @Mock private ProcurementAuditService auditService;
     @Mock private ProcurementExpiryService expiryService;
+    @Mock private ConditionalRequirementService conditionalRequirements;
+    @Mock private BudgetService budgetService;
+    @Mock private ContractClosureRepository closureRepository;
 
     private StageEngine engine;
     private ProcurementPackage pkg;
@@ -63,7 +69,8 @@ class ContractCloseTest {
         mocks = MockitoAnnotations.openMocks(this);
         engine = new StageEngine(packageRepository, stageRepository, documentLinkRepository,
                 fieldRepository, tenderRepository, definitions, validationService,
-                auditService, expiryService);
+                auditService, expiryService, conditionalRequirements, budgetService,
+                closureRepository);
 
         pkg = new ProcurementPackage();
         pkg.setId(PACKAGE_ID);
@@ -93,11 +100,14 @@ class ContractCloseTest {
         stageIs(LAST_STAGE, PackageStage.IN_PROGRESS);
         stageIs((short) (LAST_STAGE - 1), PackageStage.COMPLETED);
         when(expiryService.closeAllForPackage(PACKAGE_ID)).thenReturn(3);
+        when(budgetService.reconcileAtClosure(PACKAGE_ID)).thenReturn(reconciliation());
 
         engine.complete(PACKAGE_ID, LAST_STAGE, USER_ID, null);
 
         assertEquals("CLOSED", pkg.getStatus());
         verify(expiryService).closeAllForPackage(PACKAGE_ID);
+        // The money is reconciled and reported at closure, not left to be worked out later
+        verify(budgetService).reconcileAtClosure(PACKAGE_ID);
     }
 
     @Test
@@ -112,6 +122,16 @@ class ContractCloseTest {
 
         assertEquals("ACTIVE", pkg.getStatus());
         verify(expiryService, never()).closeAllForPackage(anyLong());
+    }
+
+    /** Released more than was consumed - the ordinary case at closure (REQ-16.3). */
+    private BudgetService.ClosureReconciliation reconciliation() {
+        BudgetService.ClosureReconciliation r = new BudgetService.ClosureReconciliation();
+        r.packageId = PACKAGE_ID;
+        r.released = new java.math.BigDecimal("1000.00");
+        r.consumed = new java.math.BigDecimal("900.00");
+        r.residual = new java.math.BigDecimal("100.00");
+        return r;
     }
 
     private void stageIs(short code, String status) {

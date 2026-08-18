@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,13 +16,19 @@ import com.bpdb.dms.procurement.entity.BerBidder;
 import com.bpdb.dms.procurement.entity.Contract;
 import com.bpdb.dms.procurement.entity.ContractApproval;
 import com.bpdb.dms.procurement.entity.Delivery;
+import com.bpdb.dms.procurement.entity.DeliveryLine;
 import com.bpdb.dms.procurement.entity.Evaluation;
 import com.bpdb.dms.procurement.entity.InspectionEvent;
 import com.bpdb.dms.procurement.entity.Invoice;
 import com.bpdb.dms.procurement.entity.InvoiceDeliveryLink;
 import com.bpdb.dms.procurement.entity.Payment;
 import com.bpdb.dms.procurement.entity.PaymentInvoiceLink;
+import com.bpdb.dms.procurement.entity.PriceSchedule;
+import com.bpdb.dms.procurement.entity.PriceScheduleLine;
 import com.bpdb.dms.procurement.repository.BerBidderRepository;
+import com.bpdb.dms.procurement.repository.DeliveryLineRepository;
+import com.bpdb.dms.procurement.repository.PriceScheduleLineRepository;
+import com.bpdb.dms.procurement.repository.PriceScheduleRepository;
 import com.bpdb.dms.procurement.repository.ContractApprovalRepository;
 import com.bpdb.dms.procurement.repository.DeliveryRepository;
 import com.bpdb.dms.procurement.repository.InspectionEventRepository;
@@ -49,6 +57,9 @@ public class ProcurementRecordService {
     private final InvoiceDeliveryLinkRepository invoiceDeliveryLinkRepository;
     private final PaymentRepository paymentRepository;
     private final PaymentInvoiceLinkRepository paymentInvoiceLinkRepository;
+    private final PriceScheduleRepository priceScheduleRepository;
+    private final PriceScheduleLineRepository priceScheduleLineRepository;
+    private final DeliveryLineRepository deliveryLineRepository;
     private final StageDataService stageDataService;
     private final ValidationService validationService;
     private final BudgetService budgetService;
@@ -62,6 +73,9 @@ public class ProcurementRecordService {
                                     InvoiceDeliveryLinkRepository invoiceDeliveryLinkRepository,
                                     PaymentRepository paymentRepository,
                                     PaymentInvoiceLinkRepository paymentInvoiceLinkRepository,
+                                    PriceScheduleRepository priceScheduleRepository,
+                                    PriceScheduleLineRepository priceScheduleLineRepository,
+                                    DeliveryLineRepository deliveryLineRepository,
                                     StageDataService stageDataService,
                                     ValidationService validationService,
                                     BudgetService budgetService,
@@ -74,6 +88,9 @@ public class ProcurementRecordService {
         this.invoiceDeliveryLinkRepository = invoiceDeliveryLinkRepository;
         this.paymentRepository = paymentRepository;
         this.paymentInvoiceLinkRepository = paymentInvoiceLinkRepository;
+        this.priceScheduleRepository = priceScheduleRepository;
+        this.priceScheduleLineRepository = priceScheduleLineRepository;
+        this.deliveryLineRepository = deliveryLineRepository;
         this.stageDataService = stageDataService;
         this.validationService = validationService;
         this.budgetService = budgetService;
@@ -146,7 +163,112 @@ public class ProcurementRecordService {
                 .orElseGet(List::of);
     }
 
+    // ------------------------------------------------ Stage 10: price schedule
+
+    /**
+     * Store the e-GP price schedule against the contract (REQ-10.3).
+     *
+     * <p>This is the item and price baseline everything downstream is measured against:
+     * a delivery names the schedule lines it fulfils, and an invoice is checked against
+     * what those lines are worth. Without it, Stages 12 and 13 have quantities and amounts
+     * with nothing to compare them to — which is how a contract quietly over-delivers on
+     * one item and under-delivers on another while the totals still look right.
+     *
+     * <p>Lines are replaced wholesale, matching how the BER table is handled: the schedule
+     * is one document, and a re-read of it supersedes the last.
+     */
+    @Transactional
+    public PriceSchedule savePriceSchedule(Long packageId, String source,
+                                           Integer deliveryPeriodDays,
+                                           List<PriceScheduleLine> lines) {
+        Contract contract = requireContract(packageId);
+        PriceSchedule schedule = priceScheduleRepository.findByContractId(contract.getId())
+                .orElseGet(PriceSchedule::new);
+        schedule.setContractId(contract.getId());
+        if (source != null) {
+            schedule.setSource(source);
+        }
+        if (deliveryPeriodDays != null) {
+            schedule.setDeliveryPeriodDays(deliveryPeriodDays);
+        }
+        PriceSchedule saved = priceScheduleRepository.save(schedule);
+
+        if (lines != null) {
+            priceScheduleLineRepository.deleteAll(
+                    priceScheduleLineRepository.findByScheduleIdOrderByLineNoAsc(saved.getId()));
+            int lineNo = 1;
+            for (PriceScheduleLine line : lines) {
+                line.setId(null);
+                line.setScheduleId(saved.getId());
+                if (line.getLineNo() == null) {
+                    line.setLineNo(lineNo);
+                }
+                // A line's value is quantity x unit price unless the schedule states it,
+                // so a schedule that omits the extension is still a usable baseline
+                if (line.getLineAmount() == null && line.getQuantity() != null
+                        && line.getUnitPrice() != null) {
+                    line.setLineAmount(line.getQuantity().multiply(line.getUnitPrice()));
+                }
+                if (line.getCurrency() == null) {
+                    line.setCurrency(contract.getCurrency());
+                }
+                priceScheduleLineRepository.save(line);
+                lineNo++;
+            }
+        }
+        log.info("Price schedule saved for package {} with {} lines (REQ-10.3)",
+                packageId, lines == null ? 0 : lines.size());
+        return saved;
+    }
+
+    public Optional<PriceSchedule> priceSchedule(Long packageId) {
+        return stageDataService.findContract(packageId)
+                .flatMap(c -> priceScheduleRepository.findByContractId(c.getId()));
+    }
+
+    public List<PriceScheduleLine> priceScheduleLines(Long packageId) {
+        return priceSchedule(packageId)
+                .map(s -> priceScheduleLineRepository.findByScheduleIdOrderByLineNoAsc(s.getId()))
+                .orElseGet(List::of);
+    }
+
     // ----------------------------------------------------- Stage 12: deliveries
+
+    /**
+     * Save a delivery together with the price-schedule lines it fulfils (REQ-10.3).
+     *
+     * <p>Item lines are optional — a services contract may have nothing to itemise — but
+     * where they are given they are checked against the baseline, because a delivery
+     * naming a line that is not on the schedule is either the wrong line or the wrong
+     * schedule, and both are worth stopping at the door.
+     */
+    @Transactional
+    public Delivery saveDelivery(Long packageId, Delivery delivery, List<DeliveryLine> lines) {
+        Delivery saved = saveDelivery(packageId, delivery);
+        if (lines == null) {
+            return saved;
+        }
+        Set<Long> baseline = priceScheduleLines(packageId).stream()
+                .map(PriceScheduleLine::getId).collect(Collectors.toSet());
+        deliveryLineRepository.deleteAll(deliveryLineRepository.findByDeliveryId(saved.getId()));
+        for (DeliveryLine line : lines) {
+            if (line.getPriceScheduleLineId() != null
+                    && !baseline.isEmpty()
+                    && !baseline.contains(line.getPriceScheduleLineId())) {
+                throw new IllegalArgumentException("Delivery line references price schedule line "
+                        + line.getPriceScheduleLineId()
+                        + ", which is not on this contract's price schedule (REQ-10.3)");
+            }
+            line.setId(null);
+            line.setDeliveryId(saved.getId());
+            deliveryLineRepository.save(line);
+        }
+        return saved;
+    }
+
+    public List<DeliveryLine> deliveryLines(Long deliveryId) {
+        return deliveryLineRepository.findByDeliveryId(deliveryId);
+    }
 
     @Transactional
     public Delivery saveDelivery(Long packageId, Delivery delivery) {

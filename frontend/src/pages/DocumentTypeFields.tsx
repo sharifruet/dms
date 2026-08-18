@@ -229,6 +229,11 @@ const DocumentTypeFields: React.FC = () => {
                     <TableCell>Field Key</TableCell>
                     <TableCell>Label</TableCell>
                     <TableCell>Type</TableCell>
+                    {/* The procurement catalogue columns (REQ-P13) */}
+                    <TableCell>Stage</TableCell>
+                    <TableCell>Stored as</TableCell>
+                    <TableCell>Captured by</TableCell>
+                    <TableCell>Mandatory</TableCell>
                     <TableCell>Required</TableCell>
                     <TableCell>OCR Mappable</TableCell>
                     <TableCell>Display Order</TableCell>
@@ -239,7 +244,7 @@ const DocumentTypeFields: React.FC = () => {
                 <TableBody>
                   {fields.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} align="center">
+                      <TableCell colSpan={12} align="center">
                         No fields configured for this document type
                       </TableCell>
                     </TableRow>
@@ -250,6 +255,30 @@ const DocumentTypeFields: React.FC = () => {
                         <TableCell>{field.fieldLabel}</TableCell>
                         <TableCell>
                           <Chip label={field.fieldType} size="small" />
+                        </TableCell>
+                        <TableCell>
+                          {field.stageCode ? `Stage ${field.stageCode}` : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {field.entityType
+                            ? `${field.entityType}.${field.entityColumn ?? '?'}`
+                            : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {field.captureSource ? (
+                            <Chip
+                              label={field.captureSource}
+                              size="small"
+                              color={field.captureSource === 'MANUAL' ? 'default' : 'info'}
+                            />
+                          ) : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {field.isMandatory ? (
+                            <Chip label="Gates the stage" color="warning" size="small" />
+                          ) : (
+                            <Chip label="No" size="small" />
+                          )}
                         </TableCell>
                         <TableCell>
                           {field.isRequired ? (
@@ -359,6 +388,71 @@ const DocumentTypeFields: React.FC = () => {
                 type="number"
                 value={formData.displayOrder}
                 onChange={(e) => setFormData({ ...formData, displayOrder: parseInt(e.target.value) || 0 })}
+              />
+            </Grid>
+            {/*
+              The procurement catalogue columns (REQ-P13). A field is added to a stage by
+              filling these in rather than by a code change, which is what makes the
+              catalogue configuration and not a hard-coded stage form.
+            */}
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                label="Stage (1-16)"
+                type="number"
+                value={formData.stageCode ?? ''}
+                helperText="Which lifecycle stage this field belongs to"
+                onChange={(e) => setFormData({
+                  ...formData,
+                  stageCode: e.target.value === '' ? undefined : parseInt(e.target.value, 10),
+                })}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                label="Entity"
+                value={formData.entityType || ''}
+                helperText="e.g. TENDER, CONTRACT"
+                onChange={(e) => setFormData({ ...formData, entityType: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <TextField
+                fullWidth
+                label="Entity column"
+                value={formData.entityColumn || ''}
+                helperText="The typed column the value lands on"
+                onChange={(e) => setFormData({ ...formData, entityColumn: e.target.value })}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel>Captured by</InputLabel>
+                <Select
+                  value={formData.captureSource || 'OCR'}
+                  label="Captured by"
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    captureSource: e.target.value as DocumentTypeField['captureSource'],
+                  })}
+                >
+                  <MenuItem value="OCR">OCR — read from the document</MenuItem>
+                  <MenuItem value="MANUAL">Manual — typed in</MenuItem>
+                  <MenuItem value="DERIVED">Derived — computed</MenuItem>
+                  <MenuItem value="IMPORT">Import — from a spreadsheet</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={formData.isMandatory || false}
+                    onChange={(e) => setFormData({ ...formData, isMandatory: e.target.checked })}
+                  />
+                }
+                label="Mandatory — blocks stage completion until confirmed"
               />
             </Grid>
             <Grid item xs={12}>

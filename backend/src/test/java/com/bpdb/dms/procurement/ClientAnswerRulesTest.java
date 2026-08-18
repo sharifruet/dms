@@ -24,7 +24,8 @@ class ClientAnswerRulesTest {
     // Every collaborator is null: these rules are pure arithmetic on a contract and a
     // figure, and none of them reaches a repository
     private final ValidationService validation = new ValidationService(
-            null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+            null, null, null, null, null, null, null, null, null, null,
+            null, null, null, null, null, null, null, null, null, null);
 
     // ------------------------------------------------- Q-12: no over-billing
 

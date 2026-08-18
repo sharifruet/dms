@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+      Five entities had no table at all, so every one of their endpoints threw on its first
+      query. One of them is not hypothetical: /ml is in the shipped navigation, the page
+      calls GET /ml/models on load, and users get a 500.
+
+      These definitions are generated from the entities rather than transcribed, so the
+      schema and the mappings agree by construction - which LiquibaseSchemaAgreementTest
+      then holds them to.
+
+      What this does NOT claim: that these features work. It makes them able to start
+      rather than fail instantly. Each still needs someone to exercise it or decide it is
+      not wanted - see the note in the plan. Creating a table cannot break anything that
+      currently works, because none of this currently works.
+    -->
+
+    <changeSet id="045-001" author="dms">
+        <comment>ml_models - reachable from /ml, currently 500s on page load</comment>
+        <createTable tableName="ml_models">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_ml_models"/>
+            </column>
+            <column name="name" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="description" type="VARCHAR(1000)"/>
+            <column name="model_type" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="status" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="version" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="model_path" type="VARCHAR(500)"/>
+            <column name="training_data_path" type="VARCHAR(500)"/>
+            <column name="model_config" type="VARCHAR(5000)"/>
+            <column name="performance_metrics" type="VARCHAR(2000)"/>
+            <column name="accuracy_score" type="DOUBLE PRECISION"/>
+            <column name="precision_score" type="DOUBLE PRECISION"/>
+            <column name="recall_score" type="DOUBLE PRECISION"/>
+            <column name="f1_score" type="DOUBLE PRECISION"/>
+            <column name="training_started_at" type="TIMESTAMP"/>
+            <column name="training_completed_at" type="TIMESTAMP"/>
+            <column name="last_prediction_at" type="TIMESTAMP"/>
+            <column name="prediction_count" type="BIGINT" defaultValueNumeric="0"/>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="auto_retrain" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="retrain_frequency_days" type="INTEGER" defaultValueNumeric="30"/>
+            <column name="next_retrain_at" type="TIMESTAMP"/>
+            <column name="created_by" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="last_modified_by" type="BIGINT"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="ml_models" baseColumnNames="created_by"
+                                 constraintName="fk_ml_models_created_by"
+                                 referencedTableName="users" referencedColumnNames="id"/>
+        <rollback><dropTable tableName="ml_models"/></rollback>
+    </changeSet>
+
+    <changeSet id="045-002" author="dms">
+        <comment>webhooks</comment>
+        <createTable tableName="webhooks">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_webhooks"/>
+            </column>
+            <column name="name" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="description" type="VARCHAR(1000)"/>
+            <column name="url" type="VARCHAR(500)"><constraints nullable="false"/></column>
+            <column name="event_type" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="secret_key" type="VARCHAR(100)"/>
+            <column name="status" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="is_enabled" type="BOOLEAN" defaultValueBoolean="true"/>
+            <column name="retry_count" type="INTEGER" defaultValueNumeric="3"/>
+            <column name="timeout_seconds" type="INTEGER" defaultValueNumeric="30"/>
+            <column name="headers" type="VARCHAR(2000)"/>
+            <column name="payload_template" type="VARCHAR(5000)"/>
+            <column name="created_by" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="last_triggered_at" type="TIMESTAMP"/>
+            <column name="success_count" type="BIGINT" defaultValueNumeric="0"/>
+            <column name="failure_count" type="BIGINT" defaultValueNumeric="0"/>
+            <column name="last_error" type="VARCHAR(1000)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="webhooks" baseColumnNames="created_by"
+                                 constraintName="fk_webhooks_created_by"
+                                 referencedTableName="users" referencedColumnNames="id"/>
+        <rollback><dropTable tableName="webhooks"/></rollback>
+    </changeSet>
+
+    <changeSet id="045-003" author="dms">
+        <comment>document_templates</comment>
+        <createTable tableName="document_templates">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_document_templates"/>
+            </column>
+            <column name="name" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="description" type="VARCHAR(1000)"/>
+            <column name="template_type" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="file_path" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="file_size" type="BIGINT"/>
+            <column name="mime_type" type="VARCHAR(255)"/>
+            <column name="template_content" type="VARCHAR(10000)"/>
+            <column name="variables" type="VARCHAR(2000)"/>
+            <column name="validation_rules" type="VARCHAR(2000)"/>
+            <column name="status" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="is_public" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="usage_count" type="BIGINT" defaultValueNumeric="0"/>
+            <column name="created_by" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="last_modified_by" type="BIGINT"/>
+            <column name="last_used_at" type="TIMESTAMP"/>
+            <column name="metadata" type="VARCHAR(5000)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="document_templates" baseColumnNames="created_by"
+                                 constraintName="fk_doc_templates_created_by"
+                                 referencedTableName="users" referencedColumnNames="id"/>
+        <rollback><dropTable tableName="document_templates"/></rollback>
+    </changeSet>
+
+    <changeSet id="045-004" author="dms">
+        <comment>optimization_tasks</comment>
+        <createTable tableName="optimization_tasks">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_optimization_tasks"/>
+            </column>
+            <column name="optimization_type" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="status" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="description" type="VARCHAR(255)"/>
+            <column name="parameters" type="TEXT"/>
+            <column name="results" type="TEXT"/>
+            <column name="error_message" type="VARCHAR(255)"/>
+            <column name="execution_time_ms" type="BIGINT"/>
+            <column name="started_at" type="TIMESTAMP"/>
+            <column name="completed_at" type="TIMESTAMP"/>
+            <column name="created_by" type="VARCHAR(255)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+        </createTable>
+        <rollback><dropTable tableName="optimization_tasks"/></rollback>
+    </changeSet>
+
+    <changeSet id="045-005" author="dms">
+        <comment>smart_folders</comment>
+        <createTable tableName="smart_folders">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" primaryKeyName="pk_smart_folders"/>
+            </column>
+            <column name="name" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="description" type="VARCHAR(1000)"/>
+            <column name="definition" type="TEXT"><constraints nullable="false"/></column>
+            <column name="scope" type="VARCHAR(255)"><constraints nullable="false"/></column>
+            <column name="owner_id" type="BIGINT"><constraints nullable="false"/></column>
+            <column name="is_active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP"/>
+            <column name="updated_at" type="TIMESTAMP"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="smart_folders" baseColumnNames="owner_id"
+                                 constraintName="fk_smart_folders_owner"
+                                 referencedTableName="users" referencedColumnNames="id"/>
+        <rollback><dropTable tableName="smart_folders"/></rollback>
+    </changeSet>
+
+</databaseChangeLog>

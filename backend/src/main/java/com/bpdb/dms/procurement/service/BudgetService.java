@@ -46,19 +46,22 @@ public class BudgetService {
     private final DepartmentBudgetRepository departmentBudgetRepository;
     private final ProcurementPackageRepository packageRepository;
     private final ProcurementAuditService auditService;
+    private final BudgetAlertService alertService;
 
     public BudgetService(BudgetEntryRepository entryRepository,
                          BudgetConsumptionRepository consumptionRepository,
                          ContractPackageRepository contractPackageRepository,
                          DepartmentBudgetRepository departmentBudgetRepository,
                          ProcurementPackageRepository packageRepository,
-                         ProcurementAuditService auditService) {
+                         ProcurementAuditService auditService,
+                         BudgetAlertService alertService) {
         this.entryRepository = entryRepository;
         this.consumptionRepository = consumptionRepository;
         this.contractPackageRepository = contractPackageRepository;
         this.departmentBudgetRepository = departmentBudgetRepository;
         this.packageRepository = packageRepository;
         this.auditService = auditService;
+        this.alertService = alertService;
     }
 
     @Transactional
@@ -86,13 +89,14 @@ public class BudgetService {
         // Money moving is exactly what an audit asks about (REQ-X6)
         auditService.budgetEntryAdded(userId, packageId, entryType, amount, reason);
 
-        if (RELEASE.equals(entryType)) {
-            BudgetSummary summary = summary(packageId);
-            if (summary.totalRelease.compareTo(summary.totalAvailable) > 0) {
-                log.warn("Package {} cumulative release {} exceeds available budget {} (REQ-B2)",
-                        packageId, summary.totalRelease, summary.totalAvailable);
-            }
+        BudgetSummary summary = summary(packageId);
+        if (RELEASE.equals(entryType)
+                && summary.totalRelease.compareTo(summary.totalAvailable) > 0) {
+            log.warn("Package {} cumulative release {} exceeds available budget {} (REQ-B2)",
+                    packageId, summary.totalRelease, summary.totalAvailable);
         }
+        // Entering a budget line is one of the two things that moves the position (REQ-B8)
+        alertService.positionChanged(packageId, summary);
         return saved;
     }
 
@@ -136,6 +140,11 @@ public class BudgetService {
             consumption.setCurrency(invoice.getCurrency() == null ? "BDT" : invoice.getCurrency());
             consumption.setPostedAt(LocalDateTime.now());
             posted.add(consumptionRepository.save(consumption));
+        }
+        // The other thing that moves the position, and the one nobody types by hand: an
+        // invoice can walk a package past its budget without anyone entering a figure (REQ-B8)
+        for (var link : links) {
+            alertService.positionChanged(link.getPackageId(), summary(link.getPackageId()));
         }
         return posted;
     }
@@ -233,6 +242,59 @@ public class BudgetService {
                     department, fiscalYear, position.committed, position.allocated);
         }
         return position;
+    }
+
+    // ------------------------------------------------- REQ-16.3: closure reconciliation
+
+    /**
+     * Reconcile consumption against release for a package, and report the residual
+     * (REQ-16.3).
+     *
+     * <p>Release is money actually made available; consumption is money actually invoiced.
+     * The residual between them is the figure that matters at closure — an unreleased
+     * balance is a planning number, but an unconsumed release is real money sitting
+     * against a package nobody is working on any more.
+     *
+     * <p>Consumption exceeding release is reported rather than treated as an error. It is
+     * a legitimate state — invoices are checked against the contract value, not against
+     * whether the release paperwork has caught up — but it is one somebody should see.
+     */
+    public ClosureReconciliation reconcileAtClosure(Long packageId) {
+        ClosureReconciliation r = new ClosureReconciliation();
+        r.packageId = packageId;
+        BudgetSummary summary = summary(packageId);
+        r.released = summary.totalRelease;
+        r.consumed = summary.totalConsumption;
+        r.available = summary.totalAvailable;
+        r.residual = r.released.subtract(r.consumed);
+        r.consumedBeyondRelease = r.residual.signum() < 0;
+        r.contractId = contractPackageRepository.findByPackageId(packageId).stream()
+                .findFirst().map(cp -> cp.getContractId()).orElse(null);
+        return r;
+    }
+
+    /** What closure found: released, consumed, and what is left over. */
+    public static class ClosureReconciliation {
+        public Long packageId;
+        public Long contractId;
+        public BigDecimal released = BigDecimal.ZERO;
+        public BigDecimal consumed = BigDecimal.ZERO;
+        public BigDecimal available = BigDecimal.ZERO;
+        public BigDecimal residual = BigDecimal.ZERO;
+        public boolean consumedBeyondRelease;
+
+        /** One line, written to survive in the closure record (REQ-16.3). */
+        public String summary() {
+            return "Budget at closure: released " + released.toPlainString()
+                    + ", consumed " + consumed.toPlainString()
+                    + ", residual " + residual.toPlainString()
+                    + (consumedBeyondRelease
+                        ? " (consumption exceeds release - the shortfall needs a release entry"
+                          + " or a written explanation)"
+                        : residual.signum() > 0
+                            ? " (unconsumed release to be surrendered)"
+                            : " (fully consumed)");
+        }
     }
 
     public List<BudgetEntry> entries(Long packageId) {

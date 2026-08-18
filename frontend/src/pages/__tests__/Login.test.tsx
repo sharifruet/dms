@@ -3,13 +3,19 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { BrowserRouter } from 'react-router-dom';
 import { configureStore } from '@reduxjs/toolkit';
-import Login from '../pages/Login';
-import authSlice from '../store/slices/authSlice';
+import Login from '../Login';
+import authSlice from '../../store/slices/authSlice';
 
 // Mock the API service
-jest.mock('../services/authService', () => ({
-  login: jest.fn(),
-  register: jest.fn(),
+// Login imports the named `authService` object and calls authService.login(...), so the
+// mock has to have that shape - a bare { login } module never matched what the component
+// actually uses, which is why this test could not pass even once the paths were right.
+jest.mock('../../services/authService', () => ({
+  authService: {
+    login: jest.fn(),
+    register: jest.fn(),
+    logout: jest.fn(),
+  },
 }));
 
 const createTestStore = () => {
@@ -41,13 +47,13 @@ describe('Login Component', () => {
     
     expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /login/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument();
   });
 
   test('shows validation errors for empty fields', async () => {
     renderWithProviders(<Login />);
     
-    const loginButton = screen.getByRole('button', { name: /login/i });
+    const loginButton = screen.getByRole('button', { name: /sign in/i });
     fireEvent.click(loginButton);
     
     await waitFor(() => {
@@ -57,7 +63,7 @@ describe('Login Component', () => {
   });
 
   test('submits form with valid data', async () => {
-    const mockLogin = require('../services/authService').login;
+    const mockLogin = require('../../services/authService').authService.login;
     mockLogin.mockResolvedValue({
       token: 'mock-token',
       user: { username: 'testuser', role: 'OFFICER' }
@@ -67,7 +73,7 @@ describe('Login Component', () => {
     
     const usernameInput = screen.getByLabelText(/username/i);
     const passwordInput = screen.getByLabelText(/password/i);
-    const loginButton = screen.getByRole('button', { name: /login/i });
+    const loginButton = screen.getByRole('button', { name: /sign in/i });
     
     fireEvent.change(usernameInput, { target: { value: 'testuser' } });
     fireEvent.change(passwordInput, { target: { value: 'password123' } });

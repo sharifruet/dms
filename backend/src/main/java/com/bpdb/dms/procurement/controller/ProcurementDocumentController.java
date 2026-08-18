@@ -70,6 +70,22 @@ public class ProcurementDocumentController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    /**
+     * Run OCR over this document again (REQ-P10).
+     *
+     * <p>Additive — the earlier reading keeps its version and stays retrievable. Capture
+     * rather than approval, so a Maker may do it: re-reading a document proposes values,
+     * it does not confirm them, and a confirmed value survives the pass untouched.
+     */
+    @PostMapping("/{documentId}/reocr")
+    public ResponseEntity<?> reOcr(@PathVariable Long documentId) {
+        try {
+            return ResponseEntity.ok(uploadService.reOcr(documentId, CurrentUser.id()));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/by-package/{packageId}")
     public ResponseEntity<List<DocumentLink>> byPackage(@PathVariable Long packageId,
                                                         @RequestParam(required = false) Short stage) {

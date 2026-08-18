@@ -1,5 +1,9 @@
 package com.bpdb.dms.procurement.service;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,6 +30,7 @@ import com.bpdb.dms.procurement.repository.DeliveryRepository;
 import com.bpdb.dms.procurement.repository.EvaluationRepository;
 import com.bpdb.dms.procurement.repository.InvoiceRepository;
 import com.bpdb.dms.procurement.repository.LetterOfCreditRepository;
+import com.bpdb.dms.procurement.repository.PackageStageRepository;
 import com.bpdb.dms.procurement.repository.PaymentRepository;
 import com.bpdb.dms.procurement.repository.ProcurementPackageRepository;
 import com.bpdb.dms.procurement.repository.TenderOpeningRepository;
@@ -56,6 +61,9 @@ public class ProcurementPackageService {
     private final DeliveryRepository deliveryRepository;
     private final InvoiceRepository invoiceRepository;
     private final PaymentRepository paymentRepository;
+    private final PackageStageRepository stageRepository;
+    private final DeadlineAlertService deadlineAlertService;
+    private final ProcurementExpiryService expiryService;
 
     public ProcurementPackageService(ProcurementPackageRepository packageRepository,
                                      AppLineRepository appLineRepository,
@@ -71,7 +79,10 @@ public class ProcurementPackageService {
                                      LetterOfCreditRepository lcRepository,
                                      DeliveryRepository deliveryRepository,
                                      InvoiceRepository invoiceRepository,
-                                     PaymentRepository paymentRepository) {
+                                     PaymentRepository paymentRepository,
+                                     PackageStageRepository stageRepository,
+                                     DeadlineAlertService deadlineAlertService,
+                                     ProcurementExpiryService expiryService) {
         this.packageRepository = packageRepository;
         this.appLineRepository = appLineRepository;
         this.stageEngine = stageEngine;
@@ -87,6 +98,9 @@ public class ProcurementPackageService {
         this.deliveryRepository = deliveryRepository;
         this.invoiceRepository = invoiceRepository;
         this.paymentRepository = paymentRepository;
+        this.stageRepository = stageRepository;
+        this.deadlineAlertService = deadlineAlertService;
+        this.expiryService = expiryService;
     }
 
     @Transactional
@@ -204,9 +218,19 @@ public class ProcurementPackageService {
         return graph;
     }
 
-    /** Stage distribution for the lifecycle dashboard (REQ-X5). */
+    /**
+     * The lifecycle view (REQ-X5): where every package is, how long it has been there,
+     * what is overdue, the money position and the expiries still open.
+     *
+     * <p>Stage distribution alone answers "how busy are we". The requirement asks the
+     * harder question — which packages are in trouble — and that needs elapsed time and
+     * deadlines beside the counts. A package that has sat at Stage 7 for ninety days is
+     * invisible in a bar chart and obvious in a list sorted by how long it has been stuck.
+     */
     public Map<String, Object> dashboard() {
+        LocalDate today = LocalDate.now();
         Map<String, Object> result = new LinkedHashMap<>();
+
         List<Map<String, Object>> byStage = new ArrayList<>();
         for (Object[] row : packageRepository.countByStage()) {
             Map<String, Object> entry = new LinkedHashMap<>();
@@ -217,8 +241,116 @@ public class ProcurementPackageService {
             byStage.add(entry);
         }
         result.put("byStage", byStage);
-        result.put("totalActive", packageRepository.findByStatus("ACTIVE").size());
+
+        List<ProcurementPackage> active = packageRepository.findByStatus("ACTIVE");
+        result.put("totalActive", active.size());
         result.put("totalClosed", packageRepository.findByStatus("CLOSED").size());
+
+        // Elapsed time in the current stage, per package (REQ-X5)
+        List<Map<String, Object>> ageing = new ArrayList<>();
+        BigDecimal totalAvailable = BigDecimal.ZERO;
+        BigDecimal totalConsumed = BigDecimal.ZERO;
+        BigDecimal totalRemaining = BigDecimal.ZERO;
+        int lowBudgetPackages = 0;
+
+        for (ProcurementPackage pkg : active) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("packageId", pkg.getId());
+            row.put("packageNumber", pkg.getPackageNumber());
+            row.put("stageCode", pkg.getCurrentStage());
+            row.put("stageName", pkg.getCurrentStage() == null
+                    ? null : definitions.stageName(pkg.getCurrentStage()));
+
+            LocalDateTime enteredAt = currentStageEnteredAt(pkg);
+            row.put("stageEnteredAt", enteredAt);
+            row.put("daysInStage", enteredAt == null
+                    ? null : ChronoUnit.DAYS.between(enteredAt.toLocalDate(), today));
+            ageing.add(row);
+
+            BudgetService.BudgetSummary budget = budgetService.summary(pkg.getId());
+            totalAvailable = totalAvailable.add(budget.totalAvailable);
+            totalConsumed = totalConsumed.add(budget.totalConsumption);
+            totalRemaining = totalRemaining.add(budget.remaining);
+            if (budget.lowBudget || budget.overspent) {
+                lowBudgetPackages++;
+            }
+        }
+        ageing.sort((a, b) -> Long.compare(
+                b.get("daysInStage") == null ? -1 : (Long) b.get("daysInStage"),
+                a.get("daysInStage") == null ? -1 : (Long) a.get("daysInStage")));
+        result.put("stageAgeing", ageing);
+
+        Map<String, Object> budgetPosition = new LinkedHashMap<>();
+        budgetPosition.put("available", totalAvailable);
+        budgetPosition.put("consumed", totalConsumed);
+        budgetPosition.put("remaining", totalRemaining);
+        budgetPosition.put("packagesBelowThreshold", lowBudgetPackages);
+        result.put("budget", budgetPosition);
+
+        // Overdue deadlines, and the ones about to be (REQ-X5, REQ-X8)
+        List<DeadlineAlertService.PackageDeadline> deadlines =
+                deadlineAlertService.openDeadlines(today);
+        result.put("deadlines", deadlines);
+        result.put("overdueDeadlines", deadlines.stream().filter(d -> d.overdue).toList());
+
+        // Open expiries, so the two kinds of date sit side by side (REQ-E4)
+        result.put("openExpiries", expiryService.expiringWithin(90));
         return result;
+    }
+
+    /**
+     * The package's history as a sequence: when each stage opened, when it closed, how
+     * long it took, and what is recorded against it.
+     *
+     * <p>The stage rows already hold this; nothing assembled them in time order before, so
+     * the question "how long did tendering actually take" had no answer short of reading
+     * the table by hand.
+     */
+    public List<Map<String, Object>> timeline(Long packageId) {
+        List<Map<String, Object>> events = new ArrayList<>();
+        LocalDate today = LocalDate.now();
+
+        for (PackageStage stage : stageEngine.stagesOf(packageId)) {
+            if (stage.getEnteredAt() == null && !stage.isSatisfied()) {
+                continue; // never started, nothing to say about it yet
+            }
+            Map<String, Object> event = new LinkedHashMap<>();
+            event.put("stageCode", stage.getStageCode());
+            event.put("stageName", definitions.stageName(stage.getStageCode()));
+            event.put("status", stage.getStatus());
+            event.put("applicable", !Boolean.FALSE.equals(stage.getIsApplicable()));
+            event.put("enteredAt", stage.getEnteredAt());
+            event.put("completedAt", stage.getCompletedAt());
+            event.put("completedBy", stage.getCompletedBy());
+            event.put("reworkReason", stage.getReworkReason());
+
+            LocalDateTime from = stage.getEnteredAt();
+            LocalDateTime to = stage.getCompletedAt();
+            if (from != null) {
+                event.put("elapsedDays", ChronoUnit.DAYS.between(
+                        from.toLocalDate(), to == null ? today : to.toLocalDate()));
+                event.put("open", to == null);
+            }
+            events.add(event);
+        }
+        events.sort((a, b) -> Short.compare((Short) a.get("stageCode"), (Short) b.get("stageCode")));
+        return events;
+    }
+
+    /**
+     * When the package entered the stage it is sitting in now.
+     *
+     * <p>Rework reopens a stage, so this is the last entry rather than the first: "how
+     * long has this been stuck" means since it was last picked up, not since it was first
+     * touched months ago.
+     */
+    private LocalDateTime currentStageEnteredAt(ProcurementPackage pkg) {
+        if (pkg.getCurrentStage() == null) {
+            return null;
+        }
+        return stageRepository
+                .findByPackageIdAndStageCode(pkg.getId(), pkg.getCurrentStage())
+                .map(PackageStage::getEnteredAt)
+                .orElse(null);
     }
 }

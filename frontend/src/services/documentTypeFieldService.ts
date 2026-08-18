@@ -15,6 +15,17 @@ export interface DocumentTypeField {
   displayOrder: number;
   isActive: boolean;
   description?: string;
+
+  /**
+   * The catalogue columns the procurement revamp added (REQ-P13). They decide which stage
+   * a field belongs to, which typed column it lands on, and whether OCR is expected to
+   * find it — all configuration rather than code, which is the point of the requirement.
+   */
+  stageCode?: number;
+  entityType?: string;
+  entityColumn?: string;
+  captureSource?: 'OCR' | 'MANUAL' | 'DERIVED' | 'IMPORT';
+  isMandatory?: boolean;
 }
 
 export interface FieldOption {

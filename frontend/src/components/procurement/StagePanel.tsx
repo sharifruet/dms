@@ -17,9 +17,17 @@ import {
   Typography,
 } from '@mui/material';
 import procurementService from '../../services/procurementService';
-import { BerBidder, ExtractedField, StageDetail } from '../../types/procurement';
+import {
+  BerBidder,
+  ExtractedField,
+  MasterListValue,
+  StageDetail,
+} from '../../types/procurement';
 import DocumentChecklist from './DocumentChecklist';
 import FieldRow from './FieldRow';
+import SourcePreview from './SourcePreview';
+import FieldHistoryDialog from './FieldHistoryDialog';
+import PriceScheduleTable from './PriceScheduleTable';
 import BidderTable from './BidderTable';
 import StageRecords from './StageRecords';
 import TenderAttempts from './TenderAttempts';
@@ -55,6 +63,12 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
   const [error, setError] = useState<string | null>(null);
   const [dialog, setDialog] = useState<null | 'override' | 'notApplicable' | 'rework'>(null);
   const [dialogReason, setDialogReason] = useState('');
+  // Where a value came from, and what it has been (REQ-X3, REQ-P5)
+  const [sourceField, setSourceField] = useState<ExtractedField | null>(null);
+  const [historyField, setHistoryField] = useState<ExtractedField | null>(null);
+  // The permitted Type / Method / Nature values, so Stage 2 offers them rather than
+  // leaving the user to guess the spelling (Q-8, REQ-2.4)
+  const [masterLists, setMasterLists] = useState<Record<string, MasterListValue[]>>({});
   const { canApprove } = useProcurementRole();
 
   const load = useCallback(async () => {
@@ -72,6 +86,22 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    procurementService
+      .getMasterLists()
+      .then((lists) => {
+        if (!cancelled) setMasterLists(lists || {});
+      })
+      .catch(() => {
+        // Free text stays a legitimate fallback: the server flags an unmatched value as a
+        // warning, so a missing list must not stop the field being filled in
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const refresh = async () => {
     await load();
@@ -259,6 +289,8 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
               field={field}
               onVerify={handleVerify}
               onOverride={handleOverride}
+              onShowSource={setSourceField}
+              onShowHistory={setHistoryField}
             />
           ))
         )}
@@ -267,12 +299,21 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
       <ManualFieldForm
         catalogue={detail.catalogue}
         fields={detail.fields}
+        masterLists={masterLists}
         disabled={completed || notApplicable}
         onSave={handleSaveManualFields}
       />
 
       {stageCode === STAGE_TENDER && (
         <TenderAttempts packageId={packageId} onChanged={refresh} />
+      )}
+
+      {stageCode === 10 && (
+        <PriceScheduleTable
+          packageId={packageId}
+          disabled={completed || notApplicable}
+          onChanged={refresh}
+        />
       )}
 
       {stageCode === 4 && (
@@ -367,6 +408,9 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <SourcePreview field={sourceField} onClose={() => setSourceField(null)} />
+      <FieldHistoryDialog field={historyField} onClose={() => setHistoryField(null)} />
     </Box>
   );
 };

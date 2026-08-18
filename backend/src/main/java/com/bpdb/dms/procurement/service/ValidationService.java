@@ -1,8 +1,12 @@
 package com.bpdb.dms.procurement.service;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
@@ -10,7 +14,11 @@ import org.springframework.stereotype.Service;
 import com.bpdb.dms.procurement.entity.BerBidder;
 import com.bpdb.dms.procurement.entity.Contract;
 import com.bpdb.dms.procurement.entity.Delivery;
+import com.bpdb.dms.procurement.entity.DeliveryLine;
 import com.bpdb.dms.procurement.entity.Evaluation;
+import com.bpdb.dms.procurement.entity.InspectionEvent;
+import com.bpdb.dms.procurement.entity.PriceSchedule;
+import com.bpdb.dms.procurement.entity.PriceScheduleLine;
 import com.bpdb.dms.procurement.entity.Invoice;
 import com.bpdb.dms.procurement.entity.LetterOfCredit;
 import com.bpdb.dms.procurement.entity.Noa;
@@ -23,8 +31,12 @@ import com.bpdb.dms.procurement.repository.BerBidderRepository;
 import com.bpdb.dms.procurement.repository.ContractApprovalRepository;
 import com.bpdb.dms.procurement.repository.ContractPackageRepository;
 import com.bpdb.dms.procurement.repository.ContractRepository;
+import com.bpdb.dms.procurement.repository.DeliveryLineRepository;
 import com.bpdb.dms.procurement.repository.DeliveryRepository;
 import com.bpdb.dms.procurement.repository.EvaluationRepository;
+import com.bpdb.dms.procurement.repository.InspectionEventRepository;
+import com.bpdb.dms.procurement.repository.PriceScheduleLineRepository;
+import com.bpdb.dms.procurement.repository.PriceScheduleRepository;
 import com.bpdb.dms.procurement.repository.InvoiceRepository;
 import com.bpdb.dms.procurement.repository.LetterOfCreditRepository;
 import com.bpdb.dms.procurement.repository.NoaRepository;
@@ -61,6 +73,10 @@ public class ValidationService {
     private final MasterListService masterListService;
     private final ProcurementPackageRepository packageRepository;
     private final ExtractedFieldRepository fieldRepository;
+    private final PriceScheduleRepository priceScheduleRepository;
+    private final PriceScheduleLineRepository priceScheduleLineRepository;
+    private final DeliveryLineRepository deliveryLineRepository;
+    private final InspectionEventRepository inspectionRepository;
 
     public ValidationService(TenderRepository tenderRepository,
                              TenderOpeningRepository openingRepository,
@@ -77,7 +93,11 @@ public class ValidationService {
                              PaymentRepository paymentRepository,
                              MasterListService masterListService,
                              ProcurementPackageRepository packageRepository,
-                             ExtractedFieldRepository fieldRepository) {
+                             ExtractedFieldRepository fieldRepository,
+                             PriceScheduleRepository priceScheduleRepository,
+                             PriceScheduleLineRepository priceScheduleLineRepository,
+                             DeliveryLineRepository deliveryLineRepository,
+                             InspectionEventRepository inspectionRepository) {
         this.tenderRepository = tenderRepository;
         this.openingRepository = openingRepository;
         this.evaluationRepository = evaluationRepository;
@@ -94,6 +114,10 @@ public class ValidationService {
         this.masterListService = masterListService;
         this.packageRepository = packageRepository;
         this.fieldRepository = fieldRepository;
+        this.priceScheduleRepository = priceScheduleRepository;
+        this.priceScheduleLineRepository = priceScheduleLineRepository;
+        this.deliveryLineRepository = deliveryLineRepository;
+        this.inspectionRepository = inspectionRepository;
     }
 
     /** Hard errors for a stage - these block completion. */
@@ -120,6 +144,15 @@ public class ValidationService {
             case 4 -> warnBidderCount(packageId, warnings);
             case 7 -> warnPerformanceSecurity(packageId, warnings);
             case 9 -> warnLcAgainstContract(packageId, warnings);
+            case 11 -> warnSatOutstanding(packageId, warnings);
+            case 12 -> {
+                warnLateDelivery(packageId, warnings);
+                warnDeliveryAgainstBaseline(packageId, warnings);
+            }
+            case 13 -> {
+                warnSupplierDiffersFromAward(packageId, warnings);
+                warnInvoiceAgainstBaseline(packageId, warnings);
+            }
             case 15 -> warnWarrantyAgainstContract(packageId, warnings);
             default -> { /* nothing to warn about */ }
         }
@@ -269,6 +302,262 @@ public class ValidationService {
                             + "' but this package is '" + pkg.getPackageNumber()
                             + "'. The package keeps its number - check the document belongs here."));
         });
+    }
+
+    /**
+     * A declared SAT that has not been carried out (REQ-11.3).
+     *
+     * <p>The blocking half of this rule lives in the stage gate, which makes the SAT
+     * Report a required document once somebody declares it applies. This is the softer
+     * half: the report may be filed while the test itself is still marked outstanding,
+     * and that mismatch is worth saying out loud rather than inferring from a checkbox.
+     */
+    private void warnSatOutstanding(Long packageId, List<String> warnings) {
+        List<InspectionEvent> events = inspectionsFor(packageId);
+        boolean declared = events.stream().anyMatch(e -> Boolean.TRUE.equals(e.getSatApplicable()));
+        boolean done = events.stream()
+                .filter(e -> Boolean.TRUE.equals(e.getSatApplicable()))
+                .anyMatch(e -> Boolean.TRUE.equals(e.getSatDone()));
+        if (declared && !done) {
+            warnings.add("A Site Acceptance Test has been declared applicable but is not "
+                    + "recorded as done. The SAT Report is required before this stage can "
+                    + "complete (REQ-11.3).");
+        }
+    }
+
+    /**
+     * Delivery against the contractual window (REQ-12.3).
+     *
+     * <p>The window is the contract date plus the delivery period agreed at Stage 8, or
+     * the period on the price schedule where the schedule states its own. Late delivery is
+     * flagged, never blocked: it is a fact about a delivery that already happened, and
+     * refusing to record it would only mean the lateness goes unrecorded too.
+     */
+    private void warnLateDelivery(Long packageId, List<String> warnings) {
+        Optional<Contract> found = primaryContract(packageId);
+        if (found.isEmpty()) {
+            return;
+        }
+        Contract contract = found.get();
+        LocalDate due = contractualDeliveryDeadline(contract);
+        if (due == null) {
+            warnings.add("No Delivery Period is recorded on the contract, so delivery dates "
+                    + "cannot be checked against the contractual window (REQ-12.3).");
+            return;
+        }
+        for (Delivery d : deliveryRepository.findByContractId(contract.getId())) {
+            if (d.getDeliveryDate() != null && d.getDeliveryDate().isAfter(due)) {
+                long daysLate = ChronoUnit.DAYS.between(due, d.getDeliveryDate());
+                warnings.add("Delivery " + reference(d) + " on " + d.getDeliveryDate()
+                        + " is " + daysLate + (daysLate == 1 ? " day" : " days")
+                        + " past the contractual window, which ended " + due
+                        + " (REQ-12.3).");
+            }
+        }
+    }
+
+    /**
+     * The contractual delivery deadline: contract date + delivery period in days.
+     *
+     * <p>The price schedule's own period wins where it has one, because the schedule is
+     * the later and more specific document (REQ-10.3); the contract's figure is the
+     * fallback.
+     */
+    public LocalDate contractualDeliveryDeadline(Contract contract) {
+        if (contract == null || contract.getContractDate() == null) {
+            return null;
+        }
+        Integer days = priceScheduleRepository.findByContractId(contract.getId())
+                .map(PriceSchedule::getDeliveryPeriodDays)
+                .orElse(null);
+        if (days == null) {
+            days = contract.getDeliveryPeriodDays();
+        }
+        if (days == null) {
+            // A completion date is a weaker but still real statement of when it is due
+            return contract.getCompletionDate();
+        }
+        return contract.getContractDate().plusDays(days);
+    }
+
+    /**
+     * Delivered quantities against the price schedule (REQ-10.3).
+     *
+     * <p>The schedule is the item baseline, so over-delivering a line is as much a
+     * discrepancy as over-billing — it is just one that shows up in a warehouse rather
+     * than on an invoice.
+     */
+    private void warnDeliveryAgainstBaseline(Long packageId, List<String> warnings) {
+        Optional<Contract> found = primaryContract(packageId);
+        if (found.isEmpty()) {
+            return;
+        }
+        List<PriceScheduleLine> baseline = baselineLines(found.get().getId());
+        if (baseline.isEmpty()) {
+            return; // no schedule filed - REQ-10.3 has nothing to measure against yet
+        }
+        Map<Long, BigDecimal> deliveredPerLine = new HashMap<>();
+        for (Delivery d : deliveryRepository.findByContractId(found.get().getId())) {
+            for (DeliveryLine line : deliveryLineRepository.findByDeliveryId(d.getId())) {
+                if (line.getPriceScheduleLineId() == null) {
+                    continue;
+                }
+                deliveredPerLine.merge(line.getPriceScheduleLineId(),
+                        line.getQuantity() == null ? BigDecimal.ZERO : line.getQuantity(),
+                        BigDecimal::add);
+            }
+        }
+        for (PriceScheduleLine line : baseline) {
+            BigDecimal delivered = deliveredPerLine.get(line.getId());
+            if (delivered == null || line.getQuantity() == null) {
+                continue;
+            }
+            if (delivered.compareTo(line.getQuantity()) > 0) {
+                warnings.add("Item '" + itemLabel(line) + "': delivered "
+                        + delivered.toPlainString() + " against a scheduled quantity of "
+                        + line.getQuantity().toPlainString() + " (REQ-10.3).");
+            }
+        }
+    }
+
+    /**
+     * Invoiced amount against what the price schedule says the goods are worth (REQ-10.3).
+     *
+     * <p>The contract ceiling (REQ-13.3) already refuses an invoice that would over-bill
+     * the contract as a whole. This is the finer check: an invoice can sit under the
+     * contract value and still be billing more for an item than the schedule prices it at.
+     */
+    private void warnInvoiceAgainstBaseline(Long packageId, List<String> warnings) {
+        Optional<Contract> found = primaryContract(packageId);
+        if (found.isEmpty()) {
+            return;
+        }
+        List<PriceScheduleLine> baseline = baselineLines(found.get().getId());
+        if (baseline.isEmpty()) {
+            return;
+        }
+        BigDecimal scheduleValue = baseline.stream()
+                .map(l -> l.getLineAmount() == null ? BigDecimal.ZERO : l.getLineAmount())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (scheduleValue.signum() <= 0) {
+            return;
+        }
+        BigDecimal billed = invoiceRepository.findByContractId(found.get().getId()).stream()
+                .map(i -> i.getInvoiceAmount() == null ? BigDecimal.ZERO : i.getInvoiceAmount())
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (billed.compareTo(scheduleValue) > 0) {
+            warnings.add("Invoiced " + billed.toPlainString()
+                    + " against a price schedule totalling " + scheduleValue.toPlainString()
+                    + " - the billed total has passed the item baseline (REQ-10.3).");
+        }
+    }
+
+    /**
+     * Supplier on the invoice against the bidder the BER awarded (REQ-13.5).
+     *
+     * <p>Names rarely match to the character — "Ltd." against "Limited", a branch name,
+     * a trading name — so this compares leniently and reports rather than blocks. What it
+     * is really looking for is the case where an invoice arrives from a company nobody
+     * recognises, which is worth a human look and never worth an automatic rejection.
+     */
+    private void warnSupplierDiffersFromAward(Long packageId, List<String> warnings) {
+        Optional<Contract> found = primaryContract(packageId);
+        if (found.isEmpty()) {
+            return;
+        }
+        Contract contract = found.get();
+        String awarded = awardedBidderName(packageId);
+        String reference = awarded != null ? awarded : contract.getSupplierName();
+        if (reference == null || reference.isBlank()) {
+            return;
+        }
+        String source = awarded != null ? "the awarded bidder" : "the contract";
+        for (Invoice invoice : invoiceRepository.findByContractId(contract.getId())) {
+            String supplier = invoice.getSupplierName();
+            if (supplier == null || supplier.isBlank()) {
+                warnings.add("Invoice " + invoice.getInvoiceNumber()
+                        + " names no supplier to reconcile against " + source
+                        + " '" + reference + "' (REQ-13.5).");
+                continue;
+            }
+            if (!namesMatch(supplier, reference)) {
+                warnings.add("Invoice " + invoice.getInvoiceNumber() + " is from '"
+                        + supplier + "' but " + source + " is '" + reference
+                        + "' - check this invoice belongs to this contract (REQ-13.5).");
+            }
+        }
+    }
+
+    /**
+     * The bidder the BER awarded.
+     *
+     * <p>Preferring the id Contract Approval carries (L-08) over scanning for the awarded
+     * flag: the approval is the decision, the flag is how it was recorded.
+     */
+    private String awardedBidderName(Long packageId) {
+        String fromApproval = approvalRepository.findByPackageId(packageId)
+                .map(a -> a.getAwardedBidderId())
+                .flatMap(id -> id == null ? Optional.empty() : bidderRepository.findById(id))
+                .map(BerBidder::getBidderName)
+                .filter(n -> n != null && !n.isBlank())
+                .orElse(null);
+        if (fromApproval != null) {
+            return fromApproval;
+        }
+        return evaluationFor(packageId)
+                .map(e -> bidderRepository.findByEvaluationIdOrderByBidRankAsc(e.getId()))
+                .orElseGet(List::of).stream()
+                .filter(b -> Boolean.TRUE.equals(b.getIsAwarded()))
+                .map(BerBidder::getBidderName)
+                .filter(n -> n != null && !n.isBlank())
+                .findFirst().orElse(null);
+    }
+
+    /** Evaluation reached the way the graph links it: tender to opening to evaluation. */
+    private Optional<Evaluation> evaluationFor(Long packageId) {
+        return tenderRepository.findByPackageIdAndIsCurrentTrue(packageId)
+                .flatMap(t -> openingRepository.findByTenderId(t.getId()))
+                .flatMap(o -> evaluationRepository.findByOpeningId(o.getId()));
+    }
+
+    /**
+     * Company names compared the way a person would: case, punctuation and the usual
+     * suffixes ignored, so "ABC Engineering Ltd." and "ABC Engineering Limited" are the
+     * same company and nobody is asked to confirm it.
+     */
+    public static boolean namesMatch(String a, String b) {
+        return normaliseCompany(a).equals(normaliseCompany(b));
+    }
+
+    private static String normaliseCompany(String name) {
+        String n = name.toLowerCase().replaceAll("[^a-z0-9 ]", " ");
+        n = n.replaceAll("\\b(limited|ltd|private|pvt|company|co|corporation|corp|"
+                + "incorporated|inc|and|the)\\b", " ");
+        return n.replaceAll("\\s+", " ").trim();
+    }
+
+    private List<PriceScheduleLine> baselineLines(Long contractId) {
+        return priceScheduleRepository.findByContractId(contractId)
+                .map(s -> priceScheduleLineRepository.findByScheduleIdOrderByLineNoAsc(s.getId()))
+                .orElseGet(List::of);
+    }
+
+    private List<InspectionEvent> inspectionsFor(Long packageId) {
+        return primaryContract(packageId)
+                .map(c -> inspectionRepository.findByContractId(c.getId()))
+                .orElseGet(List::of);
+    }
+
+    private static String itemLabel(PriceScheduleLine line) {
+        if (line.getItemDescription() != null && !line.getItemDescription().isBlank()) {
+            return line.getItemDescription();
+        }
+        return line.getItemCode() == null ? "line " + line.getLineNo() : line.getItemCode();
+    }
+
+    private static String reference(Delivery d) {
+        return d.getDeliveryReferenceNumber() == null
+                ? "#" + d.getId() : d.getDeliveryReferenceNumber();
     }
 
     /**

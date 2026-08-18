@@ -48,6 +48,8 @@ const BudgetPanel: React.FC<Props> = ({ packageId }) => {
   const [draft, setDraft] = useState<Record<string, any>>({ entryType: 'ALLOCATION', currency: 'BDT' });
   const [department, setDepartment] = useState<DepartmentBudget | null>(null);
   const [position, setPosition] = useState<DepartmentBudgetPosition | null>(null);
+  const [annualDraft, setAnnualDraft] = useState<Record<string, any>>({ currency: 'BDT' });
+  const [savingAnnual, setSavingAnnual] = useState(false);
   const { canApprove } = useProcurementRole();
 
   const load = useCallback(async () => {
@@ -84,6 +86,38 @@ const BudgetPanel: React.FC<Props> = ({ packageId }) => {
       setError(e?.response?.data?.error || 'Could not save the entry');
     }
   };
+
+  /**
+   * Set the department's annual budget (REQ-B0, Q-13).
+   *
+   * The panel has said "a Checker can set one" since it was built, with nowhere to do it.
+   * Approval here is a permission check rather than a routed workflow, so the person who
+   * can set it is the person looking at this form.
+   */
+  const saveAnnualBudget = async () => {
+    setError(null);
+    setSavingAnnual(true);
+    try {
+      await procurementService.saveDepartmentBudget({
+        fiscalYear: Number(annualDraft.fiscalYear),
+        department: annualDraft.department,
+        allocatedAmount: Number(annualDraft.allocatedAmount),
+        currency: annualDraft.currency,
+        notes: annualDraft.notes,
+      });
+      setAnnualDraft({ currency: 'BDT' });
+      await load();
+    } catch (e: any) {
+      setError(e?.response?.data?.error || 'Could not save the annual budget');
+    } finally {
+      setSavingAnnual(false);
+    }
+  };
+
+  const annualComplete =
+    Boolean(annualDraft.fiscalYear) &&
+    Boolean(annualDraft.department) &&
+    Boolean(annualDraft.allocatedAmount);
 
   const tile = (label: string, value?: number, color?: string) => (
     <Grid item xs={6} md={3}>
@@ -144,9 +178,55 @@ const BudgetPanel: React.FC<Props> = ({ packageId }) => {
           No annual budget is on file for this department and fiscal year, so there is
           nothing for this package to draw down from.
           {canApprove
-            ? ' Set one to track the departmental position.'
+            ? ' Set one below to track the departmental position.'
             : ' A Checker can set one.'}
         </Alert>
+      )}
+
+      {/* The form the message above used to promise (REQ-B0) */}
+      {canApprove && (
+        <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            {position ? 'Revise the annual budget' : 'Set the annual budget'}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            One figure per department per fiscal year. Package allocations draw down
+            against it; over-commitment is reported, not blocked.
+          </Typography>
+          <Stack direction="row" spacing={1} flexWrap="wrap" alignItems="center" sx={{ mt: 2 }}>
+            <TextField
+              size="small" type="number" label="Fiscal year" sx={{ width: 140 }}
+              value={annualDraft.fiscalYear ?? position?.fiscalYear ?? ''}
+              onChange={(e) => setAnnualDraft({ ...annualDraft, fiscalYear: e.target.value })}
+            />
+            <TextField
+              size="small" label="Department" sx={{ minWidth: 180 }}
+              value={annualDraft.department ?? position?.department ?? ''}
+              onChange={(e) => setAnnualDraft({ ...annualDraft, department: e.target.value })}
+            />
+            <TextField
+              size="small" type="number" label="Annual amount" sx={{ minWidth: 180 }}
+              value={annualDraft.allocatedAmount ?? ''}
+              onChange={(e) => setAnnualDraft({ ...annualDraft, allocatedAmount: e.target.value })}
+            />
+            <TextField
+              size="small" label="Currency" sx={{ width: 110 }}
+              value={annualDraft.currency}
+              onChange={(e) => setAnnualDraft({ ...annualDraft, currency: e.target.value })}
+            />
+            <TextField
+              size="small" label="Note" sx={{ minWidth: 200 }}
+              value={annualDraft.notes ?? ''}
+              onChange={(e) => setAnnualDraft({ ...annualDraft, notes: e.target.value })}
+            />
+            <Button
+              variant="contained" onClick={saveAnnualBudget}
+              disabled={!annualComplete || savingAnnual}
+            >
+              {savingAnnual ? 'Saving…' : 'Save'}
+            </Button>
+          </Stack>
+        </Paper>
       )}
 
       <Typography variant="subtitle2" sx={{ mb: 1 }}>

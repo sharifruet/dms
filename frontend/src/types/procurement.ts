@@ -313,6 +313,64 @@ export interface StageDetail {
   invoices?: Invoice[];
   payments?: Payment[];
   cumulativeDelivered?: number;
+  /** The e-GP item baseline Stages 12 and 13 are measured against (REQ-10.3). */
+  priceSchedule?: PriceSchedule | null;
+  priceScheduleLines?: PriceScheduleLine[];
+}
+
+/** The e-GP price schedule stored against the contract (REQ-10.3). */
+export interface PriceSchedule {
+  id?: number;
+  contractId?: number;
+  source?: string;
+  deliveryPeriodDays?: number;
+}
+
+export interface PriceScheduleLine {
+  id?: number;
+  scheduleId?: number;
+  lineNo?: number;
+  itemCode?: string;
+  itemDescription?: string;
+  quantity?: number;
+  uom?: string;
+  unitPrice?: number;
+  lineAmount?: number;
+  currency?: string;
+}
+
+/** A permitted value for Procurement Type / Method / Nature (Q-8, REQ-2.4). */
+export interface MasterListValue {
+  id?: number;
+  listKey: string;
+  code: string;
+  label?: string;
+  displayOrder?: number;
+}
+
+/** One stage on the package timeline, with how long it took (REQ-X5). */
+export interface StageTimelineEntry {
+  stageCode: number;
+  stageName: string;
+  status: string;
+  applicable: boolean;
+  enteredAt?: string;
+  completedAt?: string;
+  completedBy?: number;
+  reworkReason?: string;
+  elapsedDays?: number;
+  open?: boolean;
+}
+
+/** A deadline somebody must act before (REQ-X8). */
+export interface PackageDeadline {
+  packageId: number;
+  packageNumber?: string;
+  deadlineKey: string;
+  label: string;
+  dueDate: string;
+  daysRemaining: number;
+  overdue: boolean;
 }
 
 export interface UploadResult {
@@ -321,6 +379,10 @@ export interface UploadResult {
   fields: ExtractedField[];
   ocrConfidence?: number;
   ocrError?: string;
+  /** OCR produced nothing usable - the values have to be typed in (REQ-P12). */
+  manualEntryRequired?: boolean;
+  /** Whether captured values carry a source region to highlight (REQ-P6). */
+  sourceRegionsAvailable?: boolean;
 }
 
 export const STAGE_NAMES: string[] = [

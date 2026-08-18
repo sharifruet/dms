@@ -59,27 +59,16 @@ class LiquibaseSchemaAgreementTest extends PostgresLiquibaseTest {
             // Tables that exist but are missing columns their entity maps.
             // document_versions has left this list - it was on a path users reach, and
             // changeset 043 fixed it.
+            // The five entities that had no table at all now have one, generated from the
+            // entities themselves in changeset 045, so they have left this list. Their
+            // features remain unverified — a table lets them start, it does not make them
+            // correct — but the schema and the mappings now agree.
             "backup_records",
             "dashboards",
             "integration_configs",
             "reports",
             "system_health_checks",
-            "tenants",
-
-            // Entities with no table at all: these features cannot function against a real
-            // database, because the first query throws. Each has a controller, so each is
-            // a reachable endpoint that returns a 500.
-            //
-            // Left as a decision rather than guessed at. Writing ~70 columns of schema for
-            // four features outside the procurement revamp, none of them in the pilot
-            // scope and none verifiable from here, is precisely the "pressure to integrate
-            // everything" the plan calls out as R-5. The three that were genuinely dead -
-            // no controller, no service, no reference anywhere - have been deleted instead.
-            "document_templates",
-            "ml_models",
-            "optimization_tasks",
-            "smart_folders",
-            "webhooks");
+            "tenants");
 
     @Autowired
     private EntityManagerFactory entityManagerFactory;

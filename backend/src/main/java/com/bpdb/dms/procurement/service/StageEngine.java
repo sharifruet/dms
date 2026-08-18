@@ -20,6 +20,7 @@ import com.bpdb.dms.procurement.entity.PackageStage;
 import com.bpdb.dms.procurement.entity.ProcurementPackage;
 import com.bpdb.dms.procurement.entity.StageDocumentRequirement;
 import com.bpdb.dms.procurement.entity.Tender;
+import com.bpdb.dms.procurement.repository.ContractClosureRepository;
 import com.bpdb.dms.procurement.repository.DocumentLinkRepository;
 import com.bpdb.dms.procurement.repository.ExtractedFieldRepository;
 import com.bpdb.dms.procurement.repository.PackageStageRepository;
@@ -51,6 +52,9 @@ public class StageEngine {
     private final ValidationService validationService;
     private final ProcurementAuditService auditService;
     private final ProcurementExpiryService expiryService;
+    private final ConditionalRequirementService conditionalRequirements;
+    private final BudgetService budgetService;
+    private final ContractClosureRepository closureRepository;
 
     public StageEngine(ProcurementPackageRepository packageRepository,
                        PackageStageRepository stageRepository,
@@ -60,7 +64,10 @@ public class StageEngine {
                        StageDefinitionService definitions,
                        ValidationService validationService,
                        ProcurementAuditService auditService,
-                       ProcurementExpiryService expiryService) {
+                       ProcurementExpiryService expiryService,
+                       ConditionalRequirementService conditionalRequirements,
+                       BudgetService budgetService,
+                       ContractClosureRepository closureRepository) {
         this.packageRepository = packageRepository;
         this.stageRepository = stageRepository;
         this.documentLinkRepository = documentLinkRepository;
@@ -70,6 +77,9 @@ public class StageEngine {
         this.validationService = validationService;
         this.auditService = auditService;
         this.expiryService = expiryService;
+        this.conditionalRequirements = conditionalRequirements;
+        this.budgetService = budgetService;
+        this.closureRepository = closureRepository;
     }
 
     /** Create the 16 stage rows for a new package and open stage 1 (WF-02). */
@@ -131,14 +141,36 @@ public class StageEngine {
             }
         }
 
-        // Gate 2 - every mandatory document uploaded
+        // Gate 1b - closing the contract checks *every* prior stage, not just the one
+        // before it, and names each one that is outstanding (REQ-16.1). Rework can leave
+        // an earlier stage open while the ones after it are done, so "the previous stage
+        // is complete" is not the same statement as "nothing is outstanding".
+        if (stageCode == StageDefinitionService.LAST_STAGE) {
+            for (PackageStage s : stagesOf(packageId)) {
+                if (s.getStageCode() < StageDefinitionService.LAST_STAGE && !s.isSatisfied()) {
+                    result.blockers.add("Stage " + s.getStageCode() + " ("
+                            + definitions.stageName(s.getStageCode())
+                            + ") is outstanding and must be completed or marked Not Applicable "
+                            + "before closure (REQ-16.1)");
+                }
+            }
+        }
+
+        // Gate 2 - every mandatory document uploaded, plus any conditional document this
+        // package has switched on (REQ-11.3: a declared SAT becomes mandatory)
         Set<String> uploaded = documentLinkRepository
                 .findByPackageIdAndStageCode(packageId, stageCode).stream()
                 .map(DocumentLink::getDocRole)
                 .collect(Collectors.toCollection(HashSet::new));
-        for (StageDocumentRequirement req : definitions.blockingDocuments(stageCode)) {
+        Set<String> activeConditionals =
+                conditionalRequirements.activeConditionalRoles(packageId, stageCode);
+        List<StageDocumentRequirement> blocking = conditionalRequirements.blockingWithConditionals(
+                definitions.requiredDocuments(stageCode), activeConditionals);
+        for (StageDocumentRequirement req : blocking) {
             if (!uploaded.contains(req.getDocRole())) {
-                result.missingDocuments.add(req.getDocLabel());
+                result.missingDocuments.add(activeConditionals.contains(req.getDocRole())
+                        ? req.getDocLabel() + " (declared applicable)"
+                        : req.getDocLabel());
             }
         }
 
@@ -285,6 +317,7 @@ public class StageEngine {
                 log.info("Package {} closed at stage {}; {} expiry tracker(s) closed with it",
                         packageId, completedStage, closedTrackers);
             }
+            recordClosureReconciliation(packageId);
             return;
         }
         Optional<PackageStage> nextStage = stageRepository.findByPackageIdAndStageCode(packageId, next);
@@ -301,6 +334,43 @@ public class StageEngine {
             pkg.setCurrentStage(next);
             packageRepository.save(pkg);
         }
+    }
+
+    /**
+     * Reconcile the money at closure and write the result where it will still be readable
+     * in a year (REQ-16.3).
+     *
+     * <p>The residual is what was released but never consumed — the figure the finance
+     * side needs in order to give the money back. Computing it at closure and storing it
+     * on the closure record matters because every input to it can move afterwards: a
+     * budget line can be revised, an invoice can be corrected. The reconciliation is a
+     * statement about the moment the package closed, so it is recorded, not derived on
+     * demand.
+     */
+    private void recordClosureReconciliation(Long packageId) {
+        BudgetService.ClosureReconciliation reconciliation =
+                budgetService.reconcileAtClosure(packageId);
+        if (reconciliation == null) {
+            // Reporting the money is part of closing, but it is not what closing *is*:
+            // a package whose figures cannot be summarised is still closed, and failing
+            // here would roll the closure back over a note
+            log.warn("Package {} closed but no budget reconciliation was produced", packageId);
+            return;
+        }
+
+        Long contractId = reconciliation.contractId;
+        if (contractId != null) {
+            closureRepository.findByContractId(contractId).ifPresent(closure -> {
+                closure.setOutstandingNotes(reconciliation.summary());
+                closureRepository.save(closure);
+            });
+        }
+
+        log.info("Package {} closed. {}", packageId, reconciliation.summary());
+        auditService.recordChange(null, "PROCUREMENT_PACKAGE_CLOSED",
+                ProcurementAuditService.PACKAGE, packageId,
+                "Package closed", null, reconciliation.summary(),
+                "Budget reconciled at closure (REQ-16.3)");
     }
 
     /** The reasons a stage is not ready, in the shape the UI renders them. */

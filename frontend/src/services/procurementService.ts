@@ -10,10 +10,13 @@ import {
   ExtractedFieldHistory,
   InspectionEvent,
   Invoice,
+  MasterListValue,
   Payment,
+  PriceScheduleLine,
   ProcurementPackage,
   StageDetail,
   StageReadiness,
+  StageTimelineEntry,
   Tender,
   UploadResult,
 } from '../types/procurement';
@@ -287,6 +290,63 @@ const procurementService = {
 
   getExceptions: async (): Promise<Record<string, any>> => {
     const response = await api.get('/procurement/exceptions');
+    return response.data;
+  },
+
+  /**
+   * Download the expiry dashboard as CSV (REQ-E7).
+   *
+   * Fetched as a blob and saved through an object URL rather than linking straight at the
+   * endpoint, because the API needs the Authorization header the axios client carries and
+   * a plain anchor would not send it.
+   */
+  exportExpiries: async (withinDays = 90): Promise<void> => {
+    const response = await api.get('/procurement/expiries/export', {
+      params: { withinDays },
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(new Blob([response.data], { type: 'text/csv' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `expiries-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
+
+  /** Permitted Procurement Type / Method / Nature values (Q-8, REQ-2.4). */
+  getMasterLists: async (): Promise<Record<string, MasterListValue[]>> => {
+    const response = await api.get('/procurement/master-lists');
+    return response.data;
+  },
+
+  /** Stage by stage in time order, with how long each took (REQ-X5). */
+  getTimeline: async (packageId: number): Promise<StageTimelineEntry[]> => {
+    const response = await api.get(`/procurement/packages/${packageId}/timeline`);
+    return response.data;
+  },
+
+  /** The e-GP price schedule: the item baseline for Stages 12 and 13 (REQ-10.3). */
+  getPriceSchedule: async (packageId: number) => {
+    const response = await api.get(`/procurement/packages/${packageId}/stages/10/price-schedule`);
+    return response.data;
+  },
+
+  savePriceSchedule: async (
+    packageId: number,
+    payload: { source?: string; deliveryPeriodDays?: number; lines: PriceScheduleLine[] },
+  ) => {
+    const response = await api.put(
+      `/procurement/packages/${packageId}/stages/10/price-schedule`,
+      payload,
+    );
+    return response.data;
+  },
+
+  /** Read a document again (REQ-P10). Confirmed values survive it (REQ-P5). */
+  reOcr: async (documentId: number): Promise<Record<string, any>> => {
+    const response = await api.post(`/procurement/documents/${documentId}/reocr`);
     return response.data;
   },
 };

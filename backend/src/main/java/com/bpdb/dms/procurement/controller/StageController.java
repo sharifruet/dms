@@ -1,5 +1,7 @@
 package com.bpdb.dms.procurement.controller;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,11 +20,13 @@ import org.springframework.web.bind.annotation.RestController;
 import com.bpdb.dms.entity.DocumentTypeField;
 import com.bpdb.dms.procurement.entity.BerBidder;
 import com.bpdb.dms.procurement.entity.Delivery;
+import com.bpdb.dms.procurement.entity.DeliveryLine;
 import com.bpdb.dms.procurement.entity.ExtractedField;
 import com.bpdb.dms.procurement.entity.InspectionEvent;
 import com.bpdb.dms.procurement.entity.Invoice;
 import com.bpdb.dms.procurement.entity.PackageStage;
 import com.bpdb.dms.procurement.entity.Payment;
+import com.bpdb.dms.procurement.entity.PriceScheduleLine;
 import com.bpdb.dms.procurement.entity.Tender;
 import com.bpdb.dms.procurement.repository.ExtractedFieldRepository;
 import com.bpdb.dms.procurement.service.LinkageService;
@@ -100,14 +104,21 @@ public class StageController {
         // repeating rows, where the stage has them
         switch (stageCode) {
             case 4 -> detail.put("bidders", recordService.bidders(packageId));
+            case 10 -> {
+                detail.put("priceSchedule", recordService.priceSchedule(packageId).orElse(null));
+                detail.put("priceScheduleLines", recordService.priceScheduleLines(packageId));
+            }
             case 11 -> detail.put("inspections", recordService.inspections(packageId));
             case 12 -> {
                 detail.put("deliveries", recordService.deliveries(packageId));
                 detail.put("cumulativeDelivered", recordService.cumulativeDelivered(packageId));
+                // The item baseline the delivery is measured against (REQ-10.3)
+                detail.put("priceScheduleLines", recordService.priceScheduleLines(packageId));
             }
             case 13 -> {
                 detail.put("invoices", recordService.invoices(packageId));
                 detail.put("deliveries", recordService.deliveries(packageId));
+                detail.put("priceScheduleLines", recordService.priceScheduleLines(packageId));
             }
             case 14 -> {
                 detail.put("payments", recordService.payments(packageId));
@@ -212,11 +223,37 @@ public class StageController {
         }
     }
 
+    /**
+     * The e-GP price schedule and its lines — the item baseline Stages 12 and 13 are
+     * measured against (REQ-10.3).
+     */
+    @PutMapping("/10/price-schedule")
+    public ResponseEntity<?> savePriceSchedule(@PathVariable Long packageId,
+                                               @RequestBody PriceScheduleRequest request) {
+        try {
+            return ResponseEntity.ok(recordService.savePriceSchedule(
+                    packageId, request.source, request.deliveryPeriodDays, request.lines));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/10/price-schedule")
+    public ResponseEntity<?> priceSchedule(@PathVariable Long packageId) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("schedule", recordService.priceSchedule(packageId).orElse(null));
+        body.put("lines", recordService.priceScheduleLines(packageId));
+        return ResponseEntity.ok(body);
+    }
+
     @PostMapping("/12/deliveries")
     public ResponseEntity<?> saveDelivery(@PathVariable Long packageId,
-                                          @RequestBody Delivery delivery) {
+                                          @RequestBody DeliveryRequest request) {
         try {
-            return ResponseEntity.ok(recordService.saveDelivery(packageId, delivery));
+            // Accepts either shape: a bare delivery as before, or a delivery with the
+            // schedule lines it fulfils
+            Delivery delivery = request.delivery == null ? request.asDelivery() : request.delivery;
+            return ResponseEntity.ok(recordService.saveDelivery(packageId, delivery, request.lines));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -271,6 +308,40 @@ public class StageController {
                     recordService.savePayment(packageId, request.payment, request.invoiceIds));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** The price schedule and its lines (REQ-10.3). */
+    public static class PriceScheduleRequest {
+        public String source;
+        public Integer deliveryPeriodDays;
+        public List<PriceScheduleLine> lines;
+    }
+
+    /**
+     * A delivery, optionally with the price-schedule lines it fulfils (REQ-10.3).
+     *
+     * <p>The delivery's own fields sit at the top level so the original payload shape
+     * still works; {@code delivery} is accepted as well for callers that prefer to nest it.
+     */
+    public static class DeliveryRequest {
+        public Delivery delivery;
+        public List<DeliveryLine> lines;
+
+        public Long id;
+        public Long inspectionEventId;
+        public String deliveryReferenceNumber;
+        public LocalDate deliveryDate;
+        public BigDecimal deliveredQuantity;
+
+        Delivery asDelivery() {
+            Delivery d = new Delivery();
+            d.setId(id);
+            d.setInspectionEventId(inspectionEventId);
+            d.setDeliveryReferenceNumber(deliveryReferenceNumber);
+            d.setDeliveryDate(deliveryDate);
+            d.setDeliveredQuantity(deliveredQuantity);
+            return d;
         }
     }
 

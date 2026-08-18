@@ -4,17 +4,31 @@ import {
   Button,
   Chip,
   Grid,
+  MenuItem,
   Paper,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import { CatalogueField, ExtractedField } from '../../types/procurement';
+import { CatalogueField, ExtractedField, MasterListValue } from '../../types/procurement';
+
+/**
+ * Catalogue field keys constrained to a master list (Q-8, REQ-2.4), mapped to the list
+ * that governs them. Keyed rather than inferred, because "type" appears in field names
+ * that have nothing to do with procurement type.
+ */
+const MASTER_LIST_FIELDS: Record<string, string> = {
+  procurement_type: 'PROCUREMENT_TYPE',
+  procurement_method: 'PROCUREMENT_METHOD',
+  procurement_nature: 'PROCUREMENT_NATURE',
+};
 
 interface Props {
   catalogue: CatalogueField[];
   fields: ExtractedField[];
   disabled?: boolean;
+  /** Permitted values for the fields governed by a master list (Q-8, REQ-2.4). */
+  masterLists?: Record<string, MasterListValue[]>;
   onSave: (values: Record<string, string>) => Promise<void>;
 }
 
@@ -30,7 +44,13 @@ interface Props {
  * correction form; the provenance trail is kept by the server, which records the change
  * rather than overwriting the original reading.
  */
-const ManualFieldForm: React.FC<Props> = ({ catalogue, fields, disabled, onSave }) => {
+const ManualFieldForm: React.FC<Props> = ({
+  catalogue,
+  fields,
+  disabled,
+  masterLists = {},
+  onSave,
+}) => {
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +130,18 @@ const ManualFieldForm: React.FC<Props> = ({ catalogue, fields, disabled, onSave 
     }
   };
 
+  /**
+   * The permitted values for a field, or none when it is free text.
+   *
+   * An unmatched value is only a warning on the server, so offering the list here is
+   * about not making somebody guess whether the system wants "OTM" or "Open Tender
+   * Method" — the mismatch it prevents is a spelling, not a fraud.
+   */
+  const optionsFor = (field: CatalogueField): MasterListValue[] => {
+    const listKey = MASTER_LIST_FIELDS[field.fieldKey];
+    return listKey ? masterLists[listKey] ?? [] : [];
+  };
+
   const missingMandatory = entries.filter((e) => e.isMandatory && !byKey[e.fieldKey]);
   const dirty = Object.values(draft).some((v) => v !== '');
 
@@ -143,8 +175,9 @@ const ManualFieldForm: React.FC<Props> = ({ catalogue, fields, disabled, onSave 
             <Grid item xs={12} sm={6} key={field.fieldKey}>
               <TextField
                 fullWidth
+                select={optionsFor(field).length > 0}
                 size="small"
-                type={inputType(field.fieldType)}
+                type={optionsFor(field).length > 0 ? undefined : inputType(field.fieldType)}
                 label={field.fieldLabel + (field.isMandatory ? ' *' : '')}
                 placeholder={captured ? undefined : 'Not captured yet'}
                 value={draft[field.fieldKey] ?? currentValue(field)}
@@ -161,7 +194,13 @@ const ManualFieldForm: React.FC<Props> = ({ catalogue, fields, disabled, onSave 
                 onChange={(e) =>
                   setDraft({ ...draft, [field.fieldKey]: e.target.value })
                 }
-              />
+              >
+                {optionsFor(field).map((option) => (
+                  <MenuItem key={option.code} value={option.code}>
+                    {option.label || option.code}
+                  </MenuItem>
+                ))}
+              </TextField>
             </Grid>
           );
         })}
