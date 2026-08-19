@@ -1,22 +1,34 @@
 package com.bpdb.dms.procurement.service;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.bpdb.dms.entity.Document;
+import com.bpdb.dms.entity.User;
+import com.bpdb.dms.procurement.entity.DocumentLink;
 import com.bpdb.dms.procurement.entity.ProcurementPackage;
 import com.bpdb.dms.procurement.repository.ProcurementPackageRepository;
 import com.bpdb.dms.procurement.service.AppWorkbookParser.AppRow;
 import com.bpdb.dms.procurement.service.AppWorkbookParser.ParsedWorkbook;
+import com.bpdb.dms.repository.DocumentRepository;
+import com.bpdb.dms.repository.UserRepository;
 
 /**
  * Stage 1: turn an APP workbook into procurement packages (REQ-1.1 … REQ-1.6).
@@ -26,6 +38,10 @@ import com.bpdb.dms.procurement.service.AppWorkbookParser.ParsedWorkbook;
  * database: a row that cannot be understood is reported and skipped rather than aborting
  * the import, but a row that would collide with an existing package is never silently
  * overwritten (REQ-1.3).
+ *
+ * <p>The workbook itself is the APP Document. Each created package is linked to that
+ * file so Stage 1 does not wait for the same spreadsheet to be uploaded again. The APP
+ * Approval Memo remains on the checklist but is optional (REQ-1 exit criteria).
  *
  * <p>The legacy {@code AppDocumentService} still parses a different, finance-shaped APP
  * into {@code app_headers}/{@code app_lines}; per client answer Q-6 the two run
@@ -42,19 +58,31 @@ public class AppPackageImportService {
     /** The APP lands at Stage 1; its fields are captured against that stage. */
     private static final short STAGE_ONE = 1;
 
+    @Value("${app.upload.dir:uploads}")
+    private String uploadDir;
+
     private final AppWorkbookParser parser;
     private final ProcurementPackageRepository packageRepository;
     private final ProcurementPackageService packageService;
     private final CaptureService captureService;
+    private final DocumentRepository documentRepository;
+    private final UserRepository userRepository;
+    private final LinkageService linkageService;
 
     public AppPackageImportService(AppWorkbookParser parser,
                                    ProcurementPackageRepository packageRepository,
                                    ProcurementPackageService packageService,
-                                   CaptureService captureService) {
+                                   CaptureService captureService,
+                                   DocumentRepository documentRepository,
+                                   UserRepository userRepository,
+                                   LinkageService linkageService) {
         this.parser = parser;
         this.packageRepository = packageRepository;
         this.packageService = packageService;
         this.captureService = captureService;
+        this.documentRepository = documentRepository;
+        this.userRepository = userRepository;
+        this.linkageService = linkageService;
     }
 
     /**
@@ -66,7 +94,15 @@ public class AppPackageImportService {
     @Transactional
     public ImportReport importWorkbook(InputStream in, String department, Long userId, boolean dryRun)
             throws IOException {
-        ParsedWorkbook parsed = parser.parse(in);
+        return importWorkbook(in, department, userId, dryRun, "APP.xls", null);
+    }
+
+    @Transactional
+    public ImportReport importWorkbook(InputStream in, String department, Long userId, boolean dryRun,
+                                       String originalFilename, String contentType)
+            throws IOException {
+        byte[] bytes = in.readAllBytes();
+        ParsedWorkbook parsed = parser.parse(new ByteArrayInputStream(bytes));
         String dept = (department == null || department.isBlank()) ? DEFAULT_DEPARTMENT : department;
 
         ImportReport report = new ImportReport();
@@ -80,6 +116,7 @@ public class AppPackageImportService {
         // occurrence wins and the rest are reported, rather than the second failing on a
         // constraint the user cannot see
         Set<String> seenInThisFile = new HashSet<>();
+        Document appDocument = null;
 
         for (AppRow row : parsed.rows) {
             String packageNumber = effectivePackageNumber(row);
@@ -113,6 +150,14 @@ public class AppPackageImportService {
                     ProcurementPackage created =
                             packageService.create(toPackage(row, packageNumber, dept), userId);
                     captureProvenance(created, row, userId);
+                    if (appDocument == null) {
+                        appDocument = storeAppDocument(bytes, originalFilename, contentType, userId);
+                    }
+                    if (appDocument != null) {
+                        linkageService.link(appDocument.getId(), "PACKAGE", created.getId(),
+                                created.getId(), null, STAGE_ONE, "APP_DOCUMENT",
+                                DocumentLink.STAGE_CONTEXT, userId);
+                    }
                 }
                 report.created.add(new Outcome(row.origin(), packageNumber,
                         row.lotNumber == null ? "Created" : "Created as lot " + row.lotNumber));
@@ -144,6 +189,51 @@ public class AppPackageImportService {
         }
         String base = row.packageNumber.trim();
         return row.lotNumber == null ? base : base + "-" + row.lotNumber.trim();
+    }
+
+    /**
+     * The workbook is the APP Document (REQ-1). One file, linked to every package
+     * created from it, so Stage 1 does not wait for a second upload of the same sheet.
+     *
+     * <p>{@code documents.uploaded_by} is required. Tests that import without a real user
+     * still create packages; they just do not get the document link.
+     */
+    private Document storeAppDocument(byte[] bytes, String originalFilename,
+                                      String contentType, Long userId) {
+        if (bytes == null || bytes.length == 0 || userId == null) {
+            return null;
+        }
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null) {
+            log.warn("APP workbook not filed as APP_DOCUMENT — no user {}", userId);
+            return null;
+        }
+        try {
+            Path uploadPath = Paths.get(uploadDir, "procurement");
+            Files.createDirectories(uploadPath);
+            String original = (originalFilename == null || originalFilename.isBlank())
+                    ? "APP.xls" : originalFilename;
+            String extension = original.contains(".")
+                    ? original.substring(original.lastIndexOf('.')) : ".xls";
+            String stored = System.currentTimeMillis() + "_app" + extension;
+            Path target = uploadPath.resolve(stored);
+            Files.write(target, bytes);
+
+            Document document = new Document();
+            document.setFileName(stored);
+            document.setOriginalName(original);
+            document.setFilePath(target.toString());
+            document.setFileSize((long) bytes.length);
+            document.setMimeType(contentType);
+            document.setDocumentType("APP_DOCUMENT");
+            document.setUploadedBy(user);
+            document.setFileHash(HexFormat.of().formatHex(
+                    MessageDigest.getInstance("SHA-256").digest(bytes)));
+            return documentRepository.save(document);
+        } catch (Exception e) {
+            log.warn("APP workbook could not be stored as APP_DOCUMENT: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**

@@ -25,7 +25,6 @@ import com.bpdb.dms.procurement.service.StageEngine;
 import com.bpdb.dms.procurement.service.TenderService;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -150,30 +149,30 @@ class LifecycleSmokeTest extends PostgresLiquibaseTest {
 
     @Test
     @Order(4)
-    void theStageGateRefusesUntilItsDocumentsArePresent() {
-        // The fields are satisfied; the documents are not. A gate that passed here would
-        // be worse than no gate.
+    void importedWorkbookSatisfiesTheAppDocumentRequirement() {
+        // The workbook is the APP Document; the approval memo is optional. After import
+        // the only remaining Stage 1 action is to complete it (REQ-1 exit criteria).
         StageEngine.StageReadiness readiness = stageEngine.readiness(subject().getId(), (short) 1);
 
-        assertFalse(readiness.ready);
-        assertFalse(readiness.missingDocuments.isEmpty(),
-                "Stage 1 still needs its APP document and approval memo");
+        assertTrue(readiness.missingDocuments.stream()
+                        .noneMatch(d -> d.toLowerCase().contains("approval memo")),
+                "APP Approval Memo must not block Stage 1");
+        assertTrue(readiness.missingDocuments.isEmpty(),
+                "the imported workbook should already satisfy APP Document");
     }
 
     @Test
     @Order(5)
     void stageOneCompletesOnceItIsGenuinelyReady() {
         ProcurementPackage pkg = subject();
-        // Standing in for the upload: the gate reads document_link, and what matters here
-        // is that completion works on the real schema, not how the file arrived. The rows
-        // are real ones - document_link has a foreign key to documents, and a smoke test
-        // that fabricated ids would be testing something the database does not allow.
-        long appDoc = insertDocument("app.pdf");
-        long memo = insertDocument("approval-memo.pdf");
-        linkageService.link(appDoc, "PACKAGE", pkg.getId(), pkg.getId(), null, (short) 1,
-                "APP_DOCUMENT", "STAGE_CONTEXT", 1L);
-        linkageService.link(memo, "PACKAGE", pkg.getId(), pkg.getId(), null, (short) 1,
-                "APP_APPROVAL_MEMO", "STAGE_CONTEXT", 1L);
+        // Import already linked the workbook as APP_DOCUMENT. A second file is only
+        // needed when that link is missing (H2 tests without a real user).
+        StageEngine.StageReadiness before = stageEngine.readiness(pkg.getId(), (short) 1);
+        if (!before.missingDocuments.isEmpty()) {
+            long appDoc = insertDocument("app.pdf");
+            linkageService.link(appDoc, "PACKAGE", pkg.getId(), pkg.getId(), null, (short) 1,
+                    "APP_DOCUMENT", "STAGE_CONTEXT", 1L);
+        }
 
         assertTrue(stageEngine.readiness(pkg.getId(), (short) 1).ready,
                 "everything Stage 1 asks for is now present");

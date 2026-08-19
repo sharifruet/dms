@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+      Stage 1 exit criteria (REQ-1) require the APP Document and the four verified
+      package fields. The APP Approval Memo is listed as a document the stage can
+      hold, not as something that blocks Tender Advertisement.
+
+      Import already is the APP Document (the workbook). Keeping the memo mandatory
+      left every imported package stuck at Stage 1 until a second file nobody had
+      was uploaded.
+    -->
+
+    <changeSet id="047-001" author="dms">
+        <comment>APP Approval Memo is optional; Stage 1 completes with the APP Document alone</comment>
+        <sql>
+            UPDATE stage_document_requirement
+               SET is_mandatory = false
+             WHERE stage_code = 1
+               AND doc_role = 'APP_APPROVAL_MEMO';
+        </sql>
+        <rollback>
+            <sql>
+                UPDATE stage_document_requirement
+                   SET is_mandatory = true
+                 WHERE stage_code = 1
+                   AND doc_role = 'APP_APPROVAL_MEMO';
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

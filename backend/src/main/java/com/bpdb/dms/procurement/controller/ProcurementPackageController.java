@@ -59,7 +59,8 @@ public class ProcurementPackageController {
         }
         try (InputStream in = file.getInputStream()) {
             AppPackageImportService.ImportReport report =
-                    appImportService.importWorkbook(in, department, CurrentUser.id(), dryRun);
+                    appImportService.importWorkbook(in, department, CurrentUser.id(), dryRun,
+                            file.getOriginalFilename(), file.getContentType());
             return ResponseEntity.ok(report);
         } catch (IOException e) {
             return ResponseEntity.badRequest()

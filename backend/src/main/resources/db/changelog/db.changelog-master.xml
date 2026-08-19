@@ -62,4 +62,7 @@
 
     <!-- Deadline alerts, the other half of REQ-X8 -->
     <include file="db/changelog/046-deadline-alerts.xml"/>
+
+    <!-- Stage 1: APP Approval Memo does not block Tender Advertisement -->
+    <include file="db/changelog/047-optional-app-approval-memo.xml"/>
 </databaseChangeLog>
