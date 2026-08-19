@@ -105,8 +105,8 @@ public class ProcurementUploadService {
             document.setExtractedText(ocr.getExtractedText());
             documentRepository.save(document);
 
-            // Where each word sat, so a captured value can point at its source (REQ-P6)
-            List<OCRService.WordBox> words = ocrService.extractWords(file);
+            // Tokens from text already read — not a second Tesseract pass
+            List<OCRService.WordBox> words = wordBoxesFromText(ocr.getExtractedText());
 
             fields = extractionService.extractFields(packageId, stageCode, docRole,
                     document.getId(), stored, words);
@@ -221,6 +221,23 @@ public class ProcurementUploadService {
         @Override public void transferTo(java.io.File dest) throws IOException {
             Files.write(dest.toPath(), content);
         }
+    }
+
+    /**
+     * Word boxes from extracted text so field matching can still run without
+     * OCRing the file again. Positions are unknown; locate() matches on tokens.
+     */
+    static List<OCRService.WordBox> wordBoxesFromText(String extractedText) {
+        if (extractedText == null || extractedText.isBlank()) {
+            return List.of();
+        }
+        List<OCRService.WordBox> words = new ArrayList<>();
+        for (String token : extractedText.trim().split("\\s+")) {
+            if (!token.isEmpty()) {
+                words.add(new OCRService.WordBox(token, 1, 0, 0, 0, 0, 0));
+            }
+        }
+        return words;
     }
 
     /**

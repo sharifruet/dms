@@ -31,7 +31,12 @@
         </sql>
     </changeSet>
 
+    <!-- 030-002 was applied, then later rewritten (checksum 9:86d9f17… in DATABASECHANGELOG
+         vs 9:5465c2f4… for the current body). Liquibase refuses to start until the stored
+         checksum is declared valid; do not edit this changeset again — add a new one. -->
     <changeSet id="030-002" author="dms">
+        <validCheckSum>9:86d9f17de43c1c8f1613e07aa6c5e06c</validCheckSum>
+        <validCheckSum>9:5465c2f4f55a0764dfe4ce202549fc8b</validCheckSum>
         <comment>Add new Tender Notice fields with PostgreSQL regex patterns</comment>
         <sql>
             INSERT INTO document_type_fields (document_type, field_key, field_label, field_type, is_required, is_ocr_mappable, ocr_pattern, display_order, description)

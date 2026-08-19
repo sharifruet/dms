@@ -166,6 +166,11 @@ public class ExtractionService {
             if (!Boolean.TRUE.equals(def.getIsOcrMappable())) {
                 continue;
             }
+            // extracted_field.entity_type is NOT NULL. Legacy document_type_fields have
+            // none; writing them fails the insert (tenderId and friends from 018/030).
+            if (def.getEntityType() == null || def.getEntityType().isBlank()) {
+                continue;
+            }
             Match match = findValue(text, def.getOcrPattern());
 
             Object entity = stageDataService.ensureEntity(def.getEntityType(), packageId);

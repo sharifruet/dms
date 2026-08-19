@@ -41,8 +41,8 @@ public class OCRService {
     
     private static final Logger logger = LoggerFactory.getLogger(OCRService.class);
     
-    @Value("${app.tesseract.data.path:/usr/share/tesseract-ocr/4.00/tessdata}")
-    private String tesseractDataPath;
+//    @Value("${app.tesseract.data.path:C:/Program Files/Tesseract-OCR/tessdata}")
+    private String tesseractDataPath = "C:/Program Files/Tesseract-OCR/tessdata";
     
     /**
      * English only, by client decision (Q-19): all BPDB procurement documents are in
@@ -93,40 +93,28 @@ public class OCRService {
         }
         
         try {
-            // Resolve tessdata path if the configured one doesn't exist (common on macOS/Homebrew)
-            Path configuredPath = Paths.get(tesseractDataPath);
-            // tess4j expects datapath pointing to the PARENT of the 'tessdata' folder
-            if (configuredPath.getFileName() != null && configuredPath.getFileName().toString().equalsIgnoreCase("tessdata")) {
-                configuredPath = configuredPath.getParent();
-                if (configuredPath != null) {
-                    tesseractDataPath = configuredPath.toString();
-                }
-            }
-            if (!Files.exists(configuredPath)) {
-                String resolvedPath = resolveTessdataPathFallback();
-                if (resolvedPath != null && !resolvedPath.isBlank()) {
-                    logger.warn("Configured tessdata path not found: {}. Using detected path: {}", tesseractDataPath, resolvedPath);
-                    tesseractDataPath = resolvedPath;
-                } else {
-                    logger.warn("Configured tessdata path not found and no fallback found: {}", tesseractDataPath);
-                    ocrAvailable = false;
-                    return;
-                }
+            Path dataPath = Paths.get(tesseractDataPath);
+            if (!Files.exists(dataPath)) {
+            	String findedPath = resolveTessdataPathFallback();
+            	if (findedPath != null) {
+            		logger.info("Tesseract data path resolved automatically to {}", findedPath);
+            		dataPath = Paths.get(findedPath);
+            	}
+            	
+				if (!Files.exists(dataPath) && findedPath != null) {
+					logger.warn("Tesseract data path not found at {}. OCR will be disabled.", tesseractDataPath);
+	                ocrAvailable = false;
+	                return;
+				}
+				tesseractDataPath = findedPath;
+				dataPath = Paths.get(tesseractDataPath);
             }
             
             tesseract.setDatapath(tesseractDataPath);
             tesseract.setLanguage(tesseractLanguage);
-            // Page segmentation mode: default to 6 (Assume a single uniform block of text)
-            tesseract.setPageSegMode(pageSegMode);
+            tesseract.setPageSegMode(6); // Automatic page segmentation with OSD
             tesseract.setOcrEngineMode(1); // Neural nets LSTM engine only
-            // Quick sanity check: verify 'eng.traineddata' can be resolved
-            try {
-                Path trained = Paths.get(tesseractDataPath, "tessdata", tesseractLanguage + ".traineddata");
-                logger.info("Tesseract OCR initialized (datapath: {}, lang: {}, traineddata exists: {})",
-                        tesseractDataPath, tesseractLanguage, Files.exists(trained));
-            } catch (Exception ig) {
-                logger.info("Tesseract OCR initialized (datapath: {}, lang: {})", tesseractDataPath, tesseractLanguage);
-            }
+            logger.info("Tesseract OCR initialized successfully");
             ocrAvailable = true;
         } catch (Exception e) {
             logger.error("Failed to initialize Tesseract OCR: {}", e.getMessage());

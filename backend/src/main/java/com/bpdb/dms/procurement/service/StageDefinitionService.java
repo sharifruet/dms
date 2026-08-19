@@ -93,6 +93,9 @@ public class StageDefinitionService {
         return fieldRepository.findAll().stream()
                 .filter(f -> documentType != null && documentType.equalsIgnoreCase(f.getDocumentType()))
                 .filter(f -> Boolean.TRUE.equals(f.getIsActive()))
+                // Pre-revamp rows (018/030) share document_type but have no entity_type;
+                // extracted_field cannot store them (REQ-P13 catalogue is stage-aware).
+                .filter(f -> f.getEntityType() != null && !f.getEntityType().isBlank())
                 .collect(Collectors.toList());
     }
 }
