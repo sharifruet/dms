@@ -1,4 +1,4 @@
-1. Total contracts(total number of tenders)
+1. Total contracts(total number of contracts)
     - contract aggrement
 2. Live tenders
     - tender notice(open date, expire date)
