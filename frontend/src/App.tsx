@@ -20,10 +20,7 @@ import Notifications from './pages/Notifications';
 import Reports from './pages/Reports';
 import Integrations from './pages/Integrations';
 import SystemHealth from './pages/SystemHealth';
-import Assets from './pages/Assets';
-import AssetAssignments from './pages/AssetAssignments';
 import DocumentTypeFields from './pages/DocumentTypeFields';
-import StationeryTracking from './pages/StationeryTracking';
 import { useAppSelector } from './hooks/redux';
 
 function App() {
@@ -70,14 +67,6 @@ function App() {
             element={isAuthenticated ? <Notifications /> : <Navigate to="/login" />} 
           />
           <Route 
-            path="/assets" 
-            element={isAuthenticated ? <Assets /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/asset-assignments" 
-            element={isAuthenticated ? <AssetAssignments /> : <Navigate to="/login" />} 
-          />
-          <Route 
             path="/reports" 
             element={isAuthenticated ? <Reports /> : <Navigate to="/login" />} 
           />
@@ -92,10 +81,6 @@ function App() {
           <Route 
             path="/document-type-fields" 
             element={isAuthenticated ? <DocumentTypeFields /> : <Navigate to="/login" />} 
-          />
-          <Route 
-            path="/stationery" 
-            element={isAuthenticated ? <StationeryTracking /> : <Navigate to="/login" />} 
           />
           {/* Procurement lifecycle - the primary workspace */}
           <Route
@@ -136,6 +121,12 @@ function App() {
           <Route path="/dashboard-management" element={<Navigate to="/procurement" replace />} />
           <Route path="/analytics" element={<Navigate to="/procurement" replace />} />
           <Route path="/ml" element={<Navigate to="/procurement" replace />} />
+
+          {/* Never in procurement scope (Assets, Assignments, Stationery). Hidden from
+              the nav; bookmarks still land on procurement rather than 404. */}
+          <Route path="/assets" element={<Navigate to="/procurement" replace />} />
+          <Route path="/asset-assignments" element={<Navigate to="/procurement" replace />} />
+          <Route path="/stationery" element={<Navigate to="/procurement" replace />} />
 
           {/* Not retired at any point (Q-6): the client keeps the finance module running
               independently of the Stage 13 invoice path. */}

@@ -6,12 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A Document Management System for BPDB (Bangladesh Power Development Board). Spring Boot 3.2 backend (`com.bpdb.dms`) + Create React App/TypeScript frontend, PostgreSQL 16, Redis, Elasticsearch 8.11.
 
-The system is the **procurement lifecycle** — a 16-stage package lifecycle in `com.bpdb.dms.procurement.*` and `frontend/src/pages/procurement/` — plus the shared services it stands on (auth, documents + versions + file storage, audit, notifications, Elasticsearch indexing, OCR) and a few unrelated domains that were never in its scope (Assets, Asset Assignments, Stationery, System Health, Integrations, Users, Reports, Search).
+The system is the **procurement lifecycle** — a 16-stage package lifecycle in `com.bpdb.dms.procurement.*` and `frontend/src/pages/procurement/` — plus the shared services it stands on (auth, documents + versions + file storage, audit, notifications, Elasticsearch indexing, OCR). A few leftover domains still have pages or tables (System Health, Integrations, Users, Reports, Search) but they are not the product.
 
-**What was removed, and what that means for you.** The document-centric pages the procurement workspace superseded are gone, along with the modules no requirement asked for: the generic workflow engine (Q-16 — `StageEngine` is the sole workflow authority), custom dashboards, the metric/analytics store, ML, watermarks, smart folders, document templates, webhooks, multi-tenancy, disaster recovery, system optimisation, and the classic APP-entry path. Retired URLs survive as redirects in [App.tsx](frontend/src/App.tsx) so bookmarks don't 404. Two things follow:
+**What was removed, and what that means for you.** The document-centric pages the procurement workspace superseded are gone, along with the modules no requirement asked for: the generic workflow engine (Q-16 — `StageEngine` is the sole workflow authority), custom dashboards, the metric/analytics store, ML, watermarks, smart folders, document templates, webhooks, multi-tenancy, disaster recovery, system optimisation, the classic APP-entry path, and **Assets / Asset Assignments / Stationery** (never in procurement scope — hidden from the nav). Retired URLs survive as redirects in [App.tsx](frontend/src/App.tsx) so bookmarks don't 404 (`/assets`, `/asset-assignments`, `/stationery` included). Two things follow:
 
 - **Finance stays.** `BillEntries`, `BillService`, `BillOCRService` and the app-vs-bills report are deliberate keeps — the client runs finance independently of the Stage 13 invoice path and accepts duplicate entry (Q-6). Don't fold them into procurement.
-- **Dropped tables are still in the database.** Changesets that have run are never rewritten, so `workflows`, `dashboards`, `tenants`, `backup_records` and friends still exist with no entity mapping them. That is intentional; don't "restore" an entity to match a table you find in the schema.
+- **Dropped tables are still in the database.** Changesets that have run are never rewritten, so `workflows`, `dashboards`, `tenants`, `backup_records` and friends still exist with no entity mapping them. That is intentional; don't "restore" an entity to match a table you find in the schema. Do not put Assets, Assignments, or Stationery back in [Sidebar.tsx](frontend/src/components/Sidebar.tsx) / [MobileSidebar.tsx](frontend/src/components/MobileSidebar.tsx).
 
 ## Commands
 
@@ -54,16 +54,18 @@ The `pom.xml` carries version overrides (Byte Buddy, Mockito) and a `-javaagent`
 
 **Procurement lifecycle** (`com.bpdb.dms.procurement`), the parts that carry the invariants:
 
-- `StageDefinitionService` — 16 stages, in order. What a stage *requires* is data (`stage_document_requirement` + `document_type_fields`), never code: adding a field or document to a stage is a data change.
+- `StageDefinitionService` — 16 stages, in order. What a stage *requires* is data (`stage_document_requirement` + `document_type_fields`), never code: adding a field or document to a stage is a data change. Stage 1: **APP Document is mandatory; APP Approval Memo is optional** (changeset `047`, REQ-1 exit criteria). An APP workbook import *is* the APP Document — `AppPackageImportService` files it and links it to each created package.
 - `StageEngine` — the **only** writer of `package_stage.status`. Completion is computed (all mandatory docs present, mandatory fields confirmed, validations pass), never simply set; a not-ready completion returns the list of reasons.
 - `CaptureService` — the **only** writer of captured field values, OCR or manual. Raw OCR text is never overwritten by a correction; corrections update the parsed value and append to `extracted_field_history`. OCR below 0.80 confidence lands as `OCR_SUGGESTED` and does not count toward stage completion until confirmed.
+- `ExtractionService.extractFields` only captures catalogue rows that have `entity_type`. Legacy `document_type_fields` (018/030, e.g. `tenderId`) have none; writing them fails `extracted_field.entity_type` NOT NULL. Upload builds `WordBox`es from already-extracted text — do not call `extractWords` again on the same file.
+- `BudgetService` looks up the annual department budget by the **package's** fiscal year and department. The Budget tab must save against that pair (`POST .../packages/{id}/department-budget`), not a year/department the user typed that GET will never find.
 - `PackageScopeInterceptor` (registered by `ProcurementWebConfig`, deliberately not a `@Component` — `@WebMvcTest` would try to build it) applies package-ownership scoping to every `/api/procurement/packages/{id}/**` route in one place rather than per method.
 
 **Authorization is two-layered.** Roles (`Role.RoleType`: ADMIN, OFFICER, VIEWER, AUDITOR, DD1–DD4) for the general endpoints; granular `PERM_*` authorities from `PermissionConstants` for procurement and document endpoints, wired in `SecurityConfig`. Procurement follows maker-checker: `PROCUREMENT_CAPTURE` enters data, `PROCUREMENT_VERIFY` completes stages, `PROCUREMENT_OVERRIDE` marks not-applicable / rework / re-tender, `BUDGET_APPROVE` posts budget. Keep new procurement routes on the authority model, not `hasRole`.
 
-**Secrets are environment-only by design.** `jwt.secret=${JWT_SECRET:}` with no fallback, and the app refuses to start without it — the previous hard-coded key was a live vulnerability. Never reintroduce a default.
+**Secrets are environment-only by design.** `jwt.secret=${JWT_SECRET:}` with no fallback, and the app refuses to start without it — the previous hard-coded key was a live vulnerability. Never reintroduce a default in `application.properties`. Compose and IDE runs may load the gitignored `.env` (`spring.config.import=optional:file:.env`); that is not a committed default.
 
-**Frontend** — Redux Toolkit holds only auth (`store/slices/authSlice.ts`); server state goes through `services/*.ts` (axios via `services/api.ts`) and React Query. Procurement UI centres on `PackageWorkspace` + `StageRail`/`StagePanel`/`DocumentChecklist`/`FieldRow`.
+**Frontend** — Redux Toolkit holds only auth (`store/slices/authSlice.ts`); server state goes through `services/*.ts` (axios via `services/api.ts`) and React Query. Procurement UI centres on `PackageWorkspace` + `StageRail`/`StagePanel`/`DocumentChecklist`/`FieldRow`. The sidebar does not list Assets, Assignments, or Stationery.
 
 ## Requirements as source of truth
 
