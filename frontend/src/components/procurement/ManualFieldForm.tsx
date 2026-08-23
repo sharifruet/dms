@@ -23,6 +23,12 @@ const MASTER_LIST_FIELDS: Record<string, string> = {
   procurement_nature: 'PROCUREMENT_NATURE',
 };
 
+/** Jackson on ProcurementMasterList emits valueCode / valueLabel, not code / label. */
+const optionCode = (option: MasterListValue): string =>
+  option.code || option.valueCode || '';
+const optionLabel = (option: MasterListValue): string =>
+  option.label || option.valueLabel || optionCode(option);
+
 interface Props {
   catalogue: CatalogueField[];
   fields: ExtractedField[];
@@ -33,16 +39,31 @@ interface Props {
 }
 
 /**
+ * Catalogue entity types that are repeating rows (one bidder, one delivery, …).
+ * Those are created by their own tables, not this form — saving a single
+ * "Bidder Name" here would tick Gate 3 without a BER_BIDDER row (StageDataService).
+ */
+const REPEATING_ENTITY_TYPES = new Set([
+  'BER_BIDDER',
+  'DELIVERY',
+  'INVOICE',
+  'PAYMENT',
+  'INSPECTION_EVENT',
+]);
+
+/**
  * Entering values by hand.
  *
- * Not every field comes from OCR. Stages 5, 8 and 9 are manual end to end, and the OCE
- * at Stage 4 is typed in at BER upload (Q-9) because it exists nowhere else in the
- * system. Without this form those values have no way in at all, and the stages they gate
- * can never be completed.
+ * Document upload is optional on every stage, so OCR-sourced catalogue fields must
+ * still be typeable here — otherwise Stage 3's Number of Bidders (and the rest) only
+ * appear after a file is filed, and Complete stays blocked on "(not captured)".
+ * Stages 5, 8 and 9 plus the OCE at Stage 4 (Q-9) were already manual end to end.
  *
- * Fields already captured are shown with their current value so this doubles as a
- * correction form; the provenance trail is kept by the server, which records the change
- * rather than overwriting the original reading.
+ * Repeating rows (bidders, deliveries, invoices) stay on their own tables.
+ *
+ * Already-captured MANUAL fields stay on this form as a correction; OCR readings
+ * that have a row move to FieldRow instead. The provenance trail is kept by the
+ * server, which records the change rather than overwriting the original reading.
  */
 const ManualFieldForm: React.FC<Props> = ({
   catalogue,
@@ -81,11 +102,20 @@ const ManualFieldForm: React.FC<Props> = ({
     return captured.rawValue ?? '';
   };
 
-  // Manual fields first, and among them the mandatory ones that are still empty - those
-  // are what is actually blocking the stage
+  // Every non-repeating catalogue field that still needs a value, plus MANUAL fields
+  // already captured (those double as a correction form). Uncaptured OCR fields are
+  // included because the matching document is optional.
   const entries = useMemo(() => {
-    const manual = catalogue.filter((c) => c.captureSource === 'MANUAL');
-    return [...manual].sort((a, b) => {
+    const fillable = catalogue.filter((c) => {
+      if (c.entityType && REPEATING_ENTITY_TYPES.has(c.entityType)) {
+        return false;
+      }
+      if (c.captureSource === 'MANUAL') {
+        return true;
+      }
+      return !byKey[c.fieldKey];
+    });
+    return [...fillable].sort((a, b) => {
       const aMissing = a.isMandatory && !byKey[a.fieldKey] ? 0 : 1;
       const bMissing = b.isMandatory && !byKey[b.fieldKey] ? 0 : 1;
       if (aMissing !== bMissing) return aMissing - bMissing;
@@ -147,10 +177,13 @@ const ManualFieldForm: React.FC<Props> = ({
 
   return (
     <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
-      <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
-        <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
-          Entered by hand
-        </Typography>
+      <Stack direction="row" alignItems="flex-start" sx={{ mb: 1 }} spacing={1}>
+        <Stack sx={{ flexGrow: 1 }}>
+          <Typography variant="subtitle2">Stage fields</Typography>
+          <Typography variant="caption" color="text.secondary">
+            Uploading a document is optional — enter values here, or extract them from a file.
+          </Typography>
+        </Stack>
         {missingMandatory.length > 0 && (
           <Chip
             size="small"
@@ -195,11 +228,14 @@ const ManualFieldForm: React.FC<Props> = ({
                   setDraft({ ...draft, [field.fieldKey]: e.target.value })
                 }
               >
-                {optionsFor(field).map((option) => (
-                  <MenuItem key={option.code} value={option.code}>
-                    {option.label || option.code}
-                  </MenuItem>
-                ))}
+                {optionsFor(field).map((option) => {
+                  const code = optionCode(option);
+                  return (
+                    <MenuItem key={code} value={code}>
+                      {optionLabel(option)}
+                    </MenuItem>
+                  );
+                })}
               </TextField>
             </Grid>
           );

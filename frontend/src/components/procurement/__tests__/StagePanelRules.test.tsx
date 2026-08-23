@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import authReducer from '../../../store/slices/authSlice';
@@ -126,16 +126,77 @@ describe('fields that have to be typed in', () => {
     expect(screen.queryByText(/still needed/)).not.toBeInTheDocument();
   });
 
-  it('leaves OCR-sourced fields alone - they are verified, not typed', () => {
-    const { container } = withStore(
+  it('offers an OCR-sourced field that has not been captured yet', () => {
+    // Documents are optional, so a Stage 3 field such as Number of Bidders must still
+    // be typeable — otherwise Complete is blocked on "(not captured)" until a file
+    // is uploaded solely to make the input appear.
+    withStore(
       <ManualFieldForm
-        catalogue={[catalogue({ captureSource: 'OCR', fieldKey: 'package_number' })]}
+        catalogue={[catalogue({
+          captureSource: 'OCR',
+          fieldKey: 'number_of_bidders',
+          fieldLabel: 'Number of Bidders',
+          fieldType: 'NUMBER',
+        })]}
         fields={[]}
         onSave={jest.fn()}
       />,
     );
 
-    // Nothing to render: this form is only for values a person supplies
+    expect(screen.getByLabelText(/Number of Bidders/)).toBeInTheDocument();
+    expect(screen.getByText(/Required before this stage can be completed/)).toBeInTheDocument();
+  });
+
+  it('does not offer repeating-row fields that belong on their own table', () => {
+    const { container } = withStore(
+      <ManualFieldForm
+        catalogue={[catalogue({
+          captureSource: 'OCR',
+          fieldKey: 'bidder_name',
+          fieldLabel: 'Bidder Name',
+          entityType: 'BER_BIDDER',
+        })]}
+        fields={[]}
+        onSave={jest.fn()}
+      />,
+    );
+
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('shows master-list options from the Jackson payload (valueCode / valueLabel)', () => {
+    // GET /api/procurement/master-lists returns ProcurementMasterList as-is. Reading
+    // option.code left the Stage 2 dropdowns empty even though the list arrived.
+    withStore(
+      <ManualFieldForm
+        catalogue={[catalogue({
+          fieldKey: 'procurement_type',
+          fieldLabel: 'Procurement Type',
+          fieldType: 'TEXT',
+          captureSource: 'MANUAL',
+        })]}
+        fields={[]}
+        masterLists={{
+          PROCUREMENT_TYPE: [
+            {
+              listKey: 'PROCUREMENT_TYPE',
+              valueCode: 'NCT',
+              valueLabel: 'National Competitive Tender',
+            },
+            {
+              listKey: 'PROCUREMENT_TYPE',
+              valueCode: 'ICT',
+              valueLabel: 'International Competitive Tender',
+            },
+          ],
+        }}
+        onSave={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText(/Procurement Type/)).toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByLabelText(/Procurement Type/));
+    expect(screen.getByRole('option', { name: 'National Competitive Tender' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'International Competitive Tender' })).toBeInTheDocument();
   });
 });

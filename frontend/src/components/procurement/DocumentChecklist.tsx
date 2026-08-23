@@ -23,8 +23,9 @@ interface Props {
 }
 
 /**
- * The required-document checklist for a stage. Each row uploads its own document, so
- * the user never has to work out which file satisfies which requirement.
+ * The document checklist for a stage. Uploads are optional: a file still feeds OCR,
+ * but its absence does not block completion. Each row uploads its own document so
+ * the user never has to work out which file satisfies which slot.
  */
 const DocumentChecklist: React.FC<Props> = ({ requirements, uploaded, onUpload }) => {
   const [busyRole, setBusyRole] = useState<string | null>(null);
@@ -66,7 +67,10 @@ const DocumentChecklist: React.FC<Props> = ({ requirements, uploaded, onUpload }
   return (
     <Box>
       <Typography variant="subtitle2" sx={{ mb: 1 }}>
-        Required documents
+        Documents
+        <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1, fontWeight: 400 }}>
+          optional — upload to extract fields
+        </Typography>
       </Typography>
       <List dense disablePadding>
         {requirements.map((req) => {

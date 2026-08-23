@@ -65,4 +65,7 @@
 
     <!-- Stage 1: APP Approval Memo does not block Tender Advertisement -->
     <include file="db/changelog/047-optional-app-approval-memo.xml"/>
+
+    <!-- Documents stay on each stage checklist; none of them block Complete -->
+    <include file="db/changelog/048-optional-stage-documents.xml"/>
 </databaseChangeLog>

@@ -265,25 +265,28 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
         />
       </Paper>
 
-      <Paper variant="outlined" sx={{ p: 2 }}>
-        <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
-          <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
-            Captured values
-          </Typography>
-          {pendingFields.length > 0 && (
-            <Button size="small" onClick={handleBulkVerify}>
-              Verify all {pendingFields.length}
-            </Button>
-          )}
-        </Stack>
+      <ManualFieldForm
+        catalogue={detail.catalogue}
+        fields={detail.fields}
+        masterLists={masterLists}
+        disabled={completed || notApplicable}
+        onSave={handleSaveManualFields}
+      />
 
-        {detail.fields.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
-            Nothing captured yet. Upload a document above, or enter the values by hand once
-            the document is filed.
-          </Typography>
-        ) : (
-          detail.fields.map((field) => (
+      {detail.fields.length > 0 && (
+        <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
+          <Stack direction="row" alignItems="center" sx={{ mb: 1 }}>
+            <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
+              Captured values
+            </Typography>
+            {pendingFields.length > 0 && (
+              <Button size="small" onClick={handleBulkVerify}>
+                Verify all {pendingFields.length}
+              </Button>
+            )}
+          </Stack>
+
+          {detail.fields.map((field) => (
             <FieldRow
               key={field.id}
               field={field}
@@ -292,17 +295,9 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
               onShowSource={setSourceField}
               onShowHistory={setHistoryField}
             />
-          ))
-        )}
-      </Paper>
-
-      <ManualFieldForm
-        catalogue={detail.catalogue}
-        fields={detail.fields}
-        masterLists={masterLists}
-        disabled={completed || notApplicable}
-        onSave={handleSaveManualFields}
-      />
+          ))}
+        </Paper>
+      )}
 
       {stageCode === STAGE_TENDER && (
         <TenderAttempts packageId={packageId} onChanged={refresh} />

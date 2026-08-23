@@ -67,27 +67,10 @@ class LifecycleSmokeTest extends PostgresLiquibaseTest {
     private StageDataService stageDataService;
 
     @Autowired
-    private com.bpdb.dms.procurement.service.LinkageService linkageService;
-
-    @Autowired
-    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
-
-    @Autowired
     private TenderService tenderService;
 
     @Autowired
     private CaptureService captureService;
-
-    /** A real row in documents, so the link's foreign key is satisfied honestly. */
-    private long insertDocument(String name) {
-        return jdbcTemplate.queryForObject(
-                "INSERT INTO documents (file_name, file_path, file_size, document_type, "
-                        + "uploaded_by, is_active, is_archived, created_at, updated_at) "
-                        + "VALUES (?, ?, ?, 'OTHER', "
-                        + "(SELECT id FROM users ORDER BY id LIMIT 1), true, false, now(), now()) "
-                        + "RETURNING id",
-                Long.class, name, "uploads/" + name, 1024L);
-    }
 
     private ProcurementPackage subject() {
         return packageRepository.findByPackageNumber(PACKAGE_UNDER_TEST).orElseThrow(
@@ -150,32 +133,21 @@ class LifecycleSmokeTest extends PostgresLiquibaseTest {
     @Test
     @Order(4)
     void importedWorkbookSatisfiesTheAppDocumentRequirement() {
-        // The workbook is the APP Document; the approval memo is optional. After import
-        // the only remaining Stage 1 action is to complete it (REQ-1 exit criteria).
+        // Documents do not block Complete. After import the field gate is already
+        // satisfied, so Stage 1 is ready without a second upload.
         StageEngine.StageReadiness readiness = stageEngine.readiness(subject().getId(), (short) 1);
 
-        assertTrue(readiness.missingDocuments.stream()
-                        .noneMatch(d -> d.toLowerCase().contains("approval memo")),
-                "APP Approval Memo must not block Stage 1");
         assertTrue(readiness.missingDocuments.isEmpty(),
-                "the imported workbook should already satisfy APP Document");
+                "no document should block Stage 1");
     }
 
     @Test
     @Order(5)
     void stageOneCompletesOnceItIsGenuinelyReady() {
         ProcurementPackage pkg = subject();
-        // Import already linked the workbook as APP_DOCUMENT. A second file is only
-        // needed when that link is missing (H2 tests without a real user).
-        StageEngine.StageReadiness before = stageEngine.readiness(pkg.getId(), (short) 1);
-        if (!before.missingDocuments.isEmpty()) {
-            long appDoc = insertDocument("app.pdf");
-            linkageService.link(appDoc, "PACKAGE", pkg.getId(), pkg.getId(), null, (short) 1,
-                    "APP_DOCUMENT", "STAGE_CONTEXT", 1L);
-        }
 
         assertTrue(stageEngine.readiness(pkg.getId(), (short) 1).ready,
-                "everything Stage 1 asks for is now present");
+                "imported fields are enough; documents are optional");
 
         stageEngine.complete(pkg.getId(), (short) 1, 1L, null);
 

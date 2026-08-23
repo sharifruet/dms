@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+      Stage completion was gated on every catalogue document being uploaded. Fields
+      can be entered by hand (REQ-P12), and OCR only runs when a file is present, so
+      a missing scan must not hold the stage. Documents stay on the checklist;
+      none of them block Complete.
+    -->
+
+    <changeSet id="048-001" author="dms">
+        <comment>All stage document uploads are optional; they no longer block completion</comment>
+        <sql>
+            UPDATE stage_document_requirement
+               SET is_mandatory = false
+             WHERE is_mandatory = true;
+        </sql>
+        <rollback>
+            <sql>
+                UPDATE stage_document_requirement SET is_mandatory = true
+                 WHERE doc_role IN (
+                    'APP_DOCUMENT',
+                    'TENDER_NOTICE','TENDER_DOCUMENT','ADVERTISEMENT_COPY',
+                    'BID_OPENING_MINUTES','BID_OPENING_REGISTER','BIDDER_LIST',
+                    'BER',
+                    'APPROVAL_NOTE','APPROVAL_MEMO',
+                    'NOA',
+                    'PERFORMANCE_SECURITY',
+                    'SIGNED_CONTRACT',
+                    'LETTER_OF_CREDIT',
+                    'PRODUCTION_SCHEDULE','EGP_PRICE_SCHEDULE',
+                    'INSPECTION_REPORT','PRE_SHIPMENT_INSPECTION','FAT_REPORT',
+                    'DELIVERY_CHALLAN','PACKING_LIST','GRN',
+                    'INVOICE','SUPPORTING_DOCUMENTS',
+                    'PAYMENT_VOUCHER','PAYMENT_APPROVAL',
+                    'ACCEPTANCE_CERTIFICATE',
+                    'COMPLETION_CERTIFICATE','FINAL_ACCEPTANCE_CERTIFICATE','CONTRACT_CLOSE_MEMO'
+                 );
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

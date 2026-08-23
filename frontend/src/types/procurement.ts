@@ -343,8 +343,14 @@ export interface PriceScheduleLine {
 export interface MasterListValue {
   id?: number;
   listKey: string;
-  code: string;
+  /**
+   * The code the form saves (NCT, OTM, GOODS, …). Jackson serialises the entity
+   * as `valueCode`; `code` is the name the UI was written against. Read either.
+   */
+  code?: string;
+  valueCode?: string;
   label?: string;
+  valueLabel?: string;
   displayOrder?: number;
 }
 

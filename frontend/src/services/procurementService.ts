@@ -327,7 +327,17 @@ const procurementService = {
   /** Permitted Procurement Type / Method / Nature values (Q-8, REQ-2.4). */
   getMasterLists: async (): Promise<Record<string, MasterListValue[]>> => {
     const response = await api.get('/procurement/master-lists');
-    return response.data;
+    const raw = (response.data || {}) as Record<string, MasterListValue[]>;
+    const lists: Record<string, MasterListValue[]> = {};
+    // The entity serialises valueCode / valueLabel; the form historically read code / label.
+    Object.entries(raw).forEach(([key, rows]) => {
+      lists[key] = (rows || []).map((row) => ({
+        ...row,
+        code: row.code || row.valueCode,
+        label: row.label || row.valueLabel,
+      }));
+    });
+    return lists;
   },
 
   /** Stage by stage in time order, with how long each took (REQ-X5). */
