@@ -174,15 +174,25 @@ public class StageEngine {
             }
         }
 
-        // Gate 3 - every mandatory field confirmed by a person (WF-03)
+        // Gate 3 - every mandatory scalar field confirmed by a person (WF-03).
+        // Repeating catalogue rows (BER_BIDDER, DELIVERY, …) are stored on their
+        // own tables; they never get an extracted_field row, so treating them as
+        // "not captured" blocked Stage 4 after the bidder table was already saved
+        // (REQ-4.1). Completeness of those tables is Gate 4's job.
         List<ExtractedField> unconfirmed = fieldRepository.findUnconfirmedMandatory(packageId, stageCode);
         for (ExtractedField f : unconfirmed) {
+            if (definitions.isRepeatingEntity(f.getEntityType())) {
+                continue;
+            }
             result.unconfirmedFields.add(f.getFieldLabel() == null ? f.getFieldKey() : f.getFieldLabel());
         }
-        // A mandatory field with no row at all is also missing
+        // A mandatory scalar field with no row at all is also missing
         Set<String> present = fieldRepository.findByPackageIdAndStageCode(packageId, stageCode).stream()
                 .map(ExtractedField::getFieldKey).collect(Collectors.toSet());
         for (DocumentTypeField def : definitions.mandatoryFields(stageCode)) {
+            if (definitions.isRepeatingEntity(def.getEntityType())) {
+                continue;
+            }
             if (!present.contains(def.getFieldKey())) {
                 result.unconfirmedFields.add(def.getFieldLabel() + " (not captured)");
             }

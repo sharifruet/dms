@@ -69,6 +69,7 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
   // The permitted Type / Method / Nature values, so Stage 2 offers them rather than
   // leaving the user to guess the spelling (Q-8, REQ-2.4)
   const [masterLists, setMasterLists] = useState<Record<string, MasterListValue[]>>({});
+  const [attemptsTick, setAttemptsTick] = useState(0);
   const { canApprove } = useProcurementRole();
 
   const load = useCallback(async () => {
@@ -121,6 +122,7 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
 
   const handleOverride = async (field: ExtractedField, value: string) => {
     await procurementService.overrideField(field.id, value);
+    setAttemptsTick((n) => n + 1);
     await refresh();
   };
 
@@ -136,6 +138,7 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
 
   const handleSaveManualFields = async (values: Record<string, string>) => {
     await procurementService.saveStageFields(packageId, stageCode, values);
+    setAttemptsTick((n) => n + 1);
     await refresh();
   };
 
@@ -300,7 +303,13 @@ const StagePanel: React.FC<Props> = ({ packageId, stageCode, onChanged }) => {
       )}
 
       {stageCode === STAGE_TENDER && (
-        <TenderAttempts packageId={packageId} onChanged={refresh} />
+        <TenderAttempts
+          packageId={packageId}
+          onChanged={refresh}
+          captureRevision={`${attemptsTick}|${(detail.fields || [])
+            .map((f) => `${f.fieldKey}:${f.textValue ?? f.numericValue ?? f.dateValue ?? f.boolValue ?? ''}`)
+            .join('|')}`}
+        />
       )}
 
       {stageCode === 10 && (

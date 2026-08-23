@@ -24,6 +24,8 @@ import useProcurementRole from '../../hooks/useProcurementRole';
 interface Props {
   packageId: number;
   onChanged: () => void;
+  /** Changes when captured values are saved, so this table reloads the live tender. */
+  captureRevision?: string;
 }
 
 /**
@@ -33,7 +35,7 @@ interface Props {
  * same package, and the failed one keeps its documents, bidders and BER. This panel is
  * where that history is visible, and where the re-tender is started.
  */
-const TenderAttempts: React.FC<Props> = ({ packageId, onChanged }) => {
+const TenderAttempts: React.FC<Props> = ({ packageId, onChanged, captureRevision }) => {
   const [attempts, setAttempts] = useState<Tender[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [reason, setReason] = useState('');
@@ -52,7 +54,7 @@ const TenderAttempts: React.FC<Props> = ({ packageId, onChanged }) => {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, captureRevision]);
 
   const handleReTender = async () => {
     setBusy(true);

@@ -24,9 +24,12 @@ interface Props {
 }
 
 const displayValue = (field: ExtractedField): string => {
+  if (field.dataType === 'DATE' && field.dateValue) {
+    return field.dateValue.slice(0, 10);
+  }
   if (field.textValue) return field.textValue;
   if (field.numericValue !== undefined && field.numericValue !== null) return String(field.numericValue);
-  if (field.dateValue) return field.dateValue;
+  if (field.dateValue) return field.dateValue.slice(0, 10);
   if (field.boolValue !== undefined && field.boolValue !== null) return field.boolValue ? 'Yes' : 'No';
   return '';
 };
@@ -96,6 +99,7 @@ const FieldRow: React.FC<Props> = ({ field, onVerify, onOverride, onShowSource, 
             <TextField
               size="small"
               fullWidth
+              type={field.dataType === 'DATE' ? 'date' : undefined}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               autoFocus

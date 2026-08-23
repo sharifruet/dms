@@ -3,6 +3,7 @@ package com.bpdb.dms.procurement.service;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -153,6 +154,118 @@ public class StageDataService {
         // persist the typed rows after all values applied
         entityCache.values().stream().filter(java.util.Objects::nonNull).forEach(this::persist);
         return saved;
+    }
+
+    /**
+     * Write a corrected capture onto the live typed row (tender, evaluation, …).
+     *
+     * The verify-screen override used to touch only {@code extracted_field}, so a second
+     * edit of Procurement Type showed under Captured values and not under Tender
+     * attempts. First save already writes both; corrections must do the same, against
+     * the current attempt (Q-2, REQ-L15), not a superseded one.
+     */
+    @Transactional
+    public void applyCapturedValueToEntity(ExtractedField field, String value) {
+        if (field == null || field.getPackageId() == null || field.getFieldKey() == null) {
+            return;
+        }
+        DocumentTypeField def = catalogueEntry(field);
+        if (def == null) {
+            log.warn("No catalogue row for captured field '{}' (stage {}) - typed entity not updated",
+                    field.getFieldKey(), field.getStageCode());
+            return;
+        }
+        Object entity = loadBoundEntity(field, def);
+        if (entity == null) {
+            entity = ensureEntity(def.getEntityType(), field.getPackageId());
+        }
+        if (entity == null) {
+            return;
+        }
+        if (rewritesTheCorrelationKey(def, entity, value)) {
+            log.warn("Corrected Package Number '{}' differs from package {}'s own number "
+                            + "'{}' - the package keeps its number and the reading is recorded",
+                    value, field.getPackageId(),
+                    ((ProcurementPackage) entity).getPackageNumber());
+            return;
+        }
+        applyToEntity(entity, def, value);
+        persist(entity);
+    }
+
+    /**
+     * Catalogue keys were seeded as snake_case ({@code closing_date}); older captures
+     * and OCR rows sometimes stored camelCase ({@code closingDate}). Treat those as
+     * the same field so a correction still reaches the tender row.
+     */
+    private DocumentTypeField catalogueEntry(ExtractedField field) {
+        if (field.getStageCode() != null) {
+            DocumentTypeField match =
+                    matchCatalogue(definitions.catalogueFields(field.getStageCode()), field.getFieldKey());
+            if (match != null) {
+                return match;
+            }
+        }
+        for (short stage = StageDefinitionService.FIRST_STAGE; stage <= StageDefinitionService.LAST_STAGE; stage++) {
+            DocumentTypeField match =
+                    matchCatalogue(definitions.catalogueFields(stage), field.getFieldKey());
+            if (match != null) {
+                return match;
+            }
+        }
+        return null;
+    }
+
+    private DocumentTypeField matchCatalogue(List<DocumentTypeField> catalogue, String fieldKey) {
+        String compact = compactKey(fieldKey);
+        for (DocumentTypeField def : catalogue) {
+            if (fieldKey.equals(def.getFieldKey())
+                    || compact.equals(compactKey(def.getFieldKey()))
+                    || compact.equals(compactKey(def.getEntityColumn()))) {
+                return def;
+            }
+        }
+        return null;
+    }
+
+    private static String compactKey(String key) {
+        if (key == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(key.length());
+        for (int i = 0; i < key.length(); i++) {
+            char c = key.charAt(i);
+            if (c != '_' && c != '-') {
+                sb.append(Character.toLowerCase(c));
+            }
+        }
+        return sb.toString();
+    }
+
+    /** The typed row this capture was taken against, if it still exists. */
+    private Object loadBoundEntity(ExtractedField field, DocumentTypeField def) {
+        if (field.getEntityId() == null) {
+            return null;
+        }
+        String type = def.getEntityType() != null ? def.getEntityType() : field.getEntityType();
+        if (type == null) {
+            return null;
+        }
+        return switch (type) {
+            case "PACKAGE" -> packageRepository.findById(field.getEntityId()).orElse(null);
+            case "TENDER" -> tenderRepository.findById(field.getEntityId()).orElse(null);
+            case "TENDER_OPENING" -> openingRepository.findById(field.getEntityId()).orElse(null);
+            case "EVALUATION" -> evaluationRepository.findById(field.getEntityId()).orElse(null);
+            case "CONTRACT_APPROVAL" -> approvalRepository.findById(field.getEntityId()).orElse(null);
+            case "NOA" -> noaRepository.findById(field.getEntityId()).orElse(null);
+            case "PERFORMANCE_SECURITY" -> psRepository.findById(field.getEntityId()).orElse(null);
+            case "CONTRACT" -> contractRepository.findById(field.getEntityId()).orElse(null);
+            case "LETTER_OF_CREDIT" -> lcRepository.findById(field.getEntityId()).orElse(null);
+            case "PRODUCTION_SCHEDULE" -> productionScheduleRepository.findById(field.getEntityId()).orElse(null);
+            case "WARRANTY" -> warrantyRepository.findById(field.getEntityId()).orElse(null);
+            case "CONTRACT_CLOSURE" -> closureRepository.findById(field.getEntityId()).orElse(null);
+            default -> null;
+        };
     }
 
     /**
@@ -342,7 +455,7 @@ public class StageDataService {
         if (property == null || property.isBlank()) {
             return;
         }
-        String setter = "set" + Character.toUpperCase(property.charAt(0)) + property.substring(1);
+        String setter = setterName(property);
         for (Method m : entity.getClass().getMethods()) {
             if (!m.getName().equals(setter) || m.getParameterCount() != 1) {
                 continue;
@@ -357,6 +470,22 @@ public class StageDataService {
             }
         }
         log.warn("No setter {} on {}", setter, entity.getClass().getSimpleName());
+    }
+
+    /** {@code closingDate} and {@code closing_date} both resolve to {@code setClosingDate}. */
+    private static String setterName(String property) {
+        StringBuilder sb = new StringBuilder("set");
+        boolean upper = true;
+        for (int i = 0; i < property.length(); i++) {
+            char c = property.charAt(i);
+            if (c == '_' || c == '-') {
+                upper = true;
+                continue;
+            }
+            sb.append(upper ? Character.toUpperCase(c) : c);
+            upper = false;
+        }
+        return sb.toString();
     }
 
     private Object coerce(Class<?> target, String value) {
@@ -384,9 +513,25 @@ public class StageDataService {
             return lower.startsWith("y") || lower.startsWith("t") || lower.equals("1");
         }
         if (target == LocalDate.class) {
-            return LocalDate.parse(v);
+            return parseDate(v);
         }
         throw new IllegalArgumentException("Unsupported field type " + target.getSimpleName());
+    }
+
+    private static LocalDate parseDate(String value) {
+        String v = value.trim();
+        if (v.length() >= 10 && Character.isDigit(v.charAt(0)) && v.charAt(4) == '-') {
+            try {
+                return LocalDate.parse(v.substring(0, 10));
+            } catch (DateTimeParseException ignored) {
+                // fall through to full parse
+            }
+        }
+        try {
+            return LocalDate.parse(v);
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("Cannot parse date \"" + value + "\"");
+        }
     }
 
     private void persist(Object entity) {

@@ -162,7 +162,10 @@ class LifecycleSmokeTest extends PostgresLiquibaseTest {
     void anIctTenderMakesTheLetterOfCreditStageApplicable() {
         ProcurementPackage pkg = subject();
         stageDataService.saveStageValues(pkg.getId(), (short) 2,
-                java.util.Map.of("procurement_type", "ICT", "procurement_method", "OTM"), 1L);
+                java.util.Map.of(
+                        "procurement_type", "ICT",
+                        "procurement_method", "OTM",
+                        "closing_date", "2026-08-31"), 1L);
 
         assertTrue(stageEngine.lcExpected(pkg.getId()),
                 "ICT is what makes Stage 9 applicable (Q-5)");
@@ -171,6 +174,32 @@ class LifecycleSmokeTest extends PostgresLiquibaseTest {
 
     @Test
     @Order(7)
+    void correctingACapturedTenderFieldUpdatesTheLiveTenderRow() {
+        // A second edit on Captured values used to write only extracted_field, so
+        // Tender attempts kept the first value. Override must update the live tender.
+        ProcurementPackage pkg = subject();
+        ExtractedField type = fieldRepository.findByPackageIdAndStageCode(pkg.getId(), (short) 2)
+                .stream()
+                .filter(f -> "procurement_type".equals(f.getFieldKey()))
+                .findFirst()
+                .orElseThrow();
+        captureService.override(type.getId(), "NCT", 1L, "second edit");
+        assertEquals("NCT", tenderService.current(pkg.getId()).orElseThrow().getProcurementType());
+
+        ExtractedField closing = fieldRepository.findByPackageIdAndStageCode(pkg.getId(), (short) 2)
+                .stream()
+                .filter(f -> "closing_date".equals(f.getFieldKey()))
+                .findFirst()
+                .orElseThrow();
+        captureService.override(closing.getId(), "2026-12-31", 1L, "second edit");
+        assertEquals(java.time.LocalDate.of(2026, 12, 31),
+                tenderService.current(pkg.getId()).orElseThrow().getClosingDate());
+
+        captureService.override(type.getId(), "ICT", 1L, "restore for later assertions");
+    }
+
+    @Test
+    @Order(8)
     void reTenderingKeepsTheFailedAttemptAndReopensTheTenderStages() {
         ProcurementPackage pkg = subject();
 
@@ -191,7 +220,7 @@ class LifecycleSmokeTest extends PostgresLiquibaseTest {
     }
 
     @Test
-    @Order(8)
+    @Order(9)
     void theApValueSurvivesTheWholeJourney() {
         // The number that matters: what the APP said this package is worth, unchanged by
         // everything that has happened to it

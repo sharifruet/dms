@@ -11,6 +11,7 @@ import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,11 +49,14 @@ public class CaptureService {
 
     private final ExtractedFieldRepository fieldRepository;
     private final ExtractedFieldHistoryRepository historyRepository;
+    private final StageDataService stageDataService;
 
     public CaptureService(ExtractedFieldRepository fieldRepository,
-                          ExtractedFieldHistoryRepository historyRepository) {
+                          ExtractedFieldHistoryRepository historyRepository,
+                          @Lazy StageDataService stageDataService) {
         this.fieldRepository = fieldRepository;
         this.historyRepository = historyRepository;
+        this.stageDataService = stageDataService;
     }
 
     /**
@@ -252,6 +256,9 @@ public class CaptureService {
         ExtractedField saved = fieldRepository.save(field);
         appendHistory(saved, before, newValue, beforeStatus, ExtractedField.MANUAL_OVERRIDE,
                 userId, reason == null ? "Corrected by user" : reason);
+        // Keep the typed row (tender, evaluation, …) in step with the capture log.
+        // Without this, a second edit on Captured values never reached Tender attempts.
+        stageDataService.applyCapturedValueToEntity(saved, newValue);
         return saved;
     }
 

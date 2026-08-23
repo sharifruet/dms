@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import com.bpdb.dms.procurement.entity.BerBidder;
@@ -56,6 +58,14 @@ import com.bpdb.dms.procurement.repository.TenderRepository;
  */
 @Service
 public class ValidationService {
+
+    private static final Logger log = LoggerFactory.getLogger(ValidationService.class);
+
+    /**
+     * Largest absolute value {@code ber_bidder.deviation_pct} can hold after
+     * changeset 049 ({@code NUMERIC(18,4)}).
+     */
+    static final BigDecimal DEVIATION_PCT_ABS_MAX = new BigDecimal("99999999999999.9999");
 
     private final TenderRepository tenderRepository;
     private final TenderOpeningRepository openingRepository;
@@ -125,8 +135,10 @@ public class ValidationService {
         List<String> errors = new ArrayList<>();
         switch (stageCode) {
             case 2 -> validateTender(packageId, errors);
+            case 4 -> validateBidders(packageId, errors);
             case 5 -> validateApproval(packageId, errors);
             case 8 -> validateContract(packageId, errors);
+            case 11 -> validateInspections(packageId, errors);
             case 12 -> validateDeliveries(packageId, errors);
             case 13 -> validateInvoices(packageId, errors);
             case 14 -> validatePayments(packageId, errors);
@@ -160,6 +172,54 @@ public class ValidationService {
     }
 
     // -------------------------------------------------------------- hard rules
+
+    /**
+     * BER bidder rows are the Stage 4 field store (REQ-4.1). Gate 3 no longer looks
+     * for extracted_field copies of Bidder Name / Price / Deviation / Responsive.
+     */
+    private void validateBidders(Long packageId, List<String> errors) {
+        List<BerBidder> bidders = biddersOf(packageId);
+        if (bidders.isEmpty()) {
+            errors.add("No bidders recorded from the BER (REQ-4.1)");
+            return;
+        }
+        if (bidders.stream().anyMatch(b -> b.getBidderName() == null || b.getBidderName().isBlank())) {
+            errors.add("A BER bidder row is missing a name (REQ-4.1)");
+        }
+        if (bidders.stream().anyMatch(b -> b.getBiddingPrice() == null)) {
+            errors.add("A BER bidder row is missing a bidding price (REQ-4.1)");
+        }
+        if (bidders.stream().noneMatch(b -> Boolean.TRUE.equals(b.getIsAwarded()))) {
+            errors.add("No awarded bidder selected (REQ-4.4)");
+        }
+    }
+
+    private List<BerBidder> biddersOf(Long packageId) {
+        Optional<Tender> tender = tenderRepository.findByPackageIdAndIsCurrentTrue(packageId);
+        if (tender.isEmpty()) {
+            return List.of();
+        }
+        Optional<TenderOpening> opening = openingRepository.findByTenderId(tender.get().getId());
+        if (opening.isEmpty()) {
+            return List.of();
+        }
+        Optional<Evaluation> evaluation = evaluationRepository.findByOpeningId(opening.get().getId());
+        if (evaluation.isEmpty()) {
+            return List.of();
+        }
+        return bidderRepository.findByEvaluationIdOrderByBidRankAsc(evaluation.get().getId());
+    }
+
+    private void validateInspections(Long packageId, List<String> errors) {
+        Optional<Contract> contract = primaryContract(packageId);
+        if (contract.isEmpty()) {
+            errors.add("No contract recorded");
+            return;
+        }
+        if (inspectionRepository.findByContractId(contract.get().getId()).isEmpty()) {
+            errors.add("No inspection recorded");
+        }
+    }
 
     private void validateTender(Long packageId, List<String> errors) {
         tenderRepository.findByPackageIdAndIsCurrentTrue(packageId).ifPresent(t -> {
@@ -711,9 +771,19 @@ public class ValidationService {
                 || evaluation.getOceValue().signum() == 0) {
             return null;
         }
-        return bidder.getBiddingPrice()
+        BigDecimal pct = bidder.getBiddingPrice()
                 .subtract(evaluation.getOceValue())
                 .multiply(BigDecimal.valueOf(100))
                 .divide(evaluation.getOceValue(), 4, java.math.RoundingMode.HALF_UP);
+        if (pct.abs().compareTo(DEVIATION_PCT_ABS_MAX) > 0) {
+            // OCE and bidding price are almost certainly in different units; storing
+            // the figure would overflow the column the way NUMERIC(9,4) used to.
+            log.warn("Computed deviation {}% for '{}' exceeds what deviation_pct can hold "
+                            + "(bidding price {}, OCE {}) — left blank",
+                    pct, bidder.getBidderName(), bidder.getBiddingPrice(),
+                    evaluation.getOceValue());
+            return null;
+        }
+        return pct;
     }
 }

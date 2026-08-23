@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <!--
+      ber_bidder.deviation_pct was NUMERIC(9,4): anything ≥ 100,000 overflows
+      ("A field with precision 9, scale 4 must round to an absolute value less
+      than 10^5"). Saving Stage 4 bidders then 500s.
+
+      The column is a percentage versus OCE (REQ-4.2). Leaving it blank computes
+      (price − OCE) / OCE × 100. Real bid prices against a small or differently
+      scaled OCE (or a Taka difference typed into the % field) routinely exceed
+      99,999. NUMERIC(18,4) keeps four decimal places and matches money-column
+      width elsewhere. 032 is not rewritten; it has already run.
+    -->
+
+    <changeSet id="049-001" author="dms">
+        <comment>Widen BER deviation % so Stage 4 bidder save no longer overflows NUMERIC(9,4)</comment>
+        <modifyDataType tableName="ber_bidder" columnName="deviation_pct" newDataType="NUMERIC(18,4)"/>
+        <rollback>
+            <modifyDataType tableName="ber_bidder" columnName="deviation_pct" newDataType="NUMERIC(9,4)"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

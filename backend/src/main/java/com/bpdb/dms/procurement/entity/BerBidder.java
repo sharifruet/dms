@@ -28,7 +28,8 @@ public class BerBidder extends BaseProcurementEntity {
     @Column(name = "is_responsive")
     private Boolean isResponsive;
 
-    @Column(name = "deviation_pct")
+    /** Percentage versus OCE (REQ-4.2). NUMERIC(18,4) after changeset 049. */
+    @Column(name = "deviation_pct", precision = 18, scale = 4)
     private BigDecimal deviationPct;
 
     @Column(name = "bid_rank")

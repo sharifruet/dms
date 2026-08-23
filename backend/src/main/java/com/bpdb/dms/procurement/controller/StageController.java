@@ -210,7 +210,15 @@ public class StageController {
     @PutMapping("/4/bidders")
     public ResponseEntity<?> saveBidders(@PathVariable Long packageId,
                                          @RequestBody List<BerBidder> bidders) {
-        return ResponseEntity.ok(recordService.saveBidders(packageId, bidders));
+        try {
+            return ResponseEntity.ok(recordService.saveBidders(packageId, bidders));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "Could not save the bidder table. Deviation % is a percentage versus OCE, "
+                            + "not a money amount."));
+        }
     }
 
     @PostMapping("/11/inspections")

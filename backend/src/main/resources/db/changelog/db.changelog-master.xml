@@ -68,4 +68,7 @@
 
     <!-- Documents stay on each stage checklist; none of them block Complete -->
     <include file="db/changelog/048-optional-stage-documents.xml"/>
+
+    <!-- Stage 4: deviation % overflowed NUMERIC(9,4) on bidder save -->
+    <include file="db/changelog/049-widen-ber-deviation-pct.xml"/>
 </databaseChangeLog>

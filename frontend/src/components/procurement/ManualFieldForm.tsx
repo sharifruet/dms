@@ -42,6 +42,7 @@ interface Props {
  * Catalogue entity types that are repeating rows (one bidder, one delivery, …).
  * Those are created by their own tables, not this form — saving a single
  * "Bidder Name" here would tick Gate 3 without a BER_BIDDER row (StageDataService).
+ * Keep in step with StageDefinitionService.isRepeatingEntity.
  */
 const REPEATING_ENTITY_TYPES = new Set([
   'BER_BIDDER',
@@ -59,7 +60,8 @@ const REPEATING_ENTITY_TYPES = new Set([
  * appear after a file is filed, and Complete stays blocked on "(not captured)".
  * Stages 5, 8 and 9 plus the OCE at Stage 4 (Q-9) were already manual end to end.
  *
- * Repeating rows (bidders, deliveries, invoices) stay on their own tables.
+ * Repeating rows (bidders, deliveries, invoices) stay on their own tables —
+ * keep REPEATING_ENTITY_TYPES in step with StageDefinitionService.isRepeatingEntity.
  *
  * Already-captured MANUAL fields stay on this form as a correction; OCR readings
  * that have a row move to FieldRow instead. The provenance trail is kept by the

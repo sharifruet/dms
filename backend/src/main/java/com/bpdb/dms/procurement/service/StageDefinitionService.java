@@ -2,6 +2,7 @@ package com.bpdb.dms.procurement.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Service;
@@ -24,6 +25,24 @@ public class StageDefinitionService {
     /** The lifecycle is 16 stages, run in order (WF-01). */
     public static final short FIRST_STAGE = 1;
     public static final short LAST_STAGE = 16;
+
+    /**
+     * Catalogue entity types that are repeating rows (one bidder, one delivery, …).
+     * Those live on their own tables, not {@code extracted_field}. Gate 3 must not
+     * ask for a single "Bidder Name" capture — that would never be written
+     * (REQ-4.1, StageDataService). Keep in step with ManualFieldForm.
+     */
+    private static final Set<String> REPEATING_ENTITY_TYPES = Set.of(
+            "BER_BIDDER",
+            "DELIVERY",
+            "INVOICE",
+            "PAYMENT",
+            "INSPECTION_EVENT"
+    );
+
+    public boolean isRepeatingEntity(String entityType) {
+        return entityType != null && REPEATING_ENTITY_TYPES.contains(entityType);
+    }
 
     private static final String[] STAGE_NAMES = {
         "", "APP Approved", "Tender Advertisement", "Tender Opening", "Tender Evaluation",

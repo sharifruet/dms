@@ -121,6 +121,11 @@ public class ProcurementRecordService {
             }
             if (b.getDeviationPct() == null) {
                 b.setDeviationPct(validationService.deviationAgainstOce(b, evaluation));
+            } else if (b.getDeviationPct().abs().compareTo(ValidationService.DEVIATION_PCT_ABS_MAX) > 0) {
+                throw new IllegalArgumentException(
+                        "Deviation % for '" + b.getBidderName()
+                                + "' is too large to store. That column is a percentage versus OCE, "
+                                + "not a money amount — leave it blank to compute it from the OCE.");
             }
             saved.add(bidderRepository.save(b));
             rank++;

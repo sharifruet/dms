@@ -172,6 +172,9 @@ class FullLifecycleSmokeTest extends PostgresLiquibaseTest {
     private void satisfyFields(Long packageId, short stage) {
         Map<String, String> values = new LinkedHashMap<>();
         for (DocumentTypeField field : definitions.mandatoryFields(stage)) {
+            if (definitions.isRepeatingEntity(field.getEntityType())) {
+                continue;
+            }
             values.put(field.getFieldKey(), sampleFor(field));
         }
         if (!values.isEmpty()) {

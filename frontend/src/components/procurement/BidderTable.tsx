@@ -228,7 +228,8 @@ const BidderTable: React.FC<Props> = ({ bidders, onSave }) => {
         </TableBody>
       </Table>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-        Leave Deviation blank to have it computed from the OCE value on the evaluation.
+        Leave Deviation % blank to have it computed from the OCE on the evaluation.
+        Enter a percentage (for example -4.0), not a Taka amount.
       </Typography>
     </Paper>
   );
